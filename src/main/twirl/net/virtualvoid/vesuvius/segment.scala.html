@@ -1,0 +1,19 @@
+@import net.virtualvoid.vesuvius._
+
+@(segmentId: String)
+
+<div id="openseadragon1" style="width: 800px; height: 600px;"></div>
+<script src="/openseadragon/openseadragon.min.js"></script>
+<script type="text/javascript">
+    var viewer = OpenSeadragon({
+        id: "openseadragon1",
+        prefixUrl: "/openseadragon/images/",
+        tileSources: [@for(l <- 17 until 47 by 3) { "@{s"/segment/$segmentId/$l/dzi"}", }],
+        initialPage: 5,
+        showNavigator: true,
+        showRotationControl: true,
+        sequenceMode: true,
+        preserveViewport: true,
+        debugMode: false,
+    });
+</script>
