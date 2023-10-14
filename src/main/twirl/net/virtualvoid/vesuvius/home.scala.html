@@ -4,7 +4,11 @@
     var viewer = OpenSeadragon({
         id: "openseadragon1",
         prefixUrl: "/openseadragon/images/",
-        tileSources: "image.dzi",
+        tileSources: ["image.dzi"],
+        showNavigator: true,
+        showRotationControl: true,
+        sequenceMode: true,
+        preserveViewport: true,
         debugMode: false,
     });
 </script>
