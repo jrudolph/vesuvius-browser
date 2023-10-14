@@ -14,6 +14,8 @@ import spray.json.*
 import java.io.File
 import scala.concurrent.Future
 
+case class ImageInfo(scroll: Int, segmentId: String, width: Int, height: Int)
+
 case class DZISize(Width: Int, Height: Int)
 case class DZIImage(
     xmlns:    String, // constant: "http://schemas.microsoft.com/deepzoom/2008"
@@ -50,14 +52,14 @@ class VesuviusRoutes()(implicit system: ActorSystem) extends Directives with Twi
           }
         }
       },
-      pathPrefix("segment" / Segment) { segmentId =>
-        onSuccess(imageInfo(segmentId)) { info =>
+      pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>
+        onSuccess(imageInfo(scroll, segmentId)) { info =>
           concat(
             pathSingleSlash {
-              complete(html.segment(segmentId))
+              complete(html.segment(info))
             },
             pathPrefix(IntNumber) { z =>
-              onSuccess(segmentLayer(segmentId, z)) { layerFile =>
+              onSuccess(segmentLayer(scroll, segmentId, z)) { layerFile =>
                 concat(
                   path("dzi") {
                     val dziImage = DZIImage("webp", 0, 512, info.width, info.height) // FIXME: imagesize
@@ -81,26 +83,30 @@ class VesuviusRoutes()(implicit system: ActorSystem) extends Directives with Twi
       getFromResourceDirectory("web")
     )
 
-  case class ImageInfo(segmentId: String, width: Int, height: Int)
-  def imageInfo(segmentId: String): Future[ImageInfo] =
-    segmentLayer(segmentId, 32)
+  val InfoCache = LfuCache[(Int, String), ImageInfo]
+
+  def imageInfo(scroll: Int, segmentId: String): Future[ImageInfo] =
+    InfoCache.getOrLoad((scroll, segmentId), _ => _imageInfo(scroll, segmentId))
+
+  def _imageInfo(scroll: Int, segmentId: String): Future[ImageInfo] =
+    segmentLayer(scroll, segmentId, 32)
       .map { f =>
         import sys.process._
         val cmd = s"identify -format '%w %h' $f"
         val output = cmd.!!
         val Array(width, height) = output.trim.split(' ')
-        ImageInfo(segmentId, width.toInt, height.toInt)
+        ImageInfo(scroll, segmentId, width.toInt, height.toInt)
       }
 
-  val SegmentLayerCache = LfuCache[(String, Int), File]
-  def segmentLayer(segmentId: String, layer: Int): Future[File] =
-    SegmentLayerCache.getOrLoad((segmentId, layer), _ => _segmentLayer(segmentId, layer))
+  val SegmentLayerCache = LfuCache[(Int, String, Int), File]
+  def segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] =
+    SegmentLayerCache.getOrLoad((scroll, segmentId, layer), _ => _segmentLayer(scroll, segmentId, layer))
 
-  def _segmentLayer(segmentId: String, layer: Int): Future[File] = {
-    val targetFile = new File(dataDir, s"raw/$segmentId/layers/$layer.webp")
+  def _segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] = {
+    val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
     if (targetFile.exists) Future.successful(targetFile)
     else {
-      val url = s"http://dl.ash2txt.org/full-scrolls/Scroll1.volpkg/paths/$segmentId/layers/$layer.tif"
+      val url = s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/$segmentId/layers/$layer.tif"
       val tmpFile = File.createTempFile("download", ".tif")
 
       download(url, tmpFile)
@@ -125,7 +131,7 @@ class VesuviusRoutes()(implicit system: ActorSystem) extends Directives with Twi
     val targetX = tileX * size * tileSize
     val targetY = tileY * size * tileSize
 
-    val targetFile = new File(dataDir, s"tiles/${info.segmentId}/layers/$z/$layer/${tileX}_$tileY.webp")
+    val targetFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/${tileX}_$tileY.webp")
     if (targetFile.exists()) targetFile
     else {
       targetFile.getParentFile.mkdirs()
@@ -133,7 +139,7 @@ class VesuviusRoutes()(implicit system: ActorSystem) extends Directives with Twi
       val height = (info.height / size).min(tileSize)
 
       import sys.process._
-      val tmpFile = new File(dataDir, s"tiles/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.webp")
+      val tmpFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.webp")
 
       val cmd = s"""convert $imageFile -crop ${size * width}x${size * height}+$targetX+$targetY -resize ${width}x$height -define webp:lossless=true $tmpFile"""
       println(f"Command for layers/$z/$layer/$tileX/$tileY: $cmd")
