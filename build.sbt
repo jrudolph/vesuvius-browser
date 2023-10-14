@@ -1,9 +1,19 @@
-val scalaV = "2.13.11"
+val scalaV = "3.3.0"
+val pekkoV = "1.0.1"
+val pekkoHttpV = "1.0.0"
 val scalaTestV = "3.2.16"
 
 libraryDependencies ++= Seq(
+  "org.apache.pekko" %% "pekko-stream" % pekkoV,
+  "org.apache.pekko" %% "pekko-http" % pekkoHttpV,
+  "org.apache.pekko" %% "pekko-http-caching" % pekkoHttpV,
+  "io.spray" %% "spray-json" % "1.3.6",
+  "com.typesafe.play" %% "twirl-api" % "1.6.0-RC4",
+
   "org.scalatest" %% "scalatest" % scalaTestV % "test"
 )
+
+enablePlugins(SbtTwirl)
 
 scalaVersion := scalaV
 

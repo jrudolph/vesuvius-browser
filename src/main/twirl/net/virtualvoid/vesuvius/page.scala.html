@@ -1,0 +1,26 @@
+@import net.virtualvoid.vesuvius._
+
+@(content: Html)
+
+<html>
+<head>
+    <title>Vesuvius Data Browser</title>
+
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+
+<nav>
+    <span><b>Vesuvius Data Browser</b></span> | <span><a href="/">Start</a>
+</nav>
+
+<div class="container">
+    <div class="section">
+        @content
+    </div>
+</div>
+
+<p/>
+<footer><a href="">vesuvius</a> data browser by <a href="https://virtual-void.net">Johannes Rudolph</a></footer>
+</body>
+</html>
