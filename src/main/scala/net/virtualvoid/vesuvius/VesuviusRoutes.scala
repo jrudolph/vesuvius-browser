@@ -15,7 +15,9 @@ import java.io.File
 import scala.concurrent.Future
 import scala.util.Success
 
-case class ImageInfo(scroll: Int, segmentId: String, width: Int, height: Int, area: Float)
+case class ImageInfo(scroll: Int, segmentId: String, width: Int, height: Int, area: Float) {
+  def realScroll: Int = if (scroll == 3) 1 else scroll
+}
 
 case class DZISize(Width: Int, Height: Int)
 case class DZIImage(
@@ -119,8 +121,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     for {
       (width, height) <- sizeOf(scroll, segmentId)
       area <- areaFor(scroll, segmentId)
-      realScroll = if (scroll == 3) 1 else scroll
-    } yield ImageInfo(realScroll, segmentId, width, height, area)
+    } yield ImageInfo(scroll, segmentId, width, height, area)
 
   val SegmentLayerCache = LfuCache[(Int, String, Int), File]
   def segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] =
@@ -143,10 +144,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           Future.successful(webpVersion)
         else {
           val url =
-            if (segmentId == "20230827161847" || segmentId == "20231007101615")
+            /*if (segmentId == "20230827161847" || segmentId == "20231007101615")
               f"http://dl.ash2txt.org/hari-seldon-uploads/team-finished-paths/scroll$scroll/$segmentId/layers/$layer%02d.tif"
-            else
-              f"${baseUrlFor(scroll)}/$segmentId/layers/$layer%02d.tif"
+            else*/
+            f"${baseUrlFor(scroll)}/$segmentId/layers/$layer%02d.tif"
           val tmpFile = File.createTempFile("download", ".tif", targetFile.getParentFile)
           download(url, tmpFile)
         }
@@ -171,7 +172,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def resizer: ((File, ImageInfo, Int, Int, Int, Int)) => Future[File] =
     a => ResizeCache.getOrLoad(a, _ => ResizerQueue(a))
 
-  val ResizerQueue = LifoQueue.semaphore[(File, ImageInfo, Int, Int, Int, Int), File](16) { (imageFile, info, layer, tileX, tileY, z) =>
+  val ResizerQueue = LifoQueue.semaphore[(File, ImageInfo, Int, Int, Int, Int), File](4) { (imageFile, info, layer, tileX, tileY, z) =>
     Future { resize(imageFile, info, layer, tileX, tileY, z) }(cpuBound)
   }
 
