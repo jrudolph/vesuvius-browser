@@ -5,9 +5,9 @@ import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.marshalling.ToResponseMarshallable
-import org.apache.pekko.http.scaladsl.model.{HttpMethods, HttpRequest, StatusCodes, Uri, headers}
-import org.apache.pekko.http.scaladsl.server.{Directive1, Directives, PathMatchers, Route}
-import org.apache.pekko.stream.scaladsl.{FileIO, Source}
+import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, Uri, headers }
+import org.apache.pekko.http.scaladsl.server.{ Directive1, Directives, PathMatchers, Route }
+import org.apache.pekko.stream.scaladsl.{ FileIO, Source }
 import org.apache.pekko.util.ByteString
 import spray.json.*
 
@@ -37,8 +37,6 @@ object DZIImage {
 class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Directives with TwirlSupport with SprayJsonSupport {
   import system.dispatcher
   import config.dataDir
-
-
 
   lazy val main = encodeResponse(mainRoute)
 
@@ -71,10 +69,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                     val x = xStr.toInt
                     val y = yStr.toInt
 
-                    val resized = resize(layerFile, info, layer, x, y, z)
-
-                    getFromFile(resized)
-                  },
+                    onSuccess(resizer(layerFile, info, layer, x, y, z)) { resized =>
+                      getFromFile(resized)
+                    }
+                  }
                 )
               }
             }
@@ -113,7 +111,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230905134255_2_15.png"))
     else if (scroll == 1 && segmentId == "20230702185752" && layer == 31)
       Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/out.png"))
-      //Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230702185752_2_15.png"))
+    //Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230702185752_2_15.png"))
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
 
@@ -139,6 +137,15 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           targetFile
         }
     }
+  }
+
+  val ResizeCache = LfuCache[(File, ImageInfo, Int, Int, Int, Int), File]
+
+  def resizer: ((File, ImageInfo, Int, Int, Int, Int)) => Future[File] =
+    a => ResizeCache.getOrLoad(a, _ => ResizerQueue(a))
+
+  val ResizerQueue = LifoQueue.semaphore[(File, ImageInfo, Int, Int, Int, Int), File](4) { (imageFile, info, layer, tileX, tileY, z) =>
+    Future { resize(imageFile, info, layer, tileX, tileY, z) }
   }
 
   def resize(imageFile: File, info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): File = {

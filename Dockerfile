@@ -23,7 +23,7 @@ RUN /sbt "show assembly"
 FROM eclipse-temurin:17-jre
 
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y libvips-tools imagemagick && \
+    apt-get install --no-install-recommends -y libvips-tools && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -O https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.16.1/jmx_prometheus_javaagent-0.16.1.jar
