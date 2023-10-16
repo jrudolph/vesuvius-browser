@@ -105,6 +105,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def _segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] = {
     val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.jp2")
+    targetFile.getParentFile.mkdirs()
     if (targetFile.exists) Future.successful(targetFile)
     else if (scroll == 1 && segmentId == "20230905134255" && layer == 31)
       Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230905134255_2_15.png"))
@@ -119,19 +120,19 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           Future.successful(webpVersion)
         else {
           val url = s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/$segmentId/layers/$layer.tif"
-          val tmpFile = File.createTempFile("download", ".tif")
+          val tmpFile = File.createTempFile("download", ".tif", targetFile.getParentFile)
           download(url, tmpFile)
         }
 
       tmpFile
         .map { tmpFile =>
-          val tmpFile2 = File.createTempFile("convert", ".jp2")
+          val tmpFile2 = File.createTempFile("convert", ".jp2", targetFile.getParentFile)
           import sys.process._
           val cmd = s"""vips copy $tmpFile "$tmpFile2[lossless]""""
           println(s"Convert big image to jp2: $cmd")
           cmd.!!
           targetFile.getParentFile.mkdirs()
-          tmpFile2.renameTo(targetFile)
+          require(tmpFile2.renameTo(targetFile))
           tmpFile.delete()
           targetFile
         }
