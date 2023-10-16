@@ -20,7 +20,7 @@ COPY src /tmp/project/src
 
 RUN /sbt "show assembly"
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:17
 
 RUN apt-get update && \
     apt-get install --no-install-recommends -y libvips-tools && \
