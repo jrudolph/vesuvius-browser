@@ -81,6 +81,7 @@ viewer.nextButton.addHandler('release', function() {
 viewer.addHandler('open', function() {
     console.log("open");
     show(7);
+    viewer.canvas.focus();
 });
 
 viewer.goToPreviousPage = function() {
