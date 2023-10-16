@@ -93,10 +93,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     segmentLayer(scroll, segmentId, 32)
       .map { f =>
         import sys.process._
-        val cmd = s"identify -format '%w %h' $f"
+        val cmd = s"vipsheader -a $f"
         val output = cmd.!!
-        val Array(width, height) = output.trim.split(' ')
-        ImageInfo(scroll, segmentId, width.toInt, height.toInt)
+        val kvs = output.split('\n').map(_.split(": ").map(_.trim)).map(a => a(0) -> a(1)).toMap
+        val width = kvs("width").toInt
+        val height = kvs("height").toInt
+        ImageInfo(scroll, segmentId, width, height)
       }
 
   val SegmentLayerCache = LfuCache[(Int, String, Int), File]
