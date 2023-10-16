@@ -1,6 +1,21 @@
+@import net.virtualvoid.vesuvius._
+
+@(infos: Seq[ImageInfo])
+
 <h2>Segments</h2>
 
 <table>
+    <tr><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th><th>Mask</th></tr>
+    @for(info <- infos) {
+        <tr>
+            <td><a href="/scroll/@info.scroll/segment/@info.segmentId/">Scroll @info.scroll / @info.segmentId</a></td>
+            <td>@{info.area.formatted("%5.2f")}</td>
+            <td>@info.width</td>
+            <td>@info.height</td>
+            <td><img src="/scroll/@info.scroll/segment/@info.segmentId/mask" height="50"/></td>
+        </tr>
+    }
+
     <tr><td><a href="/scroll/1/segment/20230522181603/">Scroll 1 / 20230522181603 (Monster)</a></td></tr>
 
     <tr><td><a href="/scroll/1/segment/20230509182749/">Scroll 1 / 20230509182749</a></td></tr>
