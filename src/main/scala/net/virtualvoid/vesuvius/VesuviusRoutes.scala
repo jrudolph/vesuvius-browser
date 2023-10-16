@@ -103,18 +103,31 @@ class VesuviusRoutes()(implicit system: ActorSystem) extends Directives with Twi
     SegmentLayerCache.getOrLoad((scroll, segmentId, layer), _ => _segmentLayer(scroll, segmentId, layer))
 
   def _segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] = {
-    val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
+    val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.jp2")
     if (targetFile.exists) Future.successful(targetFile)
+    else if (scroll == 1 && segmentId == "20230905134255" && layer == 31)
+      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230905134255_2_15.png"))
+    else if (scroll == 1 && segmentId == "20230702185752" && layer == 31)
+      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/out.png"))
+      //Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230702185752_2_15.png"))
     else {
-      val url = s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/$segmentId/layers/$layer.tif"
-      val tmpFile = File.createTempFile("download", ".tif")
+      val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
 
-      download(url, tmpFile)
-        .map { f =>
-          val tmpFile2 = File.createTempFile("convert", ".webp")
+      val tmpFile: Future[File] =
+        if (webpVersion.exists())
+          Future.successful(webpVersion)
+        else {
+          val url = s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/$segmentId/layers/$layer.tif"
+          val tmpFile = File.createTempFile("download", ".tif")
+          download(url, tmpFile)
+        }
+
+      tmpFile
+        .map { tmpFile =>
+          val tmpFile2 = File.createTempFile("convert", ".jp2")
           import sys.process._
-          val cmd = s"""convert $f -define webp:lossless=true $tmpFile2"""
-          println(s"Convert big image to webp: $cmd")
+          val cmd = s"""vips copy $tmpFile "$tmpFile2[lossless]""""
+          println(s"Convert big image to jp2: $cmd")
           cmd.!!
           targetFile.getParentFile.mkdirs()
           tmpFile2.renameTo(targetFile)
@@ -135,16 +148,22 @@ class VesuviusRoutes()(implicit system: ActorSystem) extends Directives with Twi
     if (targetFile.exists()) targetFile
     else {
       targetFile.getParentFile.mkdirs()
-      val width = (info.width / size).min(tileSize)
-      val height = (info.height / size).min(tileSize)
+      val width = (info.width / size).min(tileSize).min((info.width - targetX) / size)
+      val height = (info.height / size).min(tileSize).min((info.height - targetY) / size)
 
       import sys.process._
+      val tmpFile1 = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.jp2")
       val tmpFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.webp")
 
-      val cmd = s"""convert $imageFile -crop ${size * width}x${size * height}+$targetX+$targetY -resize ${width}x$height -define webp:lossless=true $tmpFile"""
-      println(f"Command for layers/$z/$layer/$tileX/$tileY: $cmd")
-      cmd.!!
+      val cmd1 = s"""vips crop $imageFile "$tmpFile1[lossless]" $targetX $targetY ${size * width} ${size * height}"""
+      println(f"Command for layers/$z/$layer/$tileX/$tileY: $cmd1")
+      cmd1.!!
 
+      val cmd2 = s"""vips thumbnail $tmpFile1 "$tmpFile[lossless]" $width"""
+      println(f"Command2 for layers/$z/$layer/$tileX/$tileY: $cmd2")
+      cmd2.!!
+
+      tmpFile1.delete()
       tmpFile.renameTo(targetFile)
       targetFile
     }
