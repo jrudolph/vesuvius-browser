@@ -6,16 +6,97 @@
 
 <div id="openseadragon1" style="width: 800px; height: 600px;"></div>
 <script src="/openseadragon/openseadragon.min.js"></script>
+<script src="/js/jquery-3.7.1.min.js.js"></script>
+<button class="previous">Previous</button>
+<button class="next">Next</button>
 <script type="text/javascript">
-    var viewer = OpenSeadragon({
-        id: "openseadragon1",
-        prefixUrl: "/openseadragon/images/",
-        tileSources: [@for(l <- 20 to 40 by 2) { "@{s"$l/dzi"}", }],
-        initialPage: 6,
-        showNavigator: true,
-        showRotationControl: true,
-        sequenceMode: true,
-        preserveViewport: true,
-        debugMode: false,
-    });
+    @*//, opacity: @{if (l == 32) 1 else 0}, preload: @{if (l == 31 || l == 34) 1 else 0}*@
+var viewer = OpenSeadragon({
+    id: "openseadragon1",
+    prefixUrl: "/openseadragon/images/",
+    tileSources: [@for(l <- ((20 to 40 by 2) :+ 31).sorted) { { tileSource: "@l/dzi", opacity: 0, preload: 0 }, }],
+    initialPage: 6,
+    showNavigator: true,
+    showRotationControl: true,
+    //sequenceMode: true,
+    preserveViewport: true,
+    preload: true,
+    debugMode: false,
+});
+
+index = 7;
+
+function sibling(index, shownIndex) {
+    if (index >= viewer.world.getItemCount()) index = viewer.world.getItemCount() - 1;
+    if (index < 0) index = 0;
+
+    if (index == shownIndex) return;
+    var tiledImage = viewer.world.getItemAt(index);
+    tiledImage.setOpacity(0)
+    tiledImage.setPreload(true);
+}
+
+function disable_sibling(index) {
+    if (index >= viewer.world.getItemCount()) index = viewer.world.getItemCount() - 1;
+    if (index < 0) index = 0;
+
+    var tiledImage = viewer.world.getItemAt(index);
+    tiledImage.setPreload(false);
+}
+
+function show(nextIndex) {
+  disable_sibling(index - 1);
+  disable_sibling(index + 1);
+
+  var oldTiledImage = viewer.world.getItemAt(index);
+  var oldIndex = index;
+  index = nextIndex;
+  if (index >= viewer.world.getItemCount()) index = viewer.world.getItemCount() - 1;
+  if (index < 0) index = 0;
+  //console.log(oldIndex, index);
+  var newTiledImage = viewer.world.getItemAt(index);
+  oldTiledImage.setOpacity(0);
+  oldTiledImage.setPreload(false);
+  newTiledImage.setOpacity(1);
+  sibling(index - 1, index);
+  sibling(index + 1, index);
+
+  function showButton(button, show) {
+    if (show) button.enable();
+    else button.disable();
+  }
+
+  showButton(viewer.previousButton, index - 1 >= 0);
+  showButton(viewer.nextButton, index + 1 < viewer.world.getItemCount());
+}
+
+viewer.bindSequenceControls();
+viewer.previousButton.removeAllHandlers('release');
+viewer.previousButton.addHandler('release', function() {
+  show(index - 1);
+});
+viewer.nextButton.removeAllHandlers('release');
+viewer.nextButton.addHandler('release', function() {
+  show(index + 1);
+});
+
+viewer.addHandler('open', function() {
+    console.log("open");
+    show(7);
+});
+
+viewer.goToPreviousPage = function() {
+  show(index - 1);
+};
+viewer.goToNextPage = function() {
+  show(index + 1);
+};
+
+viewer.addHandler('full-screen', function(ev) {
+  console.log("full screen!", ev.fullScreen);
+  viewer.canvas.focus();
+});
+
+viewer.pixelsPerArrowPress = 250;
+
 </script>
