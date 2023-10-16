@@ -45,7 +45,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   val NameR = """(\d+)_(\d+).webp""".r
 
-  lazy val scroll1Segments: Future[Seq[ImageInfo]] = segmentIds(1).flatMap(s => Future.traverse(s)(x => imageInfo(1, x).transform(Success(_)))).map(_.collect { case Success(s) => s })
+  lazy val scroll1Segments: Future[Seq[ImageInfo]] =
+    for {
+      id1 <- segmentIds(1)
+      id2 <- segmentIds(2)
+      id3 <- segmentIds(3)
+      infos <- Future.traverse(id1 ++ id2 ++ id3) { case (scroll, segment) => imageInfo(scroll, segment).transform(Success(_)) }
+    } yield infos.collect { case Success(s) => s }
 
   lazy val mainRoute =
     concat(
@@ -113,7 +119,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     for {
       (width, height) <- sizeOf(scroll, segmentId)
       area <- areaFor(scroll, segmentId)
-    } yield ImageInfo(scroll, segmentId, width, height, area)
+      realScroll = if (scroll == 3) 1 else scroll
+    } yield ImageInfo(realScroll, segmentId, width, height, area)
 
   val SegmentLayerCache = LfuCache[(Int, String, Int), File]
   def segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] =
@@ -139,7 +146,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
             if (segmentId == "20230827161847" || segmentId == "20231007101615")
               f"http://dl.ash2txt.org/hari-seldon-uploads/team-finished-paths/scroll$scroll/$segmentId/layers/$layer%02d.tif"
             else
-              f"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/$segmentId/layers/$layer%02d.tif"
+              f"${baseUrlFor(scroll)}/$segmentId/layers/$layer%02d.tif"
           val tmpFile = File.createTempFile("download", ".tif", targetFile.getParentFile)
           download(url, tmpFile)
         }
@@ -212,33 +219,46 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map { _ => tmpFile.renameTo(to); to }
   }
 
-  def maskFor(scroll: Int, segmentId: String): Future[File] = {
-    val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/mask.png")
-    targetFile.getParentFile.mkdirs()
-    if (targetFile.exists()) Future.successful(targetFile)
-    else {
-      val url = f"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/$segmentId/${segmentId}_mask.png"
-      download(url, targetFile)
-    }
+  def cacheFile(url: String, to: File, ttlSeconds: Long = 7200): Future[File] = {
+    to.getParentFile.mkdirs()
+    val neg = new File(to.getParentFile, s".neg-${to.getName}")
+    if (to.exists() && to.lastModified() + ttlSeconds < System.currentTimeMillis()) Future.successful(to)
+    else if (neg.exists() && neg.lastModified() + ttlSeconds < System.currentTimeMillis()) Future.failed(new RuntimeException(s"Negative cache for $url"))
+    else
+      download(url, to).recoverWith {
+        case t: Throwable =>
+          neg.getParentFile.mkdirs()
+          neg.createNewFile()
+          Future.failed(t)
+      }
   }
-  def areaFor(scroll: Int, segmentId: String): Future[Float] = {
-    val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/area_cm2.txt")
-    targetFile.getParentFile.mkdirs()
-    if (targetFile.exists()) Future.successful(targetFile)
-    else {
-      val url = f"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/$segmentId/area_cm2.txt"
-      download(url, targetFile)
-    }
-  }.map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
 
-  def segmentIds(scroll: Int): Future[Seq[String]] =
-    segmentIds(s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/", new File(config.dataDir, s"raw/scroll$scroll/path-listing.html"))
+  def maskFor(scroll: Int, segmentId: String): Future[File] =
+    cacheFile(
+      f"${baseUrlFor(scroll)}$segmentId/${segmentId}_mask.png",
+      new File(dataDir, s"raw/scroll$scroll/$segmentId/mask.png"))
+
+  def areaFor(scroll: Int, segmentId: String): Future[Float] =
+    cacheFile(
+      f"${baseUrlFor(scroll)}$segmentId/area_cm2.txt",
+      new File(dataDir, s"raw/scroll$scroll/$segmentId/area_cm2.txt")
+    ).map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
+
+  def segmentIds(scroll: Int): Future[Seq[(Int, String)]] =
+    segmentIds(baseUrlFor(scroll), new File(config.dataDir, s"raw/scroll$scroll/path-listing.html"))
+      .map(_.map(id => scroll -> id))
+
+  def baseUrlFor(scroll: Int): String =
+    scroll match {
+      case 1 | 2 => s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/"
+      case 3     => "http://dl.ash2txt.org/hari-seldon-uploads/team-finished-paths/scroll1/"
+    }
 
   val LinkR = """.*href="(.*)/".*""".r
   def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
-    download(baseUrl, targetFile).map { f =>
+    cacheFile(baseUrl, targetFile).map { f =>
       scala.io.Source.fromFile(f).getLines().collect {
-        case LinkR(segmentId) => segmentId
+        case LinkR(segmentId) if !segmentId.startsWith("..") => segmentId
       }.toVector
     }
 }

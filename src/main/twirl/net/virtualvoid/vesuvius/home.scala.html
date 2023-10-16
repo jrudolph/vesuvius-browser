@@ -5,10 +5,11 @@
 <h2>Segments</h2>
 
 <table>
-    <tr><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th><th>Mask</th></tr>
+    <tr><th>Scroll</th><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th><th>Mask</th></tr>
     @for(info <- infos) {
         <tr>
-            <td><a href="/scroll/@info.scroll/segment/@info.segmentId/">Scroll @info.scroll / @info.segmentId</a></td>
+            <td>Scroll @info.scroll</td>
+            <td><a href="/scroll/@info.scroll/segment/@info.segmentId/">@info.segmentId</a></td>
             <td>@{info.area.formatted("%5.2f")}</td>
             <td>@info.width</td>
             <td>@info.height</td>
