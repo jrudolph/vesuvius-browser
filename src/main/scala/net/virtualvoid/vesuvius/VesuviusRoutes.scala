@@ -38,6 +38,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   import system.dispatcher
   import config.dataDir
 
+  val cpuBound = system.dispatchers.lookup("cpu-bound-dispatcher")
+
   lazy val main = encodeResponse(mainRoute)
 
   val NameR = """(\d+)_(\d+).webp""".r
@@ -97,7 +99,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         val width = kvs("width").toInt
         val height = kvs("height").toInt
         ImageInfo(scroll, segmentId, width, height)
-      }
+      }(cpuBound)
 
   val SegmentLayerCache = LfuCache[(Int, String, Int), File]
   def segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] =
@@ -135,7 +137,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           require(tmpFile2.renameTo(targetFile))
           tmpFile.delete()
           targetFile
-        }
+        }(cpuBound)
     }
   }
 
@@ -145,7 +147,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     a => ResizeCache.getOrLoad(a, _ => ResizerQueue(a))
 
   val ResizerQueue = LifoQueue.semaphore[(File, ImageInfo, Int, Int, Int, Int), File](4) { (imageFile, info, layer, tileX, tileY, z) =>
-    Future { resize(imageFile, info, layer, tileX, tileY, z) }
+    Future { resize(imageFile, info, layer, tileX, tileY, z) }(cpuBound)
   }
 
   def resize(imageFile: File, info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): File = {
