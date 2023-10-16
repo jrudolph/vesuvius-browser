@@ -34,10 +34,11 @@ object DZIImage {
     DZIImage("http://schemas.microsoft.com/deepzoom/2008", format, overlap, tileSize, DZISize(width, height))
 }
 
-class VesuviusRoutes()(implicit system: ActorSystem) extends Directives with TwirlSupport with SprayJsonSupport {
+class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Directives with TwirlSupport with SprayJsonSupport {
   import system.dispatcher
+  import config.dataDir
 
-  val dataDir = new File("data")
+
 
   lazy val main = encodeResponse(mainRoute)
 
@@ -169,7 +170,7 @@ class VesuviusRoutes()(implicit system: ActorSystem) extends Directives with Twi
     }
   }
 
-  val auth = headers.Authorization(headers.BasicHttpCredentials("blip", "blup"))
+  val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
   def download(url: String, to: File): Future[File] = {
     val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
     Http().singleRequest(HttpRequest(HttpMethods.GET, Uri(url), headers = auth :: Nil))

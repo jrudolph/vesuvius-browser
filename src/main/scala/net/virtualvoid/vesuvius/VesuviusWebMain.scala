@@ -6,13 +6,13 @@ import org.apache.pekko.http.scaladsl.Http
 import java.io.File
 import scala.util.{ Failure, Success }
 
-object Llama2WebMain extends App {
+object VesuviusWebMain extends App {
   implicit val system: ActorSystem = ActorSystem()
   import system.dispatcher
 
   val appConfig = AppConfig.fromConfig(system.settings.config)
 
-  val routes = new VesuviusRoutes().main
+  val routes = new VesuviusRoutes(appConfig).main
 
   val server = Http().newServerAt(appConfig.host, appConfig.port).bind(routes)
   server.onComplete {

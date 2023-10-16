@@ -1,4 +1,4 @@
-val scalaV = "3.3.0"
+val scalaV = "3.3.1"
 val pekkoV = "1.0.1"
 val pekkoHttpV = "1.0.0"
 val scalaTestV = "3.2.16"
@@ -39,3 +39,14 @@ Compile / paradoxMaterialTheme := {
 paradoxProperties ++= Map(
   "github.base_url" -> (Compile / paradoxMaterialTheme).value.properties.getOrElse("repo", "")
 )
+
+// setup docker build
+// use separate dependency and app jars
+assembly / assemblyOption := (assembly / assemblyOption).value.withIncludeScala(false).withIncludeDependency(false)
+assembly / assemblyJarName := "app.jar" // contract with Dockerfile
+assemblyPackageDependency / assemblyJarName := "deps.jar" // contract with Dockerfile
+assemblyMergeStrategy := {
+  // merging pekko protobuf and protobuf from google ortools (not sure why they are different, but doesn't matter here)
+  case PathList(ps @ _*) if ps.last endsWith ".proto" => MergeStrategy.first
+  case x => assemblyMergeStrategy.value(x)
+}
