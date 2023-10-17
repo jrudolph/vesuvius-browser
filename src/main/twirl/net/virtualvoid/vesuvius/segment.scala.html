@@ -10,11 +10,12 @@
 <script type="text/javascript">
 
     var origHash = window.location.hash.substring(1);
+    var layers = [@for(l <- ((20 to 50 by 2) :+ 31)) { "@l", }];
     @*//, opacity: @{if (l == 32) 1 else 0}, preload: @{if (l == 31 || l == 34) 1 else 0}*@
 var viewer = OpenSeadragon({
     id: "openseadragon1",
     prefixUrl: "/openseadragon/images/",
-    tileSources: [@for(l <- ((20 to 40 by 2) :+ 31).sorted) { { tileSource: "@l/dzi", opacity: 0, preload: 0 }, }],
+    tileSources: [@for(l <- ((20 to 50 by 2) :+ 31)) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
     initialPage: 6,
     showNavigator: true,
     showRotationControl: true,
@@ -88,7 +89,7 @@ function updateHash() {
     var y = imp.y;
     var rot = viewer.viewport.getRotation();
     var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true));
-    window.location.hash = "x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&item=" + index;
+    window.location.hash = "x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&layer=" + layers[index];
 }
 
 viewer.addHandler('pan', updateHash);
@@ -96,10 +97,9 @@ viewer.addHandler('zoom', updateHash);
 viewer.addHandler('rotate', updateHash);
 
 viewer.addHandler('open', function() {
-    console.log("open", origHash);
+    //console.log("open", origHash);
 
     var hash = origHash;
-    show(7);
     viewer.canvas.focus();
 
     var params = {}
@@ -107,14 +107,13 @@ viewer.addHandler('open', function() {
       let temp = hk.split('=');
         params[temp[0]] = temp[1]
     });
-    console.log(params);
+
     var tile = viewer.world.getItemAt(index);
     if (params.x) {
         // parse params.x to int
         var x = parseFloat(params.x);
         var y = parseFloat(params.y);
         var imp = new OpenSeadragon.Point(x, y);
-        console.log(x,y,imp);
         viewer.viewport.panTo(tile.imageToViewportCoordinates(imp), true);
     }
     if (params.zoom) {
@@ -123,9 +122,13 @@ viewer.addHandler('open', function() {
     if (params.rot) {
         viewer.viewport.setRotation(parseFloat(params.rot), true);
     }
-    if (params.item) {
-        show(parseInt(params.item));
-    }
+    if (params.layer) {
+        var layer = params.layer;
+        // find index of element in layers
+        var i = layers.indexOf(layer);
+        show(i);
+    } else
+        show(7);
 });
 
 viewer.goToPreviousPage = function() {
@@ -136,7 +139,6 @@ viewer.goToNextPage = function() {
 };
 
 viewer.addHandler('full-screen', function(ev) {
-  console.log("full screen!", ev.fullScreen);
   viewer.canvas.focus();
 });
 
