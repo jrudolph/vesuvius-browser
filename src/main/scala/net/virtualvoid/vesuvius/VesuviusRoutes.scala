@@ -64,6 +64,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           }
         }
       },
+      path("license") {
+        complete(html.license())
+      },
       pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>
         onSuccess(imageInfo(scroll, segmentId)) { info =>
           concat(
