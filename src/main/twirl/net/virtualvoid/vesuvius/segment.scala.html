@@ -8,6 +8,8 @@
 <script src="/openseadragon/openseadragon.min.js"></script>
 <script src="/js/jquery-3.7.1.min.js.js"></script>
 <script type="text/javascript">
+
+    var origHash = window.location.hash.substring(1);
     @*//, opacity: @{if (l == 32) 1 else 0}, preload: @{if (l == 31 || l == 34) 1 else 0}*@
 var viewer = OpenSeadragon({
     id: "openseadragon1",
@@ -66,6 +68,7 @@ function show(nextIndex) {
 
   showButton(viewer.previousButton, index - 1 >= 0);
   showButton(viewer.nextButton, index + 1 < viewer.world.getItemCount());
+  updateHash();
 }
 
 viewer.bindSequenceControls();
@@ -78,10 +81,51 @@ viewer.nextButton.addHandler('release', function() {
   show(index + 1);
 });
 
+function updateHash() {
+    var tile = viewer.world.getItemAt(index);
+    var imp = tile.viewportToImageCoordinates(viewer.viewport.getCenter(true));
+    var x = imp.x;
+    var y = imp.y;
+    var rot = viewer.viewport.getRotation();
+    var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true));
+    window.location.hash = "x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&item=" + index;
+}
+
+viewer.addHandler('pan', updateHash);
+viewer.addHandler('zoom', updateHash);
+viewer.addHandler('rotate', updateHash);
+
 viewer.addHandler('open', function() {
-    console.log("open");
+    console.log("open", origHash);
+
+    var hash = origHash;
     show(7);
     viewer.canvas.focus();
+
+    var params = {}
+    hash.split('&').map(hk => {
+      let temp = hk.split('=');
+        params[temp[0]] = temp[1]
+    });
+    console.log(params);
+    var tile = viewer.world.getItemAt(index);
+    if (params.x) {
+        // parse params.x to int
+        var x = parseFloat(params.x);
+        var y = parseFloat(params.y);
+        var imp = new OpenSeadragon.Point(x, y);
+        console.log(x,y,imp);
+        viewer.viewport.panTo(tile.imageToViewportCoordinates(imp), true);
+    }
+    if (params.zoom) {
+        viewer.viewport.zoomTo(tile.imageToViewportZoom(parseFloat(params.zoom)), true);
+    }
+    if (params.rot) {
+        viewer.viewport.setRotation(parseFloat(params.rot), true);
+    }
+    if (params.item) {
+        show(parseInt(params.item));
+    }
 });
 
 viewer.goToPreviousPage = function() {
@@ -97,6 +141,7 @@ viewer.addHandler('full-screen', function(ev) {
 });
 
 viewer.pixelsPerArrowPress = 250;
+
 
 </script>
 
