@@ -133,11 +133,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def _segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] = {
     val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.jp2")
     targetFile.getParentFile.mkdirs()
-    if (targetFile.exists) Future.successful(targetFile)
-    else if (scroll == 1 && segmentId == "20230905134255" && layer == 31)
-      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230905134255_2_15.png"))
-    else if (scroll == 1 && segmentId == "20230702185752" && layer == 31)
-      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/out.png"))
+
+    if (scroll == 3 && segmentId == "20230827161847" && layer == 31)
+      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230827161847_16_15.png"))
+    else if (scroll == 3 && segmentId == "20231005123333" && layer == 31)
+      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20231005123333_32_15_extended.png"))
+    else if (targetFile.exists) Future.successful(targetFile)
     //Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230702185752_2_15.png"))
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")

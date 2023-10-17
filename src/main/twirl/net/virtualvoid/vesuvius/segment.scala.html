@@ -12,7 +12,7 @@
 var viewer = OpenSeadragon({
     id: "openseadragon1",
     prefixUrl: "/openseadragon/images/",
-    tileSources: [@for(l <- ((20 to 40 by 2) :+ 31).sorted) { { tileSource: "@l/dzi", opacity: 0, preload: 0 }, }],
+    tileSources: [@for(l <- ((20 to 50 by 2) :+ 31)) { { tileSource: "@l/dzi", opacity: 0, preload: 0 }, }],
     initialPage: 6,
     showNavigator: true,
     showRotationControl: true,
@@ -22,6 +22,7 @@ var viewer = OpenSeadragon({
     debugMode: false,
 });
 
+extra_image = 16;
 index = 7;
 
 function sibling(index, shownIndex) {
@@ -30,7 +31,7 @@ function sibling(index, shownIndex) {
 
     if (index == shownIndex) return;
     var tiledImage = viewer.world.getItemAt(index);
-    tiledImage.setOpacity(0)
+    tiledImage.setOpacity(0);
     tiledImage.setPreload(true);
 }
 
@@ -83,6 +84,17 @@ viewer.addHandler('open', function() {
     show(7);
     viewer.canvas.focus();
 });
+
+viewer.addHandler('canvas-key', function(event) {
+    if (event.originalEvent.keyCode == 69) {
+        viewer.world.getItemAt(extra_image).setOpacity(0.6);
+    }
+});
+viewer.innerTracker.keyUpHandler = function(event) {
+    if (event.keyCode == 69) {
+        viewer.world.getItemAt(extra_image).setOpacity(0);
+    }
+};
 
 viewer.goToPreviousPage = function() {
   show(index - 1);
