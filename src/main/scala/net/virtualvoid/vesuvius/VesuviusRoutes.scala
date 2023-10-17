@@ -74,7 +74,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               complete(html.segment(info))
             },
             path("mask") {
-              onSuccess(maskFor(scroll, segmentId)) { mask =>
+              onSuccess(resizedMask(scroll, segmentId)) { mask =>
                 getFromFile(mask)
               }
             },
@@ -206,7 +206,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       cmd2.!!
 
       tmpFile1.delete()
-      tmpFile.renameTo(targetFile)
+      require(tmpFile.renameTo(targetFile))
       targetFile
     }
   }
@@ -223,13 +223,32 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map { _ => tmpFile.renameTo(to); to }
   }
 
-  def cacheFile(url: String, to: File, ttlSeconds: Long = 7200): Future[File] = {
+  def resizedMask(scroll: Int, segmentId: String): Future[File] = {
+    val target = new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small.png")
+    cached(target, negTtlSeconds = 0) { () =>
+      maskFor(scroll, segmentId).map { f =>
+        import sys.process._
+        val tmpFile = File.createTempFile("small_mask", ".png", target.getParentFile)
+        val cmd = s"""vips thumbnail $f $tmpFile 10000 --height 50"""
+        cmd.!!
+        require(tmpFile.renameTo(target))
+        target
+      }
+    }
+  }
+
+  val DefaultPositiveTtl = 3600 * 24 * 365
+  val DefaultNegativeTtl = 7200
+  def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
+    cached(to, ttlSeconds) { () => download(url, to) }
+
+  def cached(to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl)(f: () => Future[File]): Future[File] = {
     to.getParentFile.mkdirs()
     val neg = new File(to.getParentFile, s".neg-${to.getName}")
-    if (to.exists() && to.lastModified() + ttlSeconds < System.currentTimeMillis()) Future.successful(to)
-    else if (neg.exists() && neg.lastModified() + ttlSeconds < System.currentTimeMillis()) Future.failed(new RuntimeException(s"Negative cache for $url"))
+    if (to.exists() && to.lastModified() + ttlSeconds > System.currentTimeMillis()) Future.successful(to)
+    else if (neg.exists() && neg.lastModified() + negTtlSeconds > System.currentTimeMillis()) Future.failed(new RuntimeException(s"Negatively cached"))
     else
-      download(url, to).recoverWith {
+      f().recoverWith {
         case t: Throwable =>
           neg.getParentFile.mkdirs()
           neg.createNewFile()
@@ -238,12 +257,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   }
 
   def maskFor(scroll: Int, segmentId: String): Future[File] =
-    cacheFile(
+    cacheDownload(
       f"${baseUrlFor(scroll)}$segmentId/${segmentId}_mask.png",
       new File(dataDir, s"raw/scroll$scroll/$segmentId/mask.png"))
 
   def areaFor(scroll: Int, segmentId: String): Future[Float] =
-    cacheFile(
+    cacheDownload(
       f"${baseUrlFor(scroll)}$segmentId/area_cm2.txt",
       new File(dataDir, s"raw/scroll$scroll/$segmentId/area_cm2.txt")
     ).map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
@@ -260,7 +279,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   val LinkR = """.*href="(.*)/".*""".r
   def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
-    cacheFile(baseUrl, targetFile).map { f =>
+    cacheDownload(baseUrl, targetFile).map { f =>
       scala.io.Source.fromFile(f).getLines().collect {
         case LinkR(segmentId) if !segmentId.startsWith("..") => segmentId
       }.toVector
