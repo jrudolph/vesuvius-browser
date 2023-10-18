@@ -173,43 +173,45 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val ResizeCache = LfuCache[(File, ImageInfo, Int, Int, Int, Int), File]
 
   def resizer: ((File, ImageInfo, Int, Int, Int, Int)) => Future[File] =
-    a => ResizeCache.getOrLoad(a, _ => ResizerQueue(a))
+    a => ResizeCache.getOrLoad(a, _ => (resized _).tupled(a))
 
   val ResizerQueue = LifoQueue.semaphore[(File, ImageInfo, Int, Int, Int, Int), File](4) { (imageFile, info, layer, tileX, tileY, z) =>
-    Future { resize(imageFile, info, layer, tileX, tileY, z) }(cpuBound)
+    resize(imageFile, info, layer, tileX, tileY, z)
   }
 
-  def resize(imageFile: File, info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): File = {
+  def resized(imageFile: File, info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): Future[File] = {
+    val targetFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/${tileX}_$tileY.webp")
+    if (targetFile.exists()) Future.successful(targetFile)
+    else ResizerQueue(imageFile, info, layer, tileX, tileY, z)
+  }
+  def resize(imageFile: File, info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): Future[File] = Future {
+    val targetFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/${tileX}_$tileY.webp")
+
     val tileSize = 512
     val maxLayer = (math.log(info.width max info.height) / math.log(2)).ceil.toInt
     val size = 1 << (maxLayer - layer)
     val targetX = tileX * size * tileSize
     val targetY = tileY * size * tileSize
+    targetFile.getParentFile.mkdirs()
+    val width = (info.width / size).min(tileSize).min((info.width - targetX) / size)
+    val height = (info.height / size).min(tileSize).min((info.height - targetY) / size)
 
-    val targetFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/${tileX}_$tileY.webp")
-    if (targetFile.exists()) targetFile
-    else {
-      targetFile.getParentFile.mkdirs()
-      val width = (info.width / size).min(tileSize).min((info.width - targetX) / size)
-      val height = (info.height / size).min(tileSize).min((info.height - targetY) / size)
+    import sys.process._
+    val tmpFile1 = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.jp2")
+    val tmpFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.webp")
 
-      import sys.process._
-      val tmpFile1 = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.jp2")
-      val tmpFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.webp")
+    val cmd1 = s"""vips crop $imageFile "$tmpFile1[lossless]" $targetX $targetY ${size * width} ${size * height}"""
+    println(f"Command for layers/$z/$layer/$tileX/$tileY: $cmd1")
+    cmd1.!!
 
-      val cmd1 = s"""vips crop $imageFile "$tmpFile1[lossless]" $targetX $targetY ${size * width} ${size * height}"""
-      println(f"Command for layers/$z/$layer/$tileX/$tileY: $cmd1")
-      cmd1.!!
+    val cmd2 = s"""vips thumbnail $tmpFile1 "$tmpFile[lossless]" $width"""
+    println(f"Command2 for layers/$z/$layer/$tileX/$tileY: $cmd2")
+    cmd2.!!
 
-      val cmd2 = s"""vips thumbnail $tmpFile1 "$tmpFile[lossless]" $width"""
-      println(f"Command2 for layers/$z/$layer/$tileX/$tileY: $cmd2")
-      cmd2.!!
-
-      tmpFile1.delete()
-      require(tmpFile.renameTo(targetFile))
-      targetFile
-    }
-  }
+    tmpFile1.delete()
+    require(tmpFile.renameTo(targetFile))
+    targetFile
+  }(cpuBound)
 
   val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
   def download(url: String, to: File): Future[File] = {
