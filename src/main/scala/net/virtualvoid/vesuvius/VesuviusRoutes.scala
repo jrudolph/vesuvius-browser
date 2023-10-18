@@ -59,7 +59,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     concat(
       pathSingleSlash {
         get {
-          onSuccess(scrollSegments) { infos =>
+          scrollSegments.await { infos =>
             complete(html.home(infos))
           }
         }
@@ -68,15 +68,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         complete(html.license())
       },
       pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>
-        existingSegmentInfo(scroll, segmentId) { (info: ImageInfo) =>
+        imageInfo(scroll, segmentId).await.orReject { (info: ImageInfo) =>
           concat(
             pathSingleSlash {
               complete(html.segment(info))
             },
             path("mask") {
-              onSuccess(resizedMask(scroll, segmentId)) { mask =>
-                getFromFile(mask)
-              }
+              resizedMask(scroll, segmentId).deliver
             },
             pathPrefix(IntNumber) { z =>
               concat(
@@ -85,14 +83,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   complete(JsObject("Image" -> dziImage.toJson))
                 },
                 path("dzi_files" / IntNumber / Segment) { (layer, name) =>
-                  onSuccess(segmentLayer(scroll, segmentId, z)) { layerFile =>
+                  segmentLayer(scroll, segmentId, z).await { layerFile =>
                     val NameR(xStr, yStr) = name
                     val x = xStr.toInt
                     val y = yStr.toInt
 
-                    onSuccess(resizer(layerFile, info, layer, x, y, z)) { resized =>
-                      getFromFile(resized)
-                    }
+                    resizer(layerFile, info, layer, x, y, z).deliver
                   }
                 }
               )
@@ -102,15 +98,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       },
       getFromResourceDirectory("web")
     )
-
-  def existing[T](value: Option[T]): Directive1[T] =
-    value match {
-      case Some(v) => provide(v)
-      case None    => reject
-    }
-
-  def existingSegmentInfo(scroll: Int, segmentId: String): Directive1[ImageInfo] =
-    onSuccess(imageInfo(scroll, segmentId)).flatMap(existing[ImageInfo])
 
   val InfoCache = LfuCache[(Int, String), Option[ImageInfo]]
 
@@ -134,8 +121,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       (width, height) <- sizeOf(scroll, segmentId)
       area <- areaFor(scroll, segmentId)
     } yield ImageInfo(scroll, segmentId, width, height, area)
-  }.map(Some(_))
-    .recover { case _: Throwable => None }
+  }.transform(x => Success(x.toOption))
 
   val SegmentLayerCache = LfuCache[(Int, String, Int), File]
   def segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] =
