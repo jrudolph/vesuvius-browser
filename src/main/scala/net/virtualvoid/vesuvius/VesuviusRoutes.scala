@@ -145,11 +145,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.jp2")
     targetFile.getParentFile.mkdirs()
     if (targetFile.exists) Future.successful(targetFile)
-    else if (scroll == 1 && segmentId == "20230905134255" && layer == 31)
-      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230905134255_2_15.png"))
-    else if (scroll == 1 && segmentId == "20230702185752" && layer == 31)
-      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/out.png"))
-    //Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230702185752_2_15.png"))
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
 
@@ -157,11 +152,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         if (webpVersion.exists())
           Future.successful(webpVersion)
         else {
-          val url =
-            /*if (segmentId == "20230827161847" || segmentId == "20231007101615")
-              f"http://dl.ash2txt.org/hari-seldon-uploads/team-finished-paths/scroll$scroll/$segmentId/layers/$layer%02d.tif"
-            else*/
-            f"${baseUrlFor(scroll)}/$segmentId/layers/$layer%02d.tif"
+          val url = f"${baseUrlFor(scroll)}/$segmentId/layers/$layer%02d.tif"
           val tmpFile = File.createTempFile("download", ".tif", targetFile.getParentFile)
           download(url, tmpFile)
         }
