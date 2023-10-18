@@ -2,6 +2,15 @@
 
 An unofficial web app to browse segments of the Vesuvius Challenge in a convenient way.
 
+The segment viewer is powered by [openseadragon](https://openseadragon.github.io/). The backend component powered by [Apache Pekko HTTP](https://pekko.apache.org/).
+
+## Features
+
+ - Browse segments of the Vesuvius Challenge
+ - View segment overview with area covered and masks
+ - Link to the current view of a segment
+ - Keyboard navigation
+
 ## Usage
 
 A public version of the app is hosted at [https://vesuvius.virtual-void.net/](https://vesuvius.virtual-void.net/). To
