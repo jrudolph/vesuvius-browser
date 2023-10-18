@@ -93,7 +93,8 @@ function updateHash() {
     var y = imp.y;
     var rot = viewer.viewport.getRotation();
     var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true));
-    window.location.hash = "x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&layer=" + layers[index];
+    var newHash = "#x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&layer=" + layers[index];
+    history.replaceState(undefined, undefined, newHash);
 }
 
 viewer.addHandler('pan', updateHash);
