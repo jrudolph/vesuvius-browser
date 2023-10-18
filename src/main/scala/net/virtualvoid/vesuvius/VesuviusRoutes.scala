@@ -240,13 +240,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val DefaultPositiveTtl = 3600 * 24 * 365
   val DefaultNegativeTtl = 7200
   def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
-    cached(to, ttlSeconds) { () => download(url, to) }
+    cached(to, ttlSeconds, negTtlSeconds) { () => download(url, to) }
 
   def cached(to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl)(f: () => Future[File]): Future[File] = {
     to.getParentFile.mkdirs()
     val neg = new File(to.getParentFile, s".neg-${to.getName}")
-    if (to.exists() && to.lastModified() + ttlSeconds > System.currentTimeMillis()) Future.successful(to)
-    else if (neg.exists() && neg.lastModified() + negTtlSeconds > System.currentTimeMillis()) Future.failed(new RuntimeException(s"Negatively cached"))
+    if (to.exists() && to.lastModified() + ttlSeconds * 1000 > System.currentTimeMillis()) Future.successful(to)
+    else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis()) Future.failed(new RuntimeException(s"Negatively cached"))
     else
       f().recoverWith {
         case t: Throwable =>
