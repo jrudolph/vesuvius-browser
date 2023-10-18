@@ -47,7 +47,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   val NameR = """(\d+)_(\d+).jpg""".r
 
-  lazy val scroll1Segments: Future[Seq[ImageInfo]] =
+  lazy val scrollSegments: Future[Seq[ImageInfo]] =
     for {
       id1 <- segmentIds(1)
       id2 <- segmentIds(2)
@@ -59,7 +59,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     concat(
       pathSingleSlash {
         get {
-          onSuccess(scroll1Segments) { infos =>
+          onSuccess(scrollSegments) { infos =>
             complete(html.home(infos))
           }
         }
@@ -206,18 +206,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }(cpuBound)
   }
 
-  val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
-  def download(url: String, to: File): Future[File] = {
-    println(s"Downloading $url")
-    val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
-    Http().singleRequest(HttpRequest(HttpMethods.GET, Uri(url), headers = auth :: Nil))
-      .flatMap { res =>
-        require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
-        res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
-      }
-      .map { _ => tmpFile.renameTo(to); to }
-  }
-
   def resizedMask(scroll: Int, segmentId: String): Future[File] = {
     val target = new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small.png")
     cached(target, negTtlSeconds = 0) { () =>
@@ -230,26 +218,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         target
       }
     }
-  }
-
-  val DefaultPositiveTtl = 3600 * 24 * 365
-  val DefaultNegativeTtl = 7200
-  def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
-    cached(to, ttlSeconds, negTtlSeconds) { () => download(url, to) }
-
-  def cached(to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl)(f: () => Future[File]): Future[File] = {
-    to.getParentFile.mkdirs()
-    val neg = new File(to.getParentFile, s".neg-${to.getName}")
-    if (to.exists() && to.lastModified() + ttlSeconds * 1000 > System.currentTimeMillis()) Future.successful(to)
-    else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis()) Future.failed(new RuntimeException(s"Negatively cached"))
-    else
-      f().recoverWith {
-        case t: Throwable =>
-          neg.getParentFile.mkdirs()
-          neg.delete()
-          neg.createNewFile()
-          Future.failed(t)
-      }
   }
 
   def maskFor(scroll: Int, segmentId: String): Future[File] =
@@ -280,4 +248,38 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         case LinkR(segmentId) if !segmentId.startsWith("..") => segmentId
       }.toVector
     }
+
+  val DefaultPositiveTtl = 3600 * 24 * 365
+  val DefaultNegativeTtl = 7200
+
+  def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
+    cached(to, ttlSeconds, negTtlSeconds) { () => download(url, to) }
+
+  def cached(to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl)(f: () => Future[File]): Future[File] = {
+    to.getParentFile.mkdirs()
+    val neg = new File(to.getParentFile, s".neg-${to.getName}")
+    if (to.exists() && to.lastModified() + ttlSeconds * 1000 > System.currentTimeMillis()) Future.successful(to)
+    else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis()) Future.failed(new RuntimeException(s"Negatively cached"))
+    else
+      f().recoverWith {
+        case t: Throwable =>
+          neg.getParentFile.mkdirs()
+          neg.delete()
+          neg.createNewFile()
+          Future.failed(t)
+      }
+  }
+
+  val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
+
+  def download(url: String, to: File): Future[File] = {
+    println(s"Downloading $url")
+    val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
+    Http().singleRequest(HttpRequest(HttpMethods.GET, Uri(url), headers = auth :: Nil))
+      .flatMap { res =>
+        require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
+        res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
+      }
+      .map { _ => tmpFile.renameTo(to); to }
+  }
 }
