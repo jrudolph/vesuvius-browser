@@ -52,8 +52,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       id1 <- segmentIds(1)
       id2 <- segmentIds(2)
       id3 <- segmentIds(3)
-      infos <- Future.traverse(id1 ++ id2 ++ id3) { case (scroll, segment) => imageInfo(scroll, segment).transform(Success(_)) }
-    } yield infos.collect { case Success(s) => s }
+      infos <- Future.traverse(id1 ++ id2 ++ id3) { case (scroll, segment) => imageInfo(scroll, segment) }
+    } yield infos.flatten
 
   lazy val mainRoute =
     concat(
@@ -68,7 +68,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         complete(html.license())
       },
       pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>
-        onSuccess(imageInfo(scroll, segmentId)) { info =>
+        existingSegmentInfo(scroll, segmentId) { (info: ImageInfo) =>
           concat(
             pathSingleSlash {
               complete(html.segment(info))
@@ -103,9 +103,18 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       getFromResourceDirectory("web")
     )
 
-  val InfoCache = LfuCache[(Int, String), ImageInfo]
+  def existing[T](value: Option[T]): Directive1[T] =
+    value match {
+      case Some(v) => provide(v)
+      case None    => reject
+    }
 
-  def imageInfo(scroll: Int, segmentId: String): Future[ImageInfo] =
+  def existingSegmentInfo(scroll: Int, segmentId: String): Directive1[ImageInfo] =
+    onSuccess(imageInfo(scroll, segmentId)).flatMap(existing[ImageInfo])
+
+  val InfoCache = LfuCache[(Int, String), Option[ImageInfo]]
+
+  def imageInfo(scroll: Int, segmentId: String): Future[Option[ImageInfo]] =
     InfoCache.getOrLoad((scroll, segmentId), _ => _imageInfo(scroll, segmentId))
 
   //areaFor
@@ -120,11 +129,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         val height = kvs("height").toInt
         (width, height)
       }(cpuBound)
-  def _imageInfo(scroll: Int, segmentId: String): Future[ImageInfo] =
+  def _imageInfo(scroll: Int, segmentId: String): Future[Option[ImageInfo]] = {
     for {
       (width, height) <- sizeOf(scroll, segmentId)
       area <- areaFor(scroll, segmentId)
     } yield ImageInfo(scroll, segmentId, width, height, area)
+  }.map(Some(_))
+    .recover { case _: Throwable => None }
 
   val SegmentLayerCache = LfuCache[(Int, String, Int), File]
   def segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] =
