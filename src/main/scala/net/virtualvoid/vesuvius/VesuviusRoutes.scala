@@ -235,6 +235,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       f().recoverWith {
         case t: Throwable =>
           neg.getParentFile.mkdirs()
+          neg.delete()
           neg.createNewFile()
           Future.failed(t)
       }
