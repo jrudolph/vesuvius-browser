@@ -8,6 +8,8 @@ A public version of the app is hosted at [https://vesuvius.virtual-void.net/](ht
 access it you will need to fill out the official registration form and use the same credentials as for the Vesuvius
 Challenge data server.
 
+![demo](docs/demo1.gif)
+
 ### Run with docker
 
 Build the docker container:
