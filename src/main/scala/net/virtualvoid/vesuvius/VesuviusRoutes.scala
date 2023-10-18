@@ -263,7 +263,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   val LinkR = """.*href="(.*)/".*""".r
   def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
-    cacheDownload(baseUrl, targetFile).map { f =>
+    cacheDownload(baseUrl, targetFile, ttlSeconds = 3600).map { f =>
       scala.io.Source.fromFile(f).getLines().collect {
         case LinkR(segmentId) if !segmentId.startsWith("..") => segmentId
       }.toVector
