@@ -90,11 +90,11 @@ viewer.nextButton.addHandler('release', function() {
 function updateHash() {
     var tile = viewer.world.getItemAt(index);
     var imp = tile.viewportToImageCoordinates(viewer.viewport.getCenter(true));
-    var x = imp.x;
-    var y = imp.y;
+    var x = imp.x.toFixed(0);
+    var y = imp.y.toFixed(0);
     var rot = viewer.viewport.getRotation();
     var flip = viewer.viewport.getFlip();
-    var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true));
+    var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true)).toFixed(3);
     var newHash = "#x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&flip=" + flip + "&layer=" + layers[index];
     history.replaceState(undefined, undefined, newHash);
 }
