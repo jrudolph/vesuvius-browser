@@ -93,8 +93,9 @@ function updateHash() {
     var x = imp.x;
     var y = imp.y;
     var rot = viewer.viewport.getRotation();
+    var flip = viewer.viewport.getFlip();
     var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true));
-    var newHash = "#x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&layer=" + layers[index];
+    var newHash = "#x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&flip=" + flip + "&layer=" + layers[index];
     history.replaceState(undefined, undefined, newHash);
 }
 
@@ -127,6 +128,9 @@ viewer.addHandler('open', function() {
     }
     if (params.rot) {
         viewer.viewport.setRotation(parseFloat(params.rot), true);
+    }
+    if (params.flip) {
+        viewer.viewport.setFlip(params.flip == "true", true);
     }
     if (params.layer) {
         var layer = params.layer;
