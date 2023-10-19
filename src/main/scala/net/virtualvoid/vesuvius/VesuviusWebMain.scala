@@ -6,7 +6,7 @@ import org.apache.pekko.http.scaladsl.Http
 import java.io.File
 import scala.util.{ Failure, Success }
 
-object VesuviusWebMain extends App {
+object VesuviusWebMain /*extends App*/ {
   implicit val system: ActorSystem = ActorSystem()
   import system.dispatcher
 
