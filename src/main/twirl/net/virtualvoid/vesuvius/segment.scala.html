@@ -90,12 +90,12 @@ viewer.nextButton.addHandler('release', function() {
 function updateHash() {
     var tile = viewer.world.getItemAt(index);
     var imp = tile.viewportToImageCoordinates(viewer.viewport.getCenter(true));
-    var x = imp.x.toFixed(0);
-    var y = imp.y.toFixed(0);
+    var u = imp.x.toFixed(0);
+    var v = imp.y.toFixed(0);
     var rot = viewer.viewport.getRotation();
     var flip = viewer.viewport.getFlip();
     var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true)).toFixed(3);
-    var newHash = "#x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&flip=" + flip + "&layer=" + layers[index];
+    var newHash = "#u=" + u + "&v=" + v + "&zoom=" + zoom + "&rot=" + rot + "&flip=" + flip + "&layer=" + layers[index];
     history.replaceState(undefined, undefined, newHash);
 }
 
@@ -116,11 +116,16 @@ viewer.addHandler('open', function() {
     });
 
     var tile = viewer.world.getItemAt(index);
-    if (params.x) {
+    if (params.x || params.u) {
         // parse params.x to int
-        var x = parseFloat(params.x);
-        var y = parseFloat(params.y);
-        var imp = new OpenSeadragon.Point(x, y);
+        var u = 0;
+        if (params.u) u = parseFloat(params.u);
+        else if (params.x) u = parseFloat(params.x); // legacy support for `x`
+        var v = 0;
+        if (params.v) v = parseFloat(params.v);
+        else if (params.y) v = parseFloat(params.y); // legacy support for `y`
+
+        var imp = new OpenSeadragon.Point(u, v);
         viewer.viewport.panTo(tile.imageToViewportCoordinates(imp), true);
     }
     if (params.zoom) {
