@@ -10,7 +10,7 @@
         <tr>
             <td>Scroll @info.scroll</td>
             <td><a href="/scroll/@info.scroll/segment/@info.segmentId/">@info.segmentId</a></td>
-            <td>@{info.area.formatted("%5.2f")}</td>
+            <td>@{info.area.map(_.formatted("%5.2f")).getOrElse("")}</td>
             <td>@info.width</td>
             <td>@info.height</td>
             <td><img src="/scroll/@info.scroll/segment/@info.segmentId/mask" height="50"/></td>

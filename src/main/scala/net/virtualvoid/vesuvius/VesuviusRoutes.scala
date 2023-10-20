@@ -37,7 +37,7 @@ case class ImageInfo(
     ref:    SegmentReference,
     width:  Int,
     height: Int,
-    area:   Float
+    area:   Option[Float]
 ) {
   def scroll: Int = ref.scroll
   def segmentId: String = ref.segmentId
@@ -239,12 +239,14 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       new File(dataDir, s"raw/scroll$scroll/$segmentId/mask.png"))
   }
 
-  def areaFor(segment: SegmentReference): Future[Float] = {
+  def areaFor(segment: SegmentReference): Future[Option[Float]] = {
     import segment._
     cacheDownload(
       s"${segment.baseUrl}area_cm2.txt",
       new File(dataDir, s"raw/scroll$scroll/$segmentId/area_cm2.txt")
-    ).map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
+    )
+      .map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
+      .transform(x => Success(x.toOption))
   }
 
   def segmentIds(base: ScrollServerBase, scroll: Int): Future[Seq[SegmentReference]] =
