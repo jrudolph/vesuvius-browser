@@ -1,7 +1,7 @@
 package net.virtualvoid.vesuvius
 
 import java.awt.image.BufferedImage
-import java.io.{ BufferedOutputStream, FileOutputStream, RandomAccessFile }
+import java.io.{ BufferedOutputStream, File, FileInputStream, FileOutputStream, RandomAccessFile }
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel.MapMode
 import javax.imageio.ImageIO
@@ -35,9 +35,11 @@ object CreateVerticalStack extends App {
 
   def p(x: Int, y: Int, z: Int): Int = stack(z).getPixel(x, y)
 
-  val xSpan = 3100 until 3350 //3000 to 3500
-  val ySpan = 4400 until 4630
-  val zSpan = 0 to 64
+  val xSpan = 2670 until (2670 + 530)
+  val ySpan = 3955 until (3953 + 700)
+  //val xSpan = 3100 until 3350
+  //val ySpan = 4400 until 4630
+  val zSpan = 0 to 58
 
   val x0 = xSpan.head
   val y0 = ySpan.head
@@ -66,19 +68,97 @@ object CreateVerticalStack extends App {
     }
   }
 
-  def threshold(v: Int): Boolean =
-    v > 32000
+  def readVox(): Unit = {
+    val f = new File("out3.vox")
+    val fis = new FileInputStream(f)
+    def tag(): String =
+      new String(Array.fill(4)(fis.read().toByte), "ASCII")
+    def uintle32(): Int =
+      fis.read() | fis.read() << 8 | fis.read() << 16 | fis.read() << 24
 
-  val voxels = for {
-    x <- xSpan
-    y <- ySpan
-    z <- zSpan
-    v = p(x, y, z)
-    if threshold(v)
-  } yield (x - x0, y - y0, z - z0, v)
+    def string(): String = {
+      val len = uintle32()
+      val buf = new Array[Byte](len)
+      val read = fis.read(buf)
+      require(read == buf.length)
+      new String(buf, "ASCII")
+    }
+    def dict(): Seq[(String, String)] = {
+      val numEntries = uintle32()
+      Vector.fill(numEntries)((string(), string()))
+    }
+
+    require(tag() == "VOX ")
+    require(uintle32() == 200)
+
+    def readTag(indent: String): Unit = {
+      val t = tag()
+      val contentSize = uintle32()
+      val childrenSize = uintle32()
+      println(s"${indent}Tag: $t contentSize: $contentSize childrenSize: $childrenSize")
+      t match {
+        case "nTRN" =>
+          val nodeId = uintle32()
+          val d = dict()
+          val childId = uintle32()
+          val reserved = uintle32()
+          val layer = uintle32()
+          val numFrames = uintle32()
+          val frames = Vector.fill(numFrames)(dict())
+          println(s"${indent}  nodeId: $nodeId childId: $childId layer: $layer numFrames: $numFrames d: $d frames: $frames")
+        case "nGRP" =>
+          val nodeId = uintle32()
+          val d = dict()
+          val numChildren = uintle32()
+          val children = Vector.fill(numChildren)(uintle32())
+          println(s"${indent}  nodeId: $nodeId numChildren: $numChildren d: $d children: $children")
+        case "nSHP" =>
+          val nodeId = uintle32()
+          val d = dict()
+          val numModels = uintle32()
+          val models = Vector.fill(numModels)(uintle32() -> dict())
+          println(s"${indent}  nodeId: $nodeId numModels: $numModels d: $d models: $models")
+        case _ =>
+          val buf = new Array[Byte](contentSize)
+          val read = fis.read(buf)
+          require(read == buf.length)
+      }
+
+      val start = fis.getChannel.position()
+      val end = start + childrenSize
+
+      while (fis.getChannel.position() < end) {
+        println(s"${fis.getChannel.position()} -> ${end} $contentSize $childrenSize $start rem: ${end - fis.getChannel.position()}")
+        readTag(indent + "  ")
+      }
+      println(s"${indent}end <$t>")
+    }
+    readTag("")
+  }
+
+  def threshold(v: Int): Boolean =
+    v > 35000
+
+  sealed trait TransformChild {
+    def nodeId: Int
+  }
+  case class TransformNode(nodeId: Int, frame0Dict: Seq[(String, String)], child: TransformChild)
+  case class GroupNode(nodeId: Int, children: Seq[TransformNode]) extends TransformChild
+  case class ShapeNode(nodeId: Int, models: Seq[Int]) extends TransformChild
 
   def genVox(): Unit = {
-    val out = new BufferedOutputStream(new FileOutputStream("out2.vox"))
+    val voxels = for {
+      x <- xSpan
+      y <- ySpan
+      z <- zSpan
+      v = p(x, y, z)
+      if threshold(v)
+    } yield (x - x0, y - y0, z - z0, v)
+
+    val f = new File("out3.vox")
+    f.delete()
+    val raf = new RandomAccessFile(f, "rw") //new BufferedOutputStream(new FileOutputStream("out3.vox"))
+    val out = new BufferedOutputStream(new FileOutputStream(raf.getFD))
 
     def tag(t: String): Unit = {
       val data = t.getBytes("ASCII")
@@ -91,39 +171,150 @@ object CreateVerticalStack extends App {
       out.write((v >> 16) & 0xff)
       out.write((v >> 24) & 0xff)
     }
+    def curPos(): Long = {
+      out.flush()
+      raf.getFilePointer
+    }
+    def withChildrenLength(f: => Unit): Unit = {
+      val pos = curPos()
+      uint32le(0) // placeholder
+      f
+      val newPos = curPos()
+      val length = (newPos - pos - 4).toInt
+      raf.seek(pos)
+      uint32le(length)
+      out.flush()
+      raf.seek(newPos)
+    }
+
+    def withOwnLength(f: => Unit): Unit = {
+      val pos = curPos()
+      uint32le(0) // placeholder
+      f
+      val newPos = curPos()
+      val length = (newPos - pos - 8).toInt
+      raf.seek(pos)
+      uint32le(length)
+      out.flush()
+      raf.seek(newPos)
+    }
 
     tag("VOX ")
     uint32le(200)
     tag("MAIN")
     uint32le(0) // MAIN content size
-    uint32le(voxels.size * 4 + 10 * 4 + 259 * 4) // MAIN children size
 
-    tag("SIZE")
-    uint32le(12) // SIZE content size
-    uint32le(0) // SIZE children size
-    uint32le(xSpan.size)
-    uint32le(ySpan.size)
-    uint32le(zSpan.size)
+    withChildrenLength {
+      val groups = voxels.groupBy { case (x, y, z, v) => (x / 256, y / 256) }.toVector
+      groups
+        //.take(1)
+        .foreach {
+          case ((xt, yt), voxels) =>
+            tag("SIZE")
+            uint32le(12) // SIZE content size
+            uint32le(0) // SIZE children size
+            uint32le(256)
+            uint32le(256)
+            uint32le(zSpan.size)
 
-    tag("XYZI")
-    uint32le(4 + 4 * voxels.size) // XYZI content size
-    uint32le(0) // XYZI children size
-    uint32le(voxels.size)
-    for ((x, y, z, v) <- voxels) {
-      val xyzi = x | y << 8 | z << 16 | (v >> 8) << 24
-      uint32le(xyzi)
-    }
+            tag("XYZI")
+            val size = 4 + 4 * voxels.size
+            println(f"XYZI size: $size for tile $xt/$yt numVoxels: ${voxels.size}")
+            uint32le(size) // XYZI content size
+            uint32le(0) // XYZI children size
+            uint32le(voxels.size)
+            for ((xi, yi, z, v) <- voxels) {
+              val x = xi - xt * 256
+              val y = yi - yt * 256
+              //println(f"XYZI: $x $y $z $v")
+              val xyzi = x | y << 8 | z << 16 | (v >> 8) << 24
+              uint32le(xyzi)
+            }
+        }
 
-    tag("RGBA")
-    uint32le(256 * 4) // RGBA content size
-    uint32le(0) // RGBA children size
-    for (i <- 0 until 256) {
-      val v = 255 - i
-      uint32le(v << 0 | v << 8 | v << 16 | 0xff << 24)
+      val groupNodes =
+        groups.zipWithIndex.map {
+          case (((x, y), _), i) =>
+            TransformNode(2 + i * 2, Seq("_t" -> s"${x * 256} ${y * 256} 0"), ShapeNode(3 + i * 2, Vector(i)))
+        }
+
+      val structure =
+        TransformNode(
+          0,
+          Nil,
+          GroupNode(
+            1,
+            groupNodes
+          )
+        )
+
+      def string(str: String): Unit = {
+        val data = str.getBytes("ASCII")
+        uint32le(data.length)
+        out.write(data)
+      }
+      def dict(es: Seq[(String, String)]): Unit = {
+        uint32le(es.size)
+        for ((k, v) <- es) {
+          string(k)
+          string(v)
+        }
+      }
+
+      def render(tn: TransformNode): Unit = {
+        tag("nTRN")
+        withOwnLength {
+          uint32le(0)
+          uint32le(tn.nodeId)
+          dict(Nil)
+          uint32le(tn.child.nodeId)
+          uint32le(-1) // reserved
+          uint32le(0) // layer 0
+          uint32le(1) // num frames
+          dict(tn.frame0Dict)
+        }
+
+        tn.child match {
+          case gn: GroupNode =>
+            tag("nGRP")
+            withOwnLength {
+              uint32le(0)
+              uint32le(gn.nodeId)
+              dict(Nil)
+              uint32le(gn.children.size)
+              gn.children.foreach(c => uint32le(c.nodeId))
+            }
+            gn.children.foreach(render)
+          case sn: ShapeNode =>
+            tag("nSHP")
+            withOwnLength {
+              uint32le(0)
+              uint32le(sn.nodeId)
+              dict(Nil)
+              uint32le(sn.models.size)
+              sn.models.foreach { modelId =>
+                uint32le(modelId)
+                dict(Nil)
+              }
+            }
+        }
+      }
+
+      render(structure)
+
+      tag("RGBA")
+      uint32le(256 * 4) // RGBA content size
+      uint32le(0) // RGBA children size
+      for (i <- 0 until 256) {
+        val v = 255 - i
+        uint32le(v << 0 | v << 8 | v << 16 | 0xff << 24)
+      }
     }
 
     out.close()
+    raf.close()
   }
 
   genVox()
+  readVox()
 }
