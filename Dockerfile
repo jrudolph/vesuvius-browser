@@ -14,11 +14,11 @@ RUN /sbt exit
 COPY build.sbt /tmp/project/
 COPY project/* /tmp/project/project/
 
-RUN /sbt -J-Xmx2g -J-verbose:gc update "show assemblyPackageDependency"
+RUN /sbt -J-Xmx2g -J-verbose:gc update "show web/assemblyPackageDependency"
 
-COPY src /tmp/project/src
+COPY web /tmp/project/web
 
-RUN /sbt "show assembly"
+RUN /sbt "show web/assembly"
 
 FROM eclipse-temurin:17
 
@@ -28,8 +28,8 @@ RUN apt-get update && \
 
 RUN curl -O https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.16.1/jmx_prometheus_javaagent-0.16.1.jar
 
-COPY --from=builder /tmp/project/target/scala-3.3.1/deps.jar /deps.jar
-COPY --from=builder /tmp/project/target/scala-3.3.1/app.jar /app.jar
+COPY --from=builder /tmp/project/web/target/scala-3.3.1/deps.jar /deps.jar
+COPY --from=builder /tmp/project/web/target/scala-3.3.1/app.jar /app.jar
 
 EXPOSE 8089/tcp
 
