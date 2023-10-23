@@ -123,7 +123,7 @@ object Tasks {
       val segmentDir = new File(workDir, item.segment.segmentId.toString)
       segmentDir.mkdirs()
 
-      val inferenceScriptDir = new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters")
+      val inferenceScriptDir = config.inferenceScriptDir
       val inferenceScript = new File(inferenceScriptDir, "inference.py")
       val model = new File(inferenceScriptDir, "model.ckpt")
       require(model.exists)

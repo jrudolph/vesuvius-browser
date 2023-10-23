@@ -1,0 +1,13 @@
+torch
+numpy==1.25.0
+pytorch_lightning
+opencv-python
+scipy==1.9.3
+pandas
+matplotlib==3.6.3
+tqdm
+albumentations
+segmentation-models-pytorch
+Pillow
+warmup_scheduler
+typed-argument-parser==1.8.1

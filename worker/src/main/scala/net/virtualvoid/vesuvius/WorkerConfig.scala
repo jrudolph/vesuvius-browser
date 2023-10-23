@@ -9,7 +9,8 @@ case class WorkerConfig(
     workEndpoint:       String,
     dataServerUsername: String,
     dataServerPassword: String,
-    dataDir:            File
+    dataDir:            File,
+    inferenceScriptDir: File
 )
 
 object WorkerConfig {
@@ -19,7 +20,8 @@ object WorkerConfig {
       workEndpoint = config.getString("app.work-endpoint"),
       dataServerUsername = config.getString("app.data-username"),
       dataServerPassword = config.getString("app.data-password"),
-      dataDir = new File(config.getString("app.data-dir"))
+      dataDir = new File(config.getString("app.data-dir")),
+      inferenceScriptDir = new File(config.getString("app.inference-script-dir"))
     )
   }
 }

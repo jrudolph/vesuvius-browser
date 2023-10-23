@@ -327,7 +327,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   }
 
   case class InferenceInfo(model: String, startLayer: Int, stride: Int)
-  lazy val requestedInferences: Seq[InferenceInfo] = Seq(InferenceInfo("blubber", 15, 32))
+  lazy val requestedInferences: Seq[InferenceInfo] = Seq(InferenceInfo("youssef-test", 15, 32))
 
   lazy val workItems: Future[Seq[WorkItem]] =
     Source.futureSource(scrollSegments.map(Source(_)))

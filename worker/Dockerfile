@@ -14,26 +14,28 @@ RUN /sbt exit
 COPY build.sbt /tmp/project/
 COPY project/* /tmp/project/project/
 
-RUN /sbt -J-Xmx2g -J-verbose:gc update "show web/assemblyPackageDependency"
+RUN /sbt -J-Xmx2g -J-verbose:gc update "show worker/assemblyPackageDependency"
 
 COPY common /tmp/project/common
-COPY web /tmp/project/web
+COPY worker /tmp/project/worker
 
-RUN /sbt "show web/assembly"
+RUN /sbt "show worker/assembly"
 
 FROM eclipse-temurin:17
 
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y libvips-tools && \
+    apt-get install --no-install-recommends -y python3-pip && \
     rm -rf /var/lib/apt/lists/*
 
-# maybe later
-# RUN curl -O https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.16.1/jmx_prometheus_javaagent-0.16.1.jar
+# prebuffer python dependencies, so that reclone will still be cached
+COPY worker/requirements.txt /tmp/requirements.txt
+#RUN pip3 install -r /tmp/requirements.txt
 
-COPY --from=builder /tmp/project/web/target/scala-3.3.1/deps.jar /deps.jar
-COPY --from=builder /tmp/project/web/target/scala-3.3.1/app.jar /app.jar
+#RUN git clone https://github.com/jrudolph/Vesuvius-First-Letters#changes /model
+#RUN cd model && pip3 install -r requirements.txt
 
-EXPOSE 8089/tcp
+COPY --from=builder /tmp/project/worker/target/scala-3.3.1/deps.jar /deps.jar
+COPY --from=builder /tmp/project/worker/target/scala-3.3.1/app.jar /app.jar
 
 WORKDIR /
 
