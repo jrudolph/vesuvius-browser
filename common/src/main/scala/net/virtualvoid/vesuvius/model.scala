@@ -3,8 +3,21 @@ package net.virtualvoid.vesuvius
 case class SegmentReference(scroll: Int, segmentId: String, base: ScrollServerBase) {
   def baseUrl: String = s"${base.baseUrl(scroll)}$segmentId/"
 }
+object SegmentReference {
+  import spray.json._
+  import DefaultJsonProtocol._
 
-sealed trait ScrollServerBase {
+  implicit val scrollServerBaseFormat: JsonFormat[ScrollServerBase] =
+    new JsonFormat[ScrollServerBase] {
+      def write(obj: ScrollServerBase): JsValue = JsString(obj.productPrefix)
+      def read(json: JsValue): ScrollServerBase = json.convertTo[String] match {
+        case "FullScrollsBase" => FullScrollsBase
+      }
+    }
+  implicit val segmentReferenceFormat: JsonFormat[SegmentReference] = jsonFormat3(SegmentReference.apply)
+}
+
+sealed trait ScrollServerBase extends Product {
   def baseUrl(scroll: Int): String
 }
 

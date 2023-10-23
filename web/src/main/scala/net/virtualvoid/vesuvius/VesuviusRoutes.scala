@@ -5,13 +5,16 @@ import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.marshalling.ToResponseMarshallable
+import org.apache.pekko.http.scaladsl.model.ws.Message
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, Uri, headers }
 import org.apache.pekko.http.scaladsl.server.{ Directive1, Directives, PathMatchers, Route }
-import org.apache.pekko.stream.scaladsl.{ FileIO, Source }
+import org.apache.pekko.stream.scaladsl.PartitionHub.ConsumerInfo
+import org.apache.pekko.stream.scaladsl.{ FileIO, Flow, PartitionHub, Sink, Source }
 import org.apache.pekko.util.ByteString
 import spray.json.*
 
 import java.io.File
+import scala.collection.immutable.ListMap
 import scala.concurrent.Future
 import scala.util.Success
 
@@ -100,6 +103,52 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
             )
           }
         }
+      },
+      (post & pathPrefix("work")) {
+        concat(
+          path("next") {
+            parameter("workerId") { workerId =>
+              workItemManager.await { man =>
+                val item = man.assignNext(workerId)
+                complete(item)
+              }
+            }
+          },
+          path("result") {
+            parameter("workerId", "workId".as[Int]) { (workerId, workItemId) =>
+              workItemManager.await { man =>
+                provide(man.findItem(workItemId)).orReject {
+                  case item: InferenceWorkItem => // FIXME
+                    println(s"Got result data request for $workItemId from $workerId, item: $item")
+
+                    val file = new File(dataDir, s"inferred/scroll${item.segment.scroll}/${item.segment.segmentId}/inference_${item.model}_${item.startLayer}_${item.stride}.png")
+                    file.getParentFile.mkdirs()
+                    val tmpFile = File.createTempFile(".tmp.result", ".png", file.getParentFile)
+
+                    extractRequestEntity { entity =>
+                      val result =
+                        entity.dataBytes
+                          .runWith(FileIO.toPath(tmpFile.toPath))
+                          .map { _ => tmpFile.renameTo(file); "OK" }
+
+                      complete(result)
+                    }
+                }
+              }
+            }
+          },
+          path("complete") {
+            parameter("workerId") { workerId =>
+              entity(as[WorkItemResult]) { result =>
+                println(s"Got result: $result from $workerId")
+                workItemManager.await { man =>
+                  man.markDone(workerId, result.workItem)
+                  complete("OK")
+                }
+              }
+            }
+          }
+        )
       },
       getFromResourceDirectory("web")
     )
@@ -265,5 +314,63 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
       }
       .map { _ => tmpFile.renameTo(to); to }
+  }
+
+  def workQueueWS: Flow[Message, Message, Any] = {
+    ???
+  }
+
+  def inferenceInfoExistsFor(ref: SegmentReference, info: InferenceInfo): Boolean = {
+    import ref._
+    val target = new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${info.model}_${info.startLayer}_${info.stride}.png")
+    target.exists
+  }
+
+  case class InferenceInfo(model: String, startLayer: Int, stride: Int)
+  lazy val requestedInferences: Seq[InferenceInfo] = Seq(InferenceInfo("blubber", 15, 32))
+
+  lazy val workItems: Future[Seq[WorkItem]] =
+    Source.futureSource(scrollSegments.map(Source(_)))
+      .mapConcat(img => requestedInferences.map(info => img.ref -> info))
+      .filter { case (ref, info) => !inferenceInfoExistsFor(ref, info) }
+      .zipWithIndex
+      .map { case ((ref, info), id) => InferenceWorkItem(id.toInt, ref, info.model, info.startLayer, info.stride) }
+      .runWith(Sink.seq)
+
+  lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))
+}
+
+trait WorkItemManager {
+  def assignNext(workerId: String): Option[WorkItem]
+
+  def findItem(id: Int): Option[WorkItem]
+  def markDone(workerId: String, workItem: WorkItem): Unit
+}
+
+object WorkItemManager {
+  def apply(initialItems: Seq[WorkItem]): WorkItemManager = {
+    sealed trait ItemState
+    case object Queued extends ItemState
+    case class Assigned(workerId: String, atMillis: Long) extends ItemState
+
+    var itemState = ListMap[WorkItem, ItemState](initialItems.map(_ -> Queued): _*)
+
+    new WorkItemManager {
+      def assignNext(workerId: String): Option[WorkItem] =
+        synchronized {
+          itemState.find(_._2 == Queued).map {
+            case (item, _) =>
+              itemState = itemState.updated(item, Assigned(workerId, System.currentTimeMillis()))
+              item
+          }
+        }
+
+      def findItem(id: Int): Option[WorkItem] = itemState.keys.find(_.id == id)
+
+      def markDone(workerId: String, workItem: WorkItem): Unit =
+        synchronized {
+          itemState = itemState.removed(workItem)
+        }
+    }
   }
 }
