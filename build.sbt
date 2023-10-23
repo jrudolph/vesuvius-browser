@@ -8,10 +8,9 @@ inThisBuild(Def.settings(
 ))
 
 val root = project.in(file("."))
-  .aggregate(web)
+  .aggregate(common, web, worker)
 
-lazy val web = project.in(file("web"))
-  .enablePlugins(SbtTwirl)
+lazy val common = project.in(file("common"))
   .settings(
     libraryDependencies ++= Seq(
       "org.apache.pekko" %% "pekko-stream" % pekkoV,
@@ -19,9 +18,25 @@ lazy val web = project.in(file("web"))
       "org.apache.pekko" %% "pekko-http-spray-json" % pekkoHttpV,
       "org.apache.pekko" %% "pekko-http-caching" % pekkoHttpV,
       "io.spray" %% "spray-json" % "1.3.6",
-      "com.typesafe.play" %% "twirl-api" % "1.6.0-RC4",
 
       "org.scalatest" %% "scalatest" % scalaTestV % "test"
+
+    )
+  )
+
+lazy val worker = project.in(file("worker"))
+  .dependsOn(common)
+  .settings(
+    libraryDependencies ++= Seq(
+    ),
+  )
+
+lazy val web = project.in(file("web"))
+  .dependsOn(common)
+  .enablePlugins(SbtTwirl)
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.typesafe.play" %% "twirl-api" % "1.6.0-RC4",
     ),
 
     // setup docker build
