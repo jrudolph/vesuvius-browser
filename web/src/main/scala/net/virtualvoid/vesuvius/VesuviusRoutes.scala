@@ -108,6 +108,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               path("mask") {
                 resizedMask(segment).deliver
               },
+              path("inferred" / Segment) { model =>
+                resizedInferred(segment, model).await.orReject.deliver
+              },
               pathPrefix(IntNumber) { z =>
                 concat(
                   path("dzi") {
@@ -221,17 +224,32 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def resizedMask(segment: SegmentReference): Future[File] = {
     import segment._
-    val target = new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small.png")
+    resizedX(maskFor(segment), new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small.png")).map(_.get)
+  }
+
+  def resizedInferred(segment: SegmentReference, model: String): Future[Option[File]] = {
+    import segment._
+    val f = inferredFor(segment)
+
+    println(s"Looking for ${inferredFor(segment)}, ${f.value.get.get.exists}")
+    resizedX(inferredFor(segment), new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${model}_15_32_small.png"))
+  }
+
+  def resizedX(orig: Future[File], target: File): Future[Option[File]] =
     cached(target, negTtlSeconds = 0) { () =>
-      maskFor(segment).map { f =>
+      orig.map { f =>
         import sys.process._
-        val tmpFile = File.createTempFile("small_mask", ".png", target.getParentFile)
+        val tmpFile = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
         val cmd = s"""vips thumbnail $f $tmpFile 10000 --height 50"""
         cmd.!!
         require(tmpFile.renameTo(target))
         target
       }
-    }
+    }.transform(x => Success(x.toOption))
+
+  def inferredFor(segment: SegmentReference): Future[File] = {
+    import segment._
+    Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32.png"))
   }
 
   def maskFor(segment: SegmentReference): Future[File] = {
