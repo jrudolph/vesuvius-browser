@@ -8,10 +8,9 @@ inThisBuild(Def.settings(
 ))
 
 val root = project.in(file("."))
-  .aggregate(web)
+  .aggregate(common, web, worker)
 
-lazy val web = project.in(file("web"))
-  .enablePlugins(SbtTwirl)
+lazy val common = project.in(file("common"))
   .settings(
     libraryDependencies ++= Seq(
       "org.apache.pekko" %% "pekko-stream" % pekkoV,
@@ -19,9 +18,35 @@ lazy val web = project.in(file("web"))
       "org.apache.pekko" %% "pekko-http-spray-json" % pekkoHttpV,
       "org.apache.pekko" %% "pekko-http-caching" % pekkoHttpV,
       "io.spray" %% "spray-json" % "1.3.6",
-      "com.typesafe.play" %% "twirl-api" % "1.6.0-RC4",
 
       "org.scalatest" %% "scalatest" % scalaTestV % "test"
+
+    )
+  )
+
+lazy val worker = project.in(file("worker"))
+  .dependsOn(common)
+  .settings(
+    libraryDependencies ++= Seq(
+    ),
+    // setup docker build
+    // use separate dependency and app jars
+    assembly / assemblyOption := (assembly / assemblyOption).value.withIncludeScala(false).withIncludeDependency(false),
+    assembly / assemblyJarName := "app.jar", // contract with Dockerfile
+    assemblyPackageDependency / assemblyJarName := "deps.jar", // contract with Dockerfile
+    assemblyMergeStrategy := {
+      // merging pekko protobuf and protobuf from google ortools (not sure why they are different, but doesn't matter here)
+      case PathList(ps@_*) if ps.last endsWith ".proto" => MergeStrategy.first
+      case x => assemblyMergeStrategy.value(x)
+    },
+  )
+
+lazy val web = project.in(file("web"))
+  .dependsOn(common)
+  .enablePlugins(SbtTwirl)
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.typesafe.play" %% "twirl-api" % "1.6.0-RC4",
     ),
 
     // setup docker build

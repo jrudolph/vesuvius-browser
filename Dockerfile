@@ -16,6 +16,7 @@ COPY project/* /tmp/project/project/
 
 RUN /sbt -J-Xmx2g -J-verbose:gc update "show web/assemblyPackageDependency"
 
+COPY common /tmp/project/common
 COPY web /tmp/project/web
 
 RUN /sbt "show web/assembly"
@@ -26,7 +27,8 @@ RUN apt-get update && \
     apt-get install --no-install-recommends -y libvips-tools && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl -O https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.16.1/jmx_prometheus_javaagent-0.16.1.jar
+# maybe later
+# RUN curl -O https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.16.1/jmx_prometheus_javaagent-0.16.1.jar
 
 COPY --from=builder /tmp/project/web/target/scala-3.3.1/deps.jar /deps.jar
 COPY --from=builder /tmp/project/web/target/scala-3.3.1/app.jar /app.jar

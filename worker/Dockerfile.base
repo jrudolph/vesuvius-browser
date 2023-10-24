@@ -1,0 +1,9 @@
+FROM pytorch/pytorch@sha256:e4aaefef0c96318759160ff971b527ae61ee306a1204c5f6e907c4b45f05b8a3
+
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y git curl openjdk-17-jre-headless libgl1 && \
+    rm -rf /var/lib/apt/lists/*
+
+# prebuffer python dependencies, so that reclone will still be cached
+COPY worker/requirements.txt /tmp/requirements.txt
+RUN pip3 install -r /tmp/requirements.txt
