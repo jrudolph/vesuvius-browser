@@ -109,7 +109,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                 resizedMask(segment).deliver
               },
               path("inferred" / Segment) { model =>
-                resizedInferred(segment, model).await.orReject.deliver
+                concat(
+                  resizedInferred(segment, model).await.orReject.deliver,
+                  complete(ImageTools.EmptyImageResponse)
+                )
               },
               pathPrefix(IntNumber) { z =>
                 concat(
@@ -229,9 +232,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def resizedInferred(segment: SegmentReference, model: String): Future[Option[File]] = {
     import segment._
-    val f = inferredFor(segment)
-
-    println(s"Looking for ${inferredFor(segment)}, ${f.value.get.get.exists}")
     resizedX(inferredFor(segment), new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${model}_15_32_small.png"))
   }
 
