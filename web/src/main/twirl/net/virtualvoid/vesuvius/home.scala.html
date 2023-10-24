@@ -6,7 +6,7 @@
 
 <table>
     <tr><th>Scroll</th><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th><th><a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a></th><th>Mask</th></tr>
-    @for(info <- infos) {
+    @for(info <- infos.sortBy(x => (x.segmentId, x.scroll)).reverse) {
         <tr>
             <td>Scroll @info.scroll</td>
             <td><a href="/scroll/@info.scroll/segment/@info.segmentId/">@info.segmentId</a></td>
