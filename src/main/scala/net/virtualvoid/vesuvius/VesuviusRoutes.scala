@@ -15,8 +15,32 @@ import java.io.File
 import scala.concurrent.Future
 import scala.util.Success
 
-case class ImageInfo(scroll: Int, segmentId: String, width: Int, height: Int, area: Float) {
-  def realScroll: Int = if (scroll == 3) 1 else scroll
+case class SegmentReference(scroll: Int, segmentId: String, base: ScrollServerBase) {
+  def baseUrl: String = s"${base.baseUrl(scroll)}$segmentId/"
+}
+
+sealed trait ScrollServerBase {
+  def baseUrl(scroll: Int): String
+}
+
+case object FullScrollsBase extends ScrollServerBase {
+  def baseUrl(scroll: Int): String =
+    s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/"
+}
+
+case object HariSeldonUploadsBase extends ScrollServerBase {
+  def baseUrl(scroll: Int): String =
+    s"http://dl.ash2txt.org/hari-seldon-uploads/team-finished-paths/scroll$scroll/"
+}
+
+case class ImageInfo(
+    ref:    SegmentReference,
+    width:  Int,
+    height: Int,
+    area:   Option[Float]
+) {
+  def scroll: Int = ref.scroll
+  def segmentId: String = ref.segmentId
 }
 
 case class DZISize(Width: Int, Height: Int)
@@ -45,21 +69,27 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   lazy val main = encodeResponse(mainRoute)
 
-  val NameR = """(\d+)_(\d+).webp""".r
+  val NameR = """(\d+)_(\d+).jpg""".r
 
-  lazy val scroll1Segments: Future[Seq[ImageInfo]] =
+  lazy val scrollSegments: Future[Seq[ImageInfo]] =
     for {
-      id1 <- segmentIds(1)
-      id2 <- segmentIds(2)
-      id3 <- segmentIds(3)
-      infos <- Future.traverse(id1 ++ id2 ++ id3) { case (scroll, segment) => imageInfo(scroll, segment).transform(Success(_)) }
-    } yield infos.collect { case Success(s) => s }
+      id1 <- segmentIds(FullScrollsBase, 1)
+      id2 <- segmentIds(FullScrollsBase, 2)
+      //id3 <- segmentIds(HariSeldonUploadsBase, 1)
+      infos <- Future.traverse(id1 ++ id2)(imageInfo)
+    } yield infos.flatten.sortBy(i => (i.scroll, i.segmentId))
+
+  lazy val scrollSegmentsMap: Future[Map[(Int, String), SegmentReference]] =
+    scrollSegments.map(_.map(i => (i.scroll, i.segmentId) -> i.ref).toMap)
+
+  def resolveRef(scroll: Int, segmentId: String): Directive1[SegmentReference] =
+    scrollSegmentsMap.map(_.get((scroll, segmentId))).await.orReject
 
   lazy val mainRoute =
     concat(
       pathSingleSlash {
         get {
-          onSuccess(scroll1Segments) { infos =>
+          scrollSegments.await { infos =>
             complete(html.home(infos))
           }
         }
@@ -68,49 +98,48 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         complete(html.license())
       },
       pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>
-        onSuccess(imageInfo(scroll, segmentId)) { info =>
-          concat(
-            pathSingleSlash {
-              complete(html.segment(info))
-            },
-            path("mask") {
-              onSuccess(resizedMask(scroll, segmentId)) { mask =>
-                getFromFile(mask)
-              }
-            },
-            pathPrefix(IntNumber) { z =>
-              concat(
-                path("dzi") {
-                  val dziImage = DZIImage("webp", 0, 512, info.width, info.height) // FIXME: imagesize
-                  complete(JsObject("Image" -> dziImage.toJson))
-                },
-                path("dzi_files" / IntNumber / Segment) { (layer, name) =>
-                  onSuccess(segmentLayer(scroll, segmentId, z)) { layerFile =>
-                    val NameR(xStr, yStr) = name
-                    val x = xStr.toInt
-                    val y = yStr.toInt
+        resolveRef(scroll, segmentId) { segment =>
 
-                    onSuccess(resizer(layerFile, info, layer, x, y, z)) { resized =>
-                      getFromFile(resized)
+          imageInfo(segment).await.orReject { (info: ImageInfo) =>
+            concat(
+              pathSingleSlash {
+                complete(html.segment(info))
+              },
+              path("mask") {
+                resizedMask(segment).deliver
+              },
+              pathPrefix(IntNumber) { z =>
+                concat(
+                  path("dzi") {
+                    val dziImage = DZIImage("jpg", 0, 512, info.width, info.height) // FIXME: imagesize
+                    complete(JsObject("Image" -> dziImage.toJson))
+                  },
+                  path("dzi_files" / IntNumber / Segment) { (layer, name) =>
+                    segmentLayer(segment, z).await { layerFile =>
+                      val NameR(xStr, yStr) = name
+                      val x = xStr.toInt
+                      val y = yStr.toInt
+
+                      resizer(layerFile, info, layer, x, y, z).deliver
                     }
                   }
-                }
-              )
-            }
-          )
+                )
+              }
+            )
+          }
         }
       },
       getFromResourceDirectory("web")
     )
 
-  val InfoCache = LfuCache[(Int, String), ImageInfo]
+  val InfoCache = LfuCache[SegmentReference, Option[ImageInfo]]
 
-  def imageInfo(scroll: Int, segmentId: String): Future[ImageInfo] =
-    InfoCache.getOrLoad((scroll, segmentId), _ => _imageInfo(scroll, segmentId))
+  def imageInfo(segment: SegmentReference): Future[Option[ImageInfo]] =
+    InfoCache.getOrLoad(segment, _ => _imageInfo(segment))
 
   //areaFor
-  def sizeOf(scroll: Int, segmentId: String): Future[(Int, Int)] =
-    maskFor(scroll, segmentId)
+  def sizeOf(segment: SegmentReference): Future[(Int, Int)] =
+    maskFor(segment)
       .map { f =>
         import sys.process._
         val cmd = s"vipsheader -a $f"
@@ -120,26 +149,24 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         val height = kvs("height").toInt
         (width, height)
       }(cpuBound)
-  def _imageInfo(scroll: Int, segmentId: String): Future[ImageInfo] =
+  def _imageInfo(segment: SegmentReference): Future[Option[ImageInfo]] = {
     for {
-      (width, height) <- sizeOf(scroll, segmentId)
-      area <- areaFor(scroll, segmentId)
-    } yield ImageInfo(scroll, segmentId, width, height, area)
+      (width, height) <- sizeOf(segment)
+      area <- areaFor(segment)
+    } yield ImageInfo(segment, width, height, area)
+  }.transform(x => Success(x.toOption))
 
-  val SegmentLayerCache = LfuCache[(Int, String, Int), File]
-  def segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] =
-    SegmentLayerCache.getOrLoad((scroll, segmentId, layer), _ => _segmentLayer(scroll, segmentId, layer))
+  val SegmentLayerCache = LfuCache[(SegmentReference, Int), File]
+  def segmentLayer(segment: SegmentReference, layer: Int): Future[File] =
+    SegmentLayerCache.getOrLoad((segment, layer), _ => _segmentLayer(segment, layer))
 
-  def _segmentLayer(scroll: Int, segmentId: String, layer: Int): Future[File] = {
+  def _segmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
+    import segment._
     val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.jp2")
     targetFile.getParentFile.mkdirs()
 
-    if (scroll == 3 && segmentId == "20230827161847" && layer == 31)
-      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230827161847_16_15.png"))
-    else if (scroll == 3 && segmentId == "20231005123333" && layer == 31)
-      Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20231005123333_32_15_extended.png"))
-    else if (targetFile.exists) Future.successful(targetFile)
-    //Future.successful(new File("/home/johannes/git/opensource/_2023/Vesuvius-First-Letters/20230702185752_2_15.png"))
+    if (targetFile.exists) Future.successful(targetFile)
+    //else if (layer == 31) FIXME
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
 
@@ -147,11 +174,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         if (webpVersion.exists())
           Future.successful(webpVersion)
         else {
-          val url =
-            /*if (segmentId == "20230827161847" || segmentId == "20231007101615")
-              f"http://dl.ash2txt.org/hari-seldon-uploads/team-finished-paths/scroll$scroll/$segmentId/layers/$layer%02d.tif"
-            else*/
-            f"${baseUrlFor(scroll)}/$segmentId/layers/$layer%02d.tif"
+          val url = f"${segment.baseUrl}layers/$layer%02d.tif"
           val tmpFile = File.createTempFile("download", ".tif", targetFile.getParentFile)
           download(url, tmpFile)
         }
@@ -171,63 +194,36 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }
   }
 
-  val ResizeCache = LfuCache[(File, ImageInfo, Int, Int, Int, Int), File]
-
-  def resizer: ((File, ImageInfo, Int, Int, Int, Int)) => Future[File] =
-    a => ResizeCache.getOrLoad(a, _ => ResizerQueue(a))
-
-  val ResizerQueue = LifoQueue.semaphore[(File, ImageInfo, Int, Int, Int, Int), File](4) { (imageFile, info, layer, tileX, tileY, z) =>
-    Future { resize(imageFile, info, layer, tileX, tileY, z) }(cpuBound)
-  }
-
-  def resize(imageFile: File, info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): File = {
-    val tileSize = 512
-    val maxLayer = (math.log(info.width max info.height) / math.log(2)).ceil.toInt
-    val size = 1 << (maxLayer - layer)
-    val targetX = tileX * size * tileSize
-    val targetY = tileY * size * tileSize
-
-    val targetFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/${tileX}_$tileY.webp")
-    if (targetFile.exists()) targetFile
-    else {
-      targetFile.getParentFile.mkdirs()
-      val width = (info.width / size).min(tileSize).min((info.width - targetX) / size)
-      val height = (info.height / size).min(tileSize).min((info.height - targetY) / size)
-
-      import sys.process._
-      val tmpFile1 = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.jp2")
-      val tmpFile = new File(dataDir, s"tiles/scroll${info.scroll}/${info.segmentId}/layers/$z/$layer/.tmp-${tileX}_$tileY.webp")
-
-      val cmd1 = s"""vips crop $imageFile "$tmpFile1[lossless]" $targetX $targetY ${size * width} ${size * height}"""
-      println(f"Command for layers/$z/$layer/$tileX/$tileY: $cmd1")
-      cmd1.!!
-
-      val cmd2 = s"""vips thumbnail $tmpFile1 "$tmpFile[lossless]" $width"""
-      println(f"Command2 for layers/$z/$layer/$tileX/$tileY: $cmd2")
-      cmd2.!!
-
-      tmpFile1.delete()
-      require(tmpFile.renameTo(targetFile))
-      targetFile
+  def resizer(imageFile: File, info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): Future[File] =
+    dzdir(imageFile, info, z).map { dir =>
+      new File(dir, s"$layer/${tileX}_$tileY.jpg")
     }
+
+  val DZDirCache = LfuCache[(File, ImageInfo, Int), File]
+  def dzdir(imageFile: File, info: ImageInfo, z: Int): Future[File] =
+    DZDirCache.getOrLoad((imageFile, info, z), _ => extractDZ(imageFile, info, z))
+
+  def extractDZ(imageFile: File, info: ImageInfo, z: Int): Future[File] = {
+    val targetDir = new File(dataDir, s"tiles-dz/scroll${info.scroll}/${info.segmentId}/layers/${z}_files")
+    if (targetDir.exists()) Future.successful(targetDir)
+    else Future {
+      targetDir.getParentFile.mkdirs()
+      import sys.process._
+      val tmpFile = File.createTempFile(s".tmp.$z", "", targetDir.getParentFile)
+      val cmd = s"""vips dzsave $imageFile $tmpFile --suffix .jpg --tile-size 512 --overlap 0"""
+      println(s"Extracting DZ: $cmd")
+      cmd.!!
+      val tmpDir = new File(tmpFile.getParentFile, tmpFile.getName + "_files")
+      require(tmpDir.renameTo(targetDir))
+      targetDir
+    }(cpuBound)
   }
 
-  val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
-  def download(url: String, to: File): Future[File] = {
-    println(s"Downloading $url")
-    val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
-    Http().singleRequest(HttpRequest(HttpMethods.GET, Uri(url), headers = auth :: Nil))
-      .flatMap { res =>
-        require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
-        res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
-      }
-      .map { _ => tmpFile.renameTo(to); to }
-  }
-
-  def resizedMask(scroll: Int, segmentId: String): Future[File] = {
+  def resizedMask(segment: SegmentReference): Future[File] = {
+    import segment._
     val target = new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small.png")
     cached(target, negTtlSeconds = 0) { () =>
-      maskFor(scroll, segmentId).map { f =>
+      maskFor(segment).map { f =>
         import sys.process._
         val tmpFile = File.createTempFile("small_mask", ".png", target.getParentFile)
         val cmd = s"""vips thumbnail $f $tmpFile 10000 --height 50"""
@@ -238,51 +234,66 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }
   }
 
+  def maskFor(segment: SegmentReference): Future[File] = {
+    import segment._
+    cacheDownload(
+      s"${segment.baseUrl}${segment.segmentId}_mask.png",
+      new File(dataDir, s"raw/scroll$scroll/$segmentId/mask.png"))
+  }
+
+  def areaFor(segment: SegmentReference): Future[Option[Float]] = {
+    import segment._
+    cacheDownload(
+      s"${segment.baseUrl}area_cm2.txt",
+      new File(dataDir, s"raw/scroll$scroll/$segmentId/area_cm2.txt")
+    )
+      .map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
+      .transform(x => Success(x.toOption))
+  }
+
+  def segmentIds(base: ScrollServerBase, scroll: Int): Future[Seq[SegmentReference]] =
+    segmentIds(base.baseUrl(scroll), new File(config.dataDir, s"raw/scroll$scroll/${base}-path-listing.html"))
+      .map(_.map(id => SegmentReference(scroll, id, base)))
+
+  val LinkR = """.*href="(.*)/".*""".r
+  def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
+    cacheDownload(baseUrl, targetFile, ttlSeconds = 3600).map { f =>
+      scala.io.Source.fromFile(f).getLines().collect {
+        case LinkR(segmentId) if !segmentId.startsWith("..") => segmentId
+      }.toVector
+    }
+
   val DefaultPositiveTtl = 3600 * 24 * 365
   val DefaultNegativeTtl = 7200
+
   def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
-    cached(to, ttlSeconds) { () => download(url, to) }
+    cached(to, ttlSeconds, negTtlSeconds) { () => download(url, to) }
 
   def cached(to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl)(f: () => Future[File]): Future[File] = {
     to.getParentFile.mkdirs()
     val neg = new File(to.getParentFile, s".neg-${to.getName}")
-    if (to.exists() && to.lastModified() + ttlSeconds > System.currentTimeMillis()) Future.successful(to)
-    else if (neg.exists() && neg.lastModified() + negTtlSeconds > System.currentTimeMillis()) Future.failed(new RuntimeException(s"Negatively cached"))
+    if (to.exists() && to.lastModified() + ttlSeconds * 1000 > System.currentTimeMillis()) Future.successful(to)
+    else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis()) Future.failed(new RuntimeException(s"Negatively cached"))
     else
       f().recoverWith {
         case t: Throwable =>
           neg.getParentFile.mkdirs()
+          neg.delete()
           neg.createNewFile()
           Future.failed(t)
       }
   }
 
-  def maskFor(scroll: Int, segmentId: String): Future[File] =
-    cacheDownload(
-      f"${baseUrlFor(scroll)}$segmentId/${segmentId}_mask.png",
-      new File(dataDir, s"raw/scroll$scroll/$segmentId/mask.png"))
+  val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
 
-  def areaFor(scroll: Int, segmentId: String): Future[Float] =
-    cacheDownload(
-      f"${baseUrlFor(scroll)}$segmentId/area_cm2.txt",
-      new File(dataDir, s"raw/scroll$scroll/$segmentId/area_cm2.txt")
-    ).map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
-
-  def segmentIds(scroll: Int): Future[Seq[(Int, String)]] =
-    segmentIds(baseUrlFor(scroll), new File(config.dataDir, s"raw/scroll$scroll/path-listing.html"))
-      .map(_.map(id => scroll -> id))
-
-  def baseUrlFor(scroll: Int): String =
-    scroll match {
-      case 1 | 2 => s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/"
-      case 3     => "http://dl.ash2txt.org/hari-seldon-uploads/team-finished-paths/scroll1/"
-    }
-
-  val LinkR = """.*href="(.*)/".*""".r
-  def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
-    cacheDownload(baseUrl, targetFile).map { f =>
-      scala.io.Source.fromFile(f).getLines().collect {
-        case LinkR(segmentId) if !segmentId.startsWith("..") => segmentId
-      }.toVector
-    }
+  def download(url: String, to: File): Future[File] = {
+    println(s"Downloading $url")
+    val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
+    Http().singleRequest(HttpRequest(HttpMethods.GET, Uri(url), headers = auth :: Nil))
+      .flatMap { res =>
+        require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
+        res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
+      }
+      .map { _ => tmpFile.renameTo(to); to }
+  }
 }

@@ -2,9 +2,14 @@
 
 @(info: ImageInfo)
 
-<h2>Scroll @info.realScroll / @info.segmentId</h2>
+<h2>Scroll @info.scroll / @info.segmentId</h2>
 
-<div id="openseadragon1" style="width: 100%; height: 90%;"></div>
+<div>Full data: <a href="@{info.ref.baseUrl}">@{info.ref.baseUrl}</a></div>
+<div>Selected layers: @{(20 to 50 by 2).mkString(", ")}</div>
+<div><a href="#keyboard_shortcuts">Keyboard shortcuts</a></div>
+<div>Note: If page stays blank for a while, layer still needs to be prepared in the background. Stay tuned, or reload after a while.</div>
+<p/>
+<div id="openseadragon1" style="width: 100%; height: 85%;"></div>
 <script src="/openseadragon/openseadragon.min.js"></script>
 <script src="/js/jquery-3.7.1.min.js.js"></script>
 <script type="text/javascript">
@@ -86,11 +91,13 @@ viewer.nextButton.addHandler('release', function() {
 function updateHash() {
     var tile = viewer.world.getItemAt(index);
     var imp = tile.viewportToImageCoordinates(viewer.viewport.getCenter(true));
-    var x = imp.x;
-    var y = imp.y;
+    var u = imp.x.toFixed(0);
+    var v = imp.y.toFixed(0);
     var rot = viewer.viewport.getRotation();
-    var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true));
-    window.location.hash = "x=" + x + "&y=" + y + "&zoom=" + zoom + "&rot=" + rot + "&layer=" + layers[index];
+    var flip = viewer.viewport.getFlip();
+    var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true)).toFixed(3);
+    var newHash = "#u=" + u + "&v=" + v + "&zoom=" + zoom + "&rot=" + rot + "&flip=" + flip + "&layer=" + layers[index];
+    history.replaceState(undefined, undefined, newHash);
 }
 
 viewer.addHandler('pan', updateHash);
@@ -110,11 +117,16 @@ viewer.addHandler('open', function() {
     });
 
     var tile = viewer.world.getItemAt(index);
-    if (params.x) {
+    if (params.x || params.u) {
         // parse params.x to int
-        var x = parseFloat(params.x);
-        var y = parseFloat(params.y);
-        var imp = new OpenSeadragon.Point(x, y);
+        var u = 0;
+        if (params.u) u = parseFloat(params.u);
+        else if (params.x) u = parseFloat(params.x); // legacy support for `x`
+        var v = 0;
+        if (params.v) v = parseFloat(params.v);
+        else if (params.y) v = parseFloat(params.y); // legacy support for `y`
+
+        var imp = new OpenSeadragon.Point(u, v);
         viewer.viewport.panTo(tile.imageToViewportCoordinates(imp), true);
     }
     if (params.zoom) {
@@ -122,6 +134,9 @@ viewer.addHandler('open', function() {
     }
     if (params.rot) {
         viewer.viewport.setRotation(parseFloat(params.rot), true);
+    }
+    if (params.flip) {
+        viewer.viewport.setFlip(params.flip == "true", true);
     }
     if (params.layer) {
         var layer = params.layer;
@@ -159,6 +174,7 @@ viewer.pixelsPerArrowPress = 250;
 
 </script>
 
+<a id="keyboard_shortcuts"></a>
 <p>
     You can use the following keys to navigate:
 </p>
