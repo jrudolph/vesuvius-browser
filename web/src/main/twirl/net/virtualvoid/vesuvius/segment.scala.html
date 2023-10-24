@@ -16,12 +16,11 @@
 <script type="text/javascript">
 
     var origHash = window.location.hash.substring(1);
-    var layers = [@for(l <- ((20 to 50 by 2) :+ 31)) { "@l", }];
-    @*//, opacity: @{if (l == 32) 1 else 0}, preload: @{if (l == 31 || l == 34) 1 else 0}*@
+    var layers = [@for(l <- ((20 to 50 by 2) :+ 2342)) { "@l", }];
 var viewer = OpenSeadragon({
     id: "openseadragon1",
     prefixUrl: "/openseadragon/images/",
-    tileSources: [@for(l <- ((20 to 50 by 2) :+ 31)) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
+    tileSources: [@for(l <- ((20 to 50 by 2) :+ 2342)) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
     initialPage: 6,
     showNavigator: true,
     showRotationControl: true,
