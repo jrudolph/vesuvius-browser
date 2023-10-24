@@ -166,7 +166,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     targetFile.getParentFile.mkdirs()
 
     if (targetFile.exists) Future.successful(targetFile)
-    //else if (layer == 31) FIXME
+    else if (layer == 31) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32.png"))
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
 
