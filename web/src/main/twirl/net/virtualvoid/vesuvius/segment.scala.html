@@ -9,7 +9,8 @@
 <div><a href="#keyboard_shortcuts">Keyboard shortcuts</a></div>
 <div>Note: If page stays blank for a while, layer still needs to be prepared in the background. Stay tuned, or reload after a while.</div>
 <p/>
-<div id="openseadragon1" style="width: 100%; height: 85%;"></div>
+<b>Hold "e" key to overlay output from <a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a> or navigate to right-most layer to show just inferred data.</b>
+<div id="openseadragon1" style="width: 100%; height: 80%;"></div>
 <script src="/openseadragon/openseadragon.min.js"></script>
 <script src="/js/jquery-3.7.1.min.js.js"></script>
 <script type="text/javascript">
@@ -149,7 +150,7 @@ viewer.addHandler('open', function() {
 
 viewer.addHandler('canvas-key', function(event) {
     if (event.originalEvent.keyCode == 69) {
-        viewer.world.getItemAt(extra_image).setOpacity(0.6);
+        viewer.world.getItemAt(extra_image).setOpacity(0.75);
     }
 });
 viewer.innerTracker.keyUpHandler = function(event) {
@@ -180,6 +181,7 @@ viewer.pixelsPerArrowPress = 250;
 </p>
 
 <ul>
+    <li><strong>[ e ]</strong> - hold to overlay ink detection model output</li>
     <li><strong>[ w, up arrow ]</strong> - move viewport <strong>up</strong></li>
     <li><strong>[ s, down arrow ]</strong> - move viewport <strong>down</strong></li>
     <li><strong>[ a, left arrow ]</strong> - move viewport <strong>left</strong></li>
