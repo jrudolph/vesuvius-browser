@@ -21,20 +21,16 @@ COPY worker/src /tmp/project/worker/src
 
 RUN /sbt "show worker/assembly"
 
-FROM eclipse-temurin:17
-
-RUN apt-get update && \
-    apt-get install --no-install-recommends -y python3-pip git && \
-    rm -rf /var/lib/apt/lists/*
-
-# prebuffer python dependencies, so that reclone will still be cached
-COPY worker/requirements.txt /tmp/requirements.txt
-RUN pip3 install -r /tmp/requirements.txt
+FROM registry2.virtual-void.net/jrudolph/vesuvius-worker-base:v1
 
 RUN git clone -b changes https://github.com/jrudolph/Vesuvius-First-Letters /model
 
-RUN cd model && curl -OJL https://media.virtual-void.net/s/Pn7CFqPzpJJMJ4G/download/model.ckpt
-RUN cd model && pip3 install -r requirements.txt
+RUN cd /model && curl -OJL https://media.virtual-void.net/s/Pn7CFqPzpJJMJ4G/download/model.ckpt
+RUN cd /model && pip3 install -r requirements.txt
+
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y git curl openjdk-17-jre-headless libgl1 && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /tmp/project/worker/target/scala-3.3.1/deps.jar /deps.jar
 COPY --from=builder /tmp/project/worker/target/scala-3.3.1/app.jar /app.jar

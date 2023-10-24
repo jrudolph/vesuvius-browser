@@ -64,16 +64,25 @@ object VesuviusWorkerMain extends App {
   def runOne(): Future[Any] =
     post(nextWorkEndpoint)
       .flatMap(Unmarshal(_).to[WorkItem])
-      .flatMap(runWorkItem)
-      .flatMap {
-        case (data: File, result: WorkItemResult) =>
-          if (data.exists)
-            post(resultEndpoint(result.workItem.id), HttpEntity(ContentTypes.`application/octet-stream`, FileIO.fromPath(data.toPath)))
-              .map(_ => result)
-          else Future.successful(result)
+      .flatMap { workItem =>
+        runWorkItem(workItem)
+          .flatMap {
+            case (data: File, result: WorkItemResult) =>
+              if (data.exists)
+                post(resultEndpoint(result.workItem.id), HttpEntity(ContentTypes.`application/octet-stream`, FileIO.fromPath(data.toPath)))
+                  .map(_ => result)
+              else Future.successful(result)
+          }
+          .flatMap(Marshal(_).to[RequestEntity])
+          .flatMap(post(completeEndpoint, _))
+          .recoverWith {
+            case ex =>
+              println(s"Error: $ex")
+              ex.printStackTrace()
+              Marshal(WorkFailed(workItem, ex.getMessage, "")).to[RequestEntity]
+                .flatMap(post(completeEndpoint, _))
+          }
       }
-      .flatMap(Marshal(_).to[RequestEntity])
-      .flatMap(post(completeEndpoint, _))
 
   def worker: Future[Any] =
     runOne()
@@ -129,13 +138,14 @@ object Tasks {
       require(model.exists)
       def runInference(): Future[(File, WorkItemResult)] = Future {
         import sys.process._
-        val cmdLine = s"${inferenceScriptDir.getAbsolutePath}/venv/bin/python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${item.stride} --start_idx ${item.startLayer} --workers 6"
+        val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${item.stride} --start_idx ${item.startLayer} --workers 6"
         println(s"Running [$cmdLine]")
 
         val res = cmdLine.!!
         val outputFile = new File(workDir, s"${item.segment.segmentId}_${item.stride}_${item.startLayer}.png")
         require(outputFile.exists, s"Output file $outputFile does not exist")
         println(s"Output file $outputFile exists")
+        s"rm -r ${segmentDir.getAbsolutePath}".!!
         (outputFile, WorkCompleted(item, res))
       }
 
