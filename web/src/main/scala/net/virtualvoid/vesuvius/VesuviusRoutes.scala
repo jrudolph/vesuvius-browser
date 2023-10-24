@@ -110,6 +110,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
             parameter("workerId") { workerId =>
               workItemManager.await { man =>
                 val item = man.assignNext(workerId)
+                println(s"Assigned $item to $workerId")
                 complete(item)
               }
             }
@@ -316,10 +317,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map { _ => tmpFile.renameTo(to); to }
   }
 
-  def workQueueWS: Flow[Message, Message, Any] = {
-    ???
-  }
-
   def inferenceInfoExistsFor(ref: SegmentReference, info: InferenceInfo): Boolean = {
     import ref._
     val target = new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${info.model}_${info.startLayer}_${info.stride}.png")
@@ -330,7 +327,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   lazy val requestedInferences: Seq[InferenceInfo] = Seq(InferenceInfo("youssef-test", 15, 32))
 
   lazy val workItems: Future[Seq[WorkItem]] =
-    Source.futureSource(scrollSegments.map(Source(_)))
+    Source.futureSource(scrollSegments.map(x => Source(x.sortBy(_.segmentId).reverse)))
       .mapConcat(img => requestedInferences.map(info => img.ref -> info))
       .filter { case (ref, info) => !inferenceInfoExistsFor(ref, info) }
       .zipWithIndex
