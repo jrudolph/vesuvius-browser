@@ -1,18 +1,14 @@
 package net.virtualvoid.vesuvius
 
-import net.virtualvoid.vesuvius.VesuviusWorkerMain.config
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{ ContentTypes, HttpEntity, HttpMethods, HttpRequest, HttpResponse, RequestEntity, StatusCodes, headers }
-import org.apache.pekko.http.scaladsl.model.ws.{ Message, TextMessage, WebSocketRequest }
-import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
+import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.apache.pekko.http.scaladsl.marshalling.Marshal
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
-import org.apache.pekko.stream.scaladsl.{ FileIO, Flow }
+import org.apache.pekko.stream.scaladsl.FileIO
 
-import scala.concurrent.{ ExecutionContext, Future }
-import scala.concurrent.duration.*
-import spray.json.*
+import scala.concurrent.Future
 
 import java.io.File
 
@@ -26,25 +22,6 @@ object VesuviusWorkerMain extends App {
     item match {
       case i: InferenceWorkItem => Tasks.infer(config, i)
     }
-
-  /*def worker: Flow[WorkItem, WorkItemResult, Any] =
-    Flow[WorkItem].mapAsyncUnordered(1)(runWorkItem)
-
-  def wsFlow: Flow[Message, Message, Any] =
-    Flow[Message]
-      .collect { case msg: TextMessage => msg }
-      .mapAsync(1)(_.toStrict(10.seconds))
-      .map(_.text.parseJson.convertTo[WorkItem])
-      .via(worker)
-      .map(x => TextMessage(x.toJson.compactPrint))
-
-  val workItemEndpoint = "http://localhost:8089/tasks"
-
-  Http()
-    .singleWebSocketRequest(
-      WebSocketRequest(uri = workItemEndpoint),
-      clientFlow = wsFlow
-    )*/
 
   val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
 
