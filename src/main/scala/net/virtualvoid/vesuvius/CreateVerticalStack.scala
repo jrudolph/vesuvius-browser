@@ -24,7 +24,7 @@ object Image {
   }
 }
 
-object CreateVerticalStack extends App {
+object CreateVerticalStack /*extends App*/ {
   def layerPath(layer: Int): String =
     f"/home/johannes/tmp/pap/20230827161847/layers/$layer%02d.tif"
 
