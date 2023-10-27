@@ -94,13 +94,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                     complete(JsObject("Image" -> dziImage.toJson))
                   },
                   path("dzi_files" / IntNumber / Segment) { (layer, name) =>
-                    segmentLayer(segment, z).await { layerFile =>
-                      val NameR(xStr, yStr) = name
-                      val x = xStr.toInt
-                      val y = yStr.toInt
+                    val NameR(xStr, yStr) = name
+                    val x = xStr.toInt
+                    val y = yStr.toInt
 
-                      resizer(layerFile, info, layer, x, y, z).deliver
-                    }
+                    resizer(info, layer, x, y, z).deliver
                   }
                 )
               }
@@ -230,20 +228,20 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }
   }
 
-  def resizer(imageFile: File, info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): Future[File] =
-    dzdir(imageFile, info, z).map { dir =>
+  def resizer(info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): Future[File] =
+    dzdir(info, z).map { dir =>
       new File(dir, s"$layer/${tileX}_$tileY.jpg")
     }
 
-  val DZDirCache = LfuCache[(File, ImageInfo, Int), File]
+  val DZDirCache = LfuCache[(ImageInfo, Int), File]
 
-  def dzdir(imageFile: File, info: ImageInfo, z: Int): Future[File] =
-    DZDirCache.getOrLoad((imageFile, info, z), _ => extractDZ(imageFile, info, z))
+  def dzdir(info: ImageInfo, z: Int): Future[File] =
+    DZDirCache.getOrLoad((info, z), _ => extractDZ(info, z))
 
-  def extractDZ(imageFile: File, info: ImageInfo, z: Int): Future[File] = {
+  def extractDZ(info: ImageInfo, z: Int): Future[File] = {
     val targetDir = new File(dataDir, s"tiles-dz/scroll${info.scroll}/${info.segmentId}/layers/${z}_files")
     if (targetDir.exists()) Future.successful(targetDir)
-    else Future {
+    else segmentLayer(info.ref, z).map { imageFile =>
       targetDir.getParentFile.mkdirs()
       import sys.process._
       val tmpFile = File.createTempFile(s".tmp.$z", "", targetDir.getParentFile)
