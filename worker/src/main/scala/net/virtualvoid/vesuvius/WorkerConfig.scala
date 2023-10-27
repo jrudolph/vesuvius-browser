@@ -5,12 +5,13 @@ import com.typesafe.config.Config
 import java.io.File
 
 case class WorkerConfig(
-    workerId:           String,
-    workEndpoint:       String,
-    dataServerUsername: String,
-    dataServerPassword: String,
-    dataDir:            File,
-    inferenceScriptDir: File
+    workerId:            String,
+    workEndpoint:        String,
+    dataServerUsername:  String,
+    dataServerPassword:  String,
+    dataDir:             File,
+    inferenceScriptDir:  File,
+    concurrentDownloads: Int
 )
 
 object WorkerConfig {
@@ -21,7 +22,8 @@ object WorkerConfig {
       dataServerUsername = config.getString("app.data-username"),
       dataServerPassword = config.getString("app.data-password"),
       dataDir = new File(config.getString("app.data-dir")),
-      inferenceScriptDir = new File(config.getString("app.inference-script-dir"))
+      inferenceScriptDir = new File(config.getString("app.inference-script-dir")),
+      concurrentDownloads = config.getInt("app.concurrent-downloads")
     )
   }
 }

@@ -115,12 +115,20 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               workItemManager.await { man =>
                 val item = man.assignNext(workerId)
                 println(s"Assigned $item to $workerId")
-                complete(item)
+                provide(item).orReject(complete(_))
+              }
+            }
+          },
+          path("log") {
+            parameter("workerId", "workId".?) { (workerId, workItemId) =>
+              entity(as[String]) { log =>
+                println(s"[$workerId${workItemId.map("/" + _).getOrElse("")}]: $log")
+                complete("OK")
               }
             }
           },
           path("result") {
-            parameter("workerId", "workId".as[Int]) { (workerId, workItemId) =>
+            parameter("workerId", "workId".as[String]) { (workerId, workItemId) =>
               workItemManager.await { man =>
                 provide(man.findItem(workItemId)).orReject {
                   case item: InferenceWorkItem => // FIXME
@@ -348,12 +356,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   case class InferenceInfo(model: String, startLayer: Int, stride: Int)
   lazy val requestedInferences: Seq[InferenceInfo] = Seq(InferenceInfo("youssef-test", 15, 32))
 
+  val runnerId = System.currentTimeMillis().toString
   lazy val workItems: Future[Seq[WorkItem]] =
     Source.futureSource(scrollSegments.map(x => Source(x.sortBy(_.segmentId).reverse)))
       .mapConcat(img => requestedInferences.map(info => img.ref -> info))
       .filter { case (ref, info) => !inferenceInfoExistsFor(ref, info) }
       .zipWithIndex
-      .map { case ((ref, info), id) => InferenceWorkItem(id.toInt, ref, info.model, info.startLayer, info.stride) }
+      .map { case ((ref, info), id) => InferenceWorkItem(s"$runnerId-$id", ref, info.model, info.startLayer, info.stride) }
       .runWith(Sink.seq)
 
   lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))
@@ -362,7 +371,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 trait WorkItemManager {
   def assignNext(workerId: String): Option[WorkItem]
 
-  def findItem(id: Int): Option[WorkItem]
+  def findItem(id: String): Option[WorkItem]
   def markDone(workerId: String, workItem: WorkItem): Unit
 }
 
@@ -384,7 +393,7 @@ object WorkItemManager {
           }
         }
 
-      def findItem(id: Int): Option[WorkItem] = itemState.keys.find(_.id == id)
+      def findItem(id: String): Option[WorkItem] = itemState.keys.find(_.id == id)
 
       def markDone(workerId: String, workItem: WorkItem): Unit =
         synchronized {

@@ -3,13 +3,12 @@ package net.virtualvoid.vesuvius
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{ ContentTypes, HttpEntity, HttpMethods, HttpRequest, HttpResponse, RequestEntity, StatusCodes, headers }
-import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
 import org.apache.pekko.http.scaladsl.marshalling.Marshal
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
-import org.apache.pekko.stream.scaladsl.FileIO
+import org.apache.pekko.stream.scaladsl.{ FileIO, Sink, Source }
 
 import scala.concurrent.Future
-
 import java.io.File
 
 object VesuviusWorkerMain extends App {
@@ -20,14 +19,15 @@ object VesuviusWorkerMain extends App {
 
   def runWorkItem(item: WorkItem): Future[(File, WorkItemResult)] =
     item match {
-      case i: InferenceWorkItem => Tasks.infer(config, i)
+      case i: InferenceWorkItem => Tasks.infer(config, i, log(_, item.id))
     }
 
   val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
 
   val nextWorkEndpoint = s"${config.workEndpoint}/next?workerId=${config.workerId}"
-  def resultEndpoint(workItemId: Int) = s"${config.workEndpoint}/result?workerId=${config.workerId}&workId=$workItemId"
+  def resultEndpoint(workItemId: String) = s"${config.workEndpoint}/result?workerId=${config.workerId}&workId=$workItemId"
   val completeEndpoint = s"${config.workEndpoint}/complete?workerId=${config.workerId}"
+  def logEndpoint(workItemId: String) = s"${config.workEndpoint}/log?workerId=${config.workerId}&workId=$workItemId"
 
   def post(endpoint: String, data: RequestEntity = HttpEntity.Empty): Future[HttpResponse] =
     Http().singleRequest(HttpRequest(method = HttpMethods.POST, uri = endpoint, entity = data, headers = auth :: Nil))
@@ -37,6 +37,13 @@ object VesuviusWorkerMain extends App {
         else
           Future.failed(new RuntimeException(s"Unexpected status code ${res.status} for endpoint $endpoint"))
       }
+
+  def log(msg: String, workId: String = ""): Future[HttpResponse] = {
+    scala.Console.println(msg)
+    post(logEndpoint(workId), HttpEntity(ContentTypes.`text/plain(UTF-8)`, msg))
+  }
+
+  def println(msg: String): Unit = log(msg)
 
   def runOne(): Future[Any] =
     post(nextWorkEndpoint)
@@ -79,19 +86,22 @@ object VesuviusWorkerMain extends App {
 }
 
 object Tasks {
-  def infer(config: WorkerConfig, item: InferenceWorkItem)(implicit system: ActorSystem): Future[(File, WorkItemResult)] = {
+  def infer(config: WorkerConfig, item: InferenceWorkItem, println: String => Unit)(implicit system: ActorSystem): Future[(File, WorkItemResult)] = {
     import system.dispatcher
 
     Future {
       val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
 
       def downloadLayers(segment: SegmentReference, from: Int, num: Int, to: File): Future[File] =
-        Future.traverse(from until from + num) { layer =>
-          download(
-            f"${segment.baseUrl}layers/$layer%02d.tif",
-            new File(to, f"layers/$layer%02d.tif")
-          )
-        }.map(_ => to)
+        Source(from until from + num)
+          .mapAsync(config.concurrentDownloads) { layer =>
+            download(
+              f"${segment.baseUrl}layers/$layer%02d.tif",
+              new File(to, f"layers/$layer%02d.tif")
+            )
+          }
+          .runWith(Sink.ignore)
+          .map(_ => to)
 
       def download(url: String, to: File): Future[File] = {
         println(s"Downloading $url")
@@ -99,10 +109,18 @@ object Tasks {
         val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
         Http().singleRequest(HttpRequest(HttpMethods.GET, uri = url, headers = auth :: Nil))
           .flatMap { res =>
+            val start = System.nanoTime()
             require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
-            res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
+            res.entity.dataBytes
+              .runWith(FileIO.toPath(tmpFile.toPath)).map(_ => start)
           }
-          .map { _ => tmpFile.renameTo(to); to }
+          .map { start =>
+            val end = System.nanoTime()
+            val lastedSeconds = (end - start) / 1000000000
+            println(f"Download of $url complete. Took $lastedSeconds. Thpt: ${to.length().toDouble / lastedSeconds / 1024 / 1024}%5.2fMB/s")
+            tmpFile.renameTo(to);
+            to
+          }
       }
 
       val workDir = new File(config.dataDir, item.id.toString)
@@ -112,13 +130,13 @@ object Tasks {
       val inferenceScriptDir = config.inferenceScriptDir
       val inferenceScript = new File(inferenceScriptDir, "inference.py")
       val model = new File(inferenceScriptDir, "model.ckpt")
-      require(model.exists)
+      require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
       def runInference(): Future[(File, WorkItemResult)] = Future {
         import sys.process._
         val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${item.stride} --start_idx ${item.startLayer} --workers 6"
         println(s"Running [$cmdLine]")
 
-        val res = cmdLine.!!
+        val res = cmdLine.!!(ProcessLogger(println))
         val outputFile = new File(workDir, s"${item.segment.segmentId}_${item.stride}_${item.startLayer}.png")
         require(outputFile.exists, s"Output file $outputFile does not exist")
         println(s"Output file $outputFile exists")

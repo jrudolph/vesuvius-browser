@@ -3,7 +3,7 @@ package net.virtualvoid.vesuvius
 import spray.json._
 
 sealed trait WorkItem {
-  def id: Int
+  def id: String
 }
 object WorkItem {
   import DefaultJsonProtocol._
@@ -19,7 +19,7 @@ object WorkItem {
   }
 }
 case class InferenceWorkItem(
-    id:         Int,
+    id:         String,
     segment:    SegmentReference,
     model:      String,
     startLayer: Int,
