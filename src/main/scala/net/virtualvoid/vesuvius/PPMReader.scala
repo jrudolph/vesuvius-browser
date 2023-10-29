@@ -1,8 +1,10 @@
 package net.virtualvoid.vesuvius
 
+import java.awt.image.BufferedImage
 import java.io.{ File, RandomAccessFile }
 import java.nio.ByteOrder
 import java.nio.channels.FileChannel.MapMode
+import javax.imageio.ImageIO
 import scala.io.Source
 
 object PPMReader extends App {
@@ -60,22 +62,15 @@ object PPMReader extends App {
     def apply(u: Int, v: Int): UV = new UV((u.toLong << 32) | v)
   }
 
-  lazy val map = new Iterable[((Int, Int), (Int, Int, Int))] {
-    def iterator: Iterator[((Int, Int), (Int, Int, Int))] =
+  lazy val uvs = new Iterable[UV] {
+    def iterator: Iterator[UV] =
       for {
         u <- (0 until width).iterator
-        v <- 0 until height
-        p = at(u, v) if p._1 > 0 || p._2 > 0 || p._3 > 0
-      } yield (u, v) -> p
+        v <- (0 until height).iterator
+        uv = UV(u, v)
+        if uv.isValid
+      } yield uv
   }
-
-  val uvs =
-    for {
-      u <- (0 until width)
-      v <- 0 until height
-      uv = UV(u, v)
-      if uv.isValid
-    } yield uv
 
   def span(what: String, s: Seq[Int]): Unit = {
     val min = s.min
@@ -93,7 +88,7 @@ object PPMReader extends App {
   }
   groups.mapValues(_.size).toVector.sortBy(-_._2).foreach(println)
   println(groups.size)*/
-  val filtered = map.filter {
+  /*val filtered = map.filter {
     case (_, (x, y, z)) =>
       x / 500 == 6 && y / 500 == 10 && z / 500 == 23
   }
@@ -103,5 +98,61 @@ object PPMReader extends App {
   println(filtered.size)
   filtered.groupBy {
     case (_, (x, y, z)) => z
-  }.mapValues(_.size).toVector.sortBy(-_._2).take(30).foreach(println)
+  }.mapValues(_.size).toVector.sortBy(-_._2).take(30).foreach(println)*/
+
+  /*uvs.groupBy(_.u).toVector.sortBy(_._1).take(10).foreach {
+    case (u, uvs) =>
+      val min = uvs.minBy(_.v)
+      val max = uvs.maxBy(_.v)
+      println(s"u: $u minV: ${min.v} maxV: ${max.v}")
+  }*/
+
+  def uvmapvis(): Unit = {
+    val minX = uvs.iterator.map(_.x).min
+    val maxX = uvs.iterator.map(_.x).max
+    val xSpan = maxX - minX
+
+    val minY = uvs.iterator.map(_.y).min
+    val maxY = uvs.iterator.map(_.y).max
+    val ySpan = maxY - minY
+
+    val centerX = (minX + maxX) / 2
+    val centerY = (minY + maxY) / 2
+
+    val rSpan = math.sqrt((maxX - centerX) * (maxX - centerX) + (maxY - centerY) * (maxY - centerY))
+
+    val minZ = (uvs.iterator.map(_.z).min - 500) max 0
+    val maxZ = uvs.iterator.map(_.z).max
+    val zSpan = maxZ - minZ
+
+    println(f"X: $minX%10d - $maxX%10d ($xSpan%10d)")
+    println(f"Y: $minY%10d - $maxY%10d ($ySpan%10d)")
+    println(f"Z: $minZ%10d - $maxZ%10d ($zSpan%10d)")
+    println(f"Center: $centerX%10d / $centerY%10d")
+    println(f"R: $rSpan%7.4f")
+
+    val xMap = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+    val yMap = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+    val zMap = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+
+    val thetaMap = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+    val rMap = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+
+    uvs.foreach { uv =>
+      xMap.setRGB(uv.u, uv.v, java.awt.Color.HSBtoRGB(0.5, 1, (uv.x.toFloat - minX) / xSpan))
+      yMap.setRGB(uv.u, uv.v, java.awt.Color.HSBtoRGB(0.3, 1, (uv.y.toFloat - minY) / ySpan))
+      zMap.setRGB(uv.u, uv.v, java.awt.Color.HSBtoRGB(0, 1, (uv.z.toFloat - minZ) / zSpan))
+
+      val theta = math.atan2(uv.x - centerX, uv.y - centerY)
+      val r = math.hypot(uv.x - centerX, uv.y - centerY)
+
+      thetaMap.setRGB(uv.u, uv.v, java.awt.Color.HSBtoRGB(((theta + math.Pi) / (2 * math.Pi)).toFloat, 1, 1))
+      rMap.setRGB(uv.u, uv.v, java.awt.Color.HSBtoRGB(0.8, 1, (r / rSpan).toFloat))
+    }
+    ImageIO.write(xMap, "png", new File("/tmp/xmap.png"))
+    ImageIO.write(yMap, "png", new File("/tmp/ymap.png"))
+    ImageIO.write(zMap, "png", new File("/tmp/zmap.png"))
+    ImageIO.write(thetaMap, "png", new File("/tmp/thetamap.png"))
+    ImageIO.write(rMap, "png", new File("/tmp/rmap.png"))
+  }
 }
