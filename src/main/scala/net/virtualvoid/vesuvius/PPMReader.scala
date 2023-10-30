@@ -57,6 +57,9 @@ object PPMReader extends App {
     def z: Int = chunks(v / chunkHeight).get(((v % chunkHeight) * width + u) * 6 + 2).toInt
 
     def isValid: Boolean = x > 0 || y > 0 || z > 0
+
+    override def toString: String =
+      f"(u=$u%5d,v=$v%5d) -> (x=$x%5d,y=$y%5d,z=$z%5d)"
   }
   object UV {
     def apply(u: Int, v: Int): UV = new UV((u.toLong << 32) | v)
@@ -78,34 +81,42 @@ object PPMReader extends App {
     println(s"$what: $min - $max (${max - min})")
   }
 
-  /*span("x", uvs.map(_.x).toVector)
-  span("y", uvs.map(_.y).toVector)
-  span("z", uvs.map(_.z).toVector)*/
-
-  /*val groups = map.groupBy {
-    case (_, (x, y, z)) =>
-      (x / 500, y / 500, z / 500)
+  def findRotationAngle(uv: UV, r: Int, n: Int): Double = {
+    // for all points on the circle with radius r around (u,v)
+    val diffs =
+      (0 until n)
+        .map { idx =>
+          val angle = idx * 2 * math.Pi / n
+          val u1 = uv.u + (r * math.cos(angle)).toInt
+          val v1 = uv.v + (r * math.sin(angle)).toInt
+          angle -> UV(u1, v1)
+        }
+        .filter(_._2.isValid)
+        .map {
+          case (angle, uv1) =>
+            angle -> (uv1.z - uv.z)
+        }
+    diffs.minBy(_._2)._1
   }
-  groups.mapValues(_.size).toVector.sortBy(-_._2).foreach(println)
-  println(groups.size)*/
-  /*val filtered = map.filter {
-    case (_, (x, y, z)) =>
-      x / 500 == 6 && y / 500 == 10 && z / 500 == 23
-  }
-  span("x", filtered.map(_._2._1).toVector)
-  span("y", filtered.map(_._2._2).toVector)
-  span("z", filtered.map(_._2._3).toVector)
-  println(filtered.size)
-  filtered.groupBy {
-    case (_, (x, y, z)) => z
-  }.mapValues(_.size).toVector.sortBy(-_._2).take(30).foreach(println)*/
-
-  /*uvs.groupBy(_.u).toVector.sortBy(_._1).take(10).foreach {
-    case (u, uvs) =>
-      val min = uvs.minBy(_.v)
-      val max = uvs.maxBy(_.v)
-      println(s"u: $u minV: ${min.v} maxV: ${max.v}")
-  }*/
+  val samples = 100
+  val angles = 500
+  val r = 500
+  val results =
+    (0 until samples).flatMap { _ =>
+      val uv = UV(util.Random.nextInt(width - 2 * r) + r, util.Random.nextInt(height - 2 * r) + r)
+      if (uv.isValid) {
+        val angle = findRotationAngle(uv, r, angles)
+        println(f"At $uv Angle: ${angle / 2 / math.Pi * 360}%7.4f")
+        Some(angle)
+      } else
+        None
+    }
+  val dirSum =
+    results
+      .map(a => math.sin(a) -> math.cos(a))
+      .reduce((a, b) => (a._1 + b._1, a._2 + b._2))
+  val avgAngle = math.atan2(dirSum._1, dirSum._2)
+  println(f"Avg angle: ${avgAngle / 2 / math.Pi * 360}%7.4f")
 
   def uvmapvis(): Unit = {
     val minX = uvs.iterator.map(_.x).min
