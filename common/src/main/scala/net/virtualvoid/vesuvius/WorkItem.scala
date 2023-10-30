@@ -8,7 +8,7 @@ sealed trait WorkItem {
 object WorkItem {
   import DefaultJsonProtocol._
 
-  implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItem] = jsonFormat5(InferenceWorkItem.apply)
+  implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItem] = jsonFormat6(InferenceWorkItem.apply)
   implicit val workItemFormat: RootJsonFormat[WorkItem] = new RootJsonFormat[WorkItem] {
     // FIXME: other potential item types
     override def write(obj: WorkItem): JsValue = obj match {
@@ -19,11 +19,12 @@ object WorkItem {
   }
 }
 case class InferenceWorkItem(
-    id:         String,
-    segment:    SegmentReference,
-    model:      String,
-    startLayer: Int,
-    stride:     Int
+    id:            String,
+    segment:       SegmentReference,
+    model:         String,
+    startLayer:    Int,
+    stride:        Int,
+    reverseLayers: Boolean
 ) extends WorkItem
 
 case class AssetReference()

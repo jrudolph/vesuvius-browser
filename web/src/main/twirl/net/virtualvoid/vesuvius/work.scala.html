@@ -1,0 +1,36 @@
+@import net.virtualvoid.vesuvius._
+
+@(itemStates: Seq[(WorkItem, WorkItemManager.ItemState)])
+
+<table>
+<tr>
+    <th>ID</th>
+    <th>Scroll</th>
+    <th>Segment</th>
+    <th>Model</th>
+    <th>Start Layer</th>
+    <th>Stride</th>
+    <th>Reverse Layers</th>
+</tr>
+@for((item: InferenceWorkItem, state) <- itemStates) {
+<tr>
+    <td>@item.id</td>
+    <td>@item.segment.scroll</td>
+    <td><a href="/scroll/@item.segment.scroll/segment/@item.segment.segmentId/">@item.segment.segmentId</a></td>
+    <td>@item.model</td>
+    <td>@item.startLayer</td>
+    <td>@item.stride</td>
+    <td>@item.reverseLayers</td>
+    @if(state == WorkItemManager.Queued) {
+        <td>Queued</td>
+    } else {}
+    @for(
+        state@WorkItemManager.Assigned(_, _) <- Seq(state)
+    ) {
+        <td>@state.workerId</td>
+        <td>@state.at</td>
+        <td>@state.runningForSeconds s ago</td>
+    }
+</tr>
+}
+</table>

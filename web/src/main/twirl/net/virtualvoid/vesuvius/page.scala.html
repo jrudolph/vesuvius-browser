@@ -14,7 +14,8 @@
 <nav>
     <span><a href="/"><b>Vesuvius Challenge Segment Browser</b></a></span> | <span><a href="/license">License</a></span>
     @if(user.isDefined) {
-        <span>| User: @{user.get.name}</span><span> | <a href="/logout">Logout</a></span>
+        <span> | <a href="/work">Work</a></span><span>
+        <span> | User: @{user.get.name}</span><span> | <a href="/logout">Logout</a></span>
     } else {
     }
 </nav>

@@ -8,6 +8,7 @@ import org.apache.pekko.http.scaladsl.marshalling.ToResponseMarshallable
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, Uri, headers }
 import org.apache.pekko.http.scaladsl.server.{ Directive0, Directive1, Directives, Route }
 import org.apache.pekko.stream.scaladsl.{ FileIO, Flow, PartitionHub, Sink, Source }
+import play.twirl.api.Html
 import spray.json.*
 
 import java.io.File
@@ -43,11 +44,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val userManagement = UserManagement(config)
 
   lazy val main =
-    encodeResponse {
-      userManagement.loggedIn { user =>
-        mainRoute(user)
-      }
-    }
+    encodeResponse { mainRoute }
 
   val NameR = """(\d+)_(\d+).jpg""".r
 
@@ -65,12 +62,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def resolveRef(scroll: Int, segmentId: String): Directive1[SegmentReference] =
     scrollSegmentsMap.map(_.get((scroll, segmentId))).await.orReject
 
-  def mainRoute(implicit user: Option[LoggedInUser]) =
+  lazy val mainRoute =
     concat(
       pathSingleSlash {
         get {
           scrollSegments.await { infos =>
-            complete(html.home(infos))
+            page(html.home(infos))
           }
         }
       },
@@ -82,7 +79,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
             }
           },
           get {
-            complete(html.login())
+            page(html.login())
           }
         )
       },
@@ -90,7 +87,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         userManagement.logout
       },
       path("license") {
-        complete(html.license())
+        page(html.license())
       },
       pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>
         resolveRef(scroll, segmentId) { segment =>
@@ -98,7 +95,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           imageInfo(segment).await.orReject { (info: ImageInfo) =>
             concat(
               pathSingleSlash {
-                complete(html.segment(info))
+                page(html.segment(info))
               },
               path("mask") {
                 resizedMask(segment).deliver
@@ -186,11 +183,28 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
             )
           },
           path("app")(getFromResource("app.jar")),
-          path("deps")(depsFile(getFromFile))
+          path("deps")(depsFile(getFromFile)),
+          adminRoutes
         )
       },
       getFromResourceDirectory("web")
     )
+
+  def adminRoutes =
+    userManagement.ensureAdmin {
+      get {
+        pathEnd {
+          workItemManager.await { manager =>
+            page(html.work(manager.itemStates.toSeq))
+          }
+        }
+      }
+    }
+
+  def page(html: Html): Route =
+    userManagement.loggedIn { implicit user =>
+      complete(html)
+    }
 
   val InfoCache = LfuCache[SegmentReference, Option[ImageInfo]]
 
@@ -379,8 +393,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     target.exists
   }
 
-  case class InferenceInfo(model: String, startLayer: Int, stride: Int)
-  lazy val requestedInferences: Seq[InferenceInfo] = Seq(InferenceInfo("youssef-test", 15, 32))
+  case class InferenceInfo(model: String, startLayer: Int, stride: Int, reverseLayers: Boolean)
+  lazy val requestedInferences: Seq[InferenceInfo] = Seq(InferenceInfo("youssef", 15, 32, false))
 
   val runnerId = System.currentTimeMillis().toString
   lazy val workItems: Future[Seq[WorkItem]] =
@@ -388,7 +402,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .mapConcat(img => requestedInferences.map(info => img.ref -> info))
       .filter { case (ref, info) => !inferenceInfoExistsFor(ref, info) }
       .zipWithIndex
-      .map { case ((ref, info), id) => InferenceWorkItem(s"$runnerId-$id", ref, info.model, info.startLayer, info.stride) }
+      .map { case ((ref, info), id) => InferenceWorkItem(s"$runnerId-$id", ref, info.model, info.startLayer, info.stride, info.reverseLayers) }
       .runWith(Sink.seq)
 
   lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))

@@ -20,6 +20,10 @@ object LoggedInUser {
 trait UserManagement {
   def loggedIn: Directive1[Option[LoggedInUser]]
   def ensureAdmin: Directive0
+  def adminUser: Directive1[LoggedInUser] = loggedIn.flatMap {
+    case Some(user) if user.admin => provide(user)
+    case _                        => redirect("/login", StatusCodes.Found)
+  }
   def login(name: String, password: String): Route
   def logout: Route
 }
