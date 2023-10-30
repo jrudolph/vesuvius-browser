@@ -161,6 +161,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           }
         )
       },
+      path("worker-app")(getFromResource("app.jar")),
       getFromResourceDirectory("web")
     )
 

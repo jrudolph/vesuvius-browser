@@ -48,6 +48,7 @@ lazy val web = project.in(file("web"))
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "twirl-api" % "1.6.0-RC4",
     ),
+    Compile / resourceGenerators += (worker / assembly).map(_ :: Nil),
 
     // setup docker build
     // use separate dependency and app jars
