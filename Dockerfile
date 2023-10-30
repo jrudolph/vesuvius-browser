@@ -1,6 +1,10 @@
 ARG BASE_IMAGE_TAG
 FROM --platform=$BUILDPLATFORM eclipse-temurin:17 AS builder
 
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y git && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN curl https://raw.githubusercontent.com/sbt/sbt/develop/sbt > /sbt && chmod +x /sbt && export PATH=/:$PATH
 
 RUN mkdir -p /tmp/project/project
