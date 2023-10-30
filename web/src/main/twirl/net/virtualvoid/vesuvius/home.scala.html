@@ -14,12 +14,12 @@
     @for(info <- infos.sortBy(x => (x.segmentId, x.scroll)).reverse) {
         <tr>
             <td>Scroll @info.scroll</td>
-            <td><a href="/scroll/@info.scroll/segment/@info.segmentId/">@info.segmentId</a></td>
+            <td><a href="/scroll/@info.scroll/segment/@info.segmentId/@{if (!info.isLandscape) "#rot=90" else ""}">@info.segmentId</a></td>
             <td>@{info.area.map(_.formatted("%5.2f")).getOrElse("")}</td>
             <td>@info.width</td>
             <td>@info.height</td>
-            <td><img src="/scroll/@info.scroll/segment/@info.segmentId/inferred/youssef-test" height="50"/></td>
-            <td><img src="/scroll/@info.scroll/segment/@info.segmentId/inferred/youssef-test-reversed" height="50"/></td>
+            <td><img src="/scroll/@info.scroll/segment/@info.segmentId/inferred/youssef-test" height="100"/></td>
+            <td><img src="/scroll/@info.scroll/segment/@info.segmentId/inferred/youssef-test-reversed" height="100"/></td>
             <td><img src="/scroll/@info.scroll/segment/@info.segmentId/mask" height="50"/></td>
         </tr>
     }

@@ -301,27 +301,38 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }(cpuBound)
   }
 
-  def resizedMask(segment: SegmentReference): Future[File] = {
-    import segment._
-    resizedX(maskFor(segment), new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small.png")).map(_.get)
-  }
+  def resizedMask(segment: SegmentReference): Future[File] =
+    imageInfo(segment).flatMap { info =>
+      import segment._
+      resizedX(maskFor(segment), new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small_autorotated.png"), height = 100, rotate90 = !info.get.isLandscape).map(_.get)
+    }
 
-  def resizedInferred(segment: SegmentReference, info: InferenceInfo): Future[Option[File]] = {
-    import segment._
-    val file = inferredFileForInfo(segment, info)
-    resizedX(file, new File(file.getParentFile, file.getName.dropRight(4) + "_small.png"))
-  }
+  def resizedInferred(segment: SegmentReference, info: InferenceInfo): Future[Option[File]] =
+    imageInfo(segment).flatMap { i =>
+      val file = inferredFileForInfo(segment, info)
+      resizedX(file, new File(file.getParentFile, file.getName.dropRight(4) + "_small_autorotated.png"), height = 100, rotate90 = !i.get.isLandscape)
+    }
 
-  def resizedX(orig: File, target: File): Future[Option[File]] =
-    resizedX(Future.successful(orig), target)
-  def resizedX(orig: Future[File], target: File): Future[Option[File]] =
+  def resizedX(orig: File, target: File, height: Int, rotate90: Boolean): Future[Option[File]] =
+    resizedX(Future.successful(orig), target, height, rotate90)
+  def resizedX(orig: Future[File], target: File, height: Int, rotate90: Boolean): Future[Option[File]] =
     orig.flatMap { f0 =>
       cached(target, negTtlSeconds = 10, isValid = f => f0.exists() && f0.lastModified() < f.lastModified()) { () =>
         val f = Option(f0).filter(_.exists).getOrElse(throw new RuntimeException(s"File $f0 does not exist"))
         import sys.process._
+        val rotatedFile =
+          if (rotate90) {
+            val rotFile = File.createTempFile(".tmp.rotated", ".png", target.getParentFile)
+            val cmd = s"""vips rot $f $rotFile d90"""
+            cmd.!!
+            rotFile.deleteOnExit()
+            rotFile
+          } else f
+
         val tmpFile = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
-        val cmd = s"""vips thumbnail $f $tmpFile 10000 --height 50"""
+        val cmd = s"""vips thumbnail $rotatedFile $tmpFile 10000 --height $height"""
         cmd.!!
+
         require(tmpFile.renameTo(target))
         Future.successful(target)
       }

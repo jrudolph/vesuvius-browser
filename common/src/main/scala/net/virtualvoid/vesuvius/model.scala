@@ -39,4 +39,6 @@ case class ImageInfo(
 ) {
   def scroll: Int = ref.scroll
   def segmentId: String = ref.segmentId
+
+  def isLandscape: Boolean = width > height
 }
