@@ -106,62 +106,67 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           }
         }
       },
-      (post & pathPrefix("work")) {
+      pathPrefix("work") {
         concat(
-          path("next") {
-            parameter("workerId") { workerId =>
-              workItemManager.await { man =>
-                val item = man.assignNext(workerId)
-                println(s"Assigned $item to $workerId")
-                provide(item).orReject(complete(_))
-              }
-            }
-          },
-          path("log") {
-            parameter("workerId", "workId".?) { (workerId, workItemId) =>
-              entity(as[String]) { log =>
-                println(s"[$workerId${workItemId.map("/" + _).getOrElse("")}]: $log")
-                complete("OK")
-              }
-            }
-          },
-          path("result") {
-            parameter("workerId", "workId".as[String]) { (workerId, workItemId) =>
-              workItemManager.await { man =>
-                provide(man.findItem(workItemId)).orReject {
-                  case item: InferenceWorkItem => // FIXME
-                    println(s"Got result data request for $workItemId from $workerId, item: $item")
+          post {
+            concat(
+              path("next") {
+                parameter("workerId") { workerId =>
+                  workItemManager.await { man =>
+                    val item = man.assignNext(workerId)
+                    println(s"Assigned $item to $workerId")
+                    provide(item).orReject(complete(_))
+                  }
+                }
+              },
+              path("log") {
+                parameter("workerId", "workId".?) { (workerId, workItemId) =>
+                  entity(as[String]) { log =>
+                    println(s"[$workerId${workItemId.map("/" + _).getOrElse("")}]: $log")
+                    complete("OK")
+                  }
+                }
+              },
+              path("result") {
+                parameter("workerId", "workId".as[String]) { (workerId, workItemId) =>
+                  workItemManager.await { man =>
+                    provide(man.findItem(workItemId)).orReject {
+                      case item: InferenceWorkItem => // FIXME
+                        println(s"Got result data request for $workItemId from $workerId, item: $item")
 
-                    val file = new File(dataDir, s"inferred/scroll${item.segment.scroll}/${item.segment.segmentId}/inference_${item.model}_${item.startLayer}_${item.stride}.png")
-                    file.getParentFile.mkdirs()
-                    val tmpFile = File.createTempFile(".tmp.result", ".png", file.getParentFile)
+                        val file = new File(dataDir, s"inferred/scroll${item.segment.scroll}/${item.segment.segmentId}/inference_${item.model}_${item.startLayer}_${item.stride}.png")
+                        file.getParentFile.mkdirs()
+                        val tmpFile = File.createTempFile(".tmp.result", ".png", file.getParentFile)
 
-                    extractRequestEntity { entity =>
-                      val result =
-                        entity.dataBytes
-                          .runWith(FileIO.toPath(tmpFile.toPath))
-                          .map { _ => tmpFile.renameTo(file); "OK" }
+                        extractRequestEntity { entity =>
+                          val result =
+                            entity.dataBytes
+                              .runWith(FileIO.toPath(tmpFile.toPath))
+                              .map { _ => tmpFile.renameTo(file); "OK" }
 
-                      complete(result)
+                          complete(result)
+                        }
                     }
+                  }
+                }
+              },
+              path("complete") {
+                parameter("workerId") { workerId =>
+                  entity(as[WorkItemResult]) { result =>
+                    println(s"Got result: $result from $workerId")
+                    workItemManager.await { man =>
+                      man.markDone(workerId, result.workItem)
+                      complete("OK")
+                    }
+                  }
                 }
               }
-            }
+            )
           },
-          path("complete") {
-            parameter("workerId") { workerId =>
-              entity(as[WorkItemResult]) { result =>
-                println(s"Got result: $result from $workerId")
-                workItemManager.await { man =>
-                  man.markDone(workerId, result.workItem)
-                  complete("OK")
-                }
-              }
-            }
-          }
+          path("app")(getFromResource("app.jar")),
+          path("deps")(depsFile(getFromFile))
         )
       },
-      path("worker-app")(getFromResource("app.jar")),
       getFromResourceDirectory("web")
     )
 
@@ -365,6 +370,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .runWith(Sink.seq)
 
   lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))
+
+  lazy val depsFile: Directive1[File] =
+    provide(sys.props("java.class.path").split(":").find(_.contains("deps.jar")).map(new File(_))).orReject
 }
 
 trait WorkItemManager {
