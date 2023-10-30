@@ -17,6 +17,8 @@ COPY project/* /tmp/project/project/
 RUN /sbt -J-Xmx2g -J-verbose:gc update "show web/assemblyPackageDependency"
 
 COPY common /tmp/project/common
+# we need the worker code to include it in the jar
+COPY worker /tmp/project/worker
 COPY web /tmp/project/web
 
 RUN /sbt "show web/assembly"
