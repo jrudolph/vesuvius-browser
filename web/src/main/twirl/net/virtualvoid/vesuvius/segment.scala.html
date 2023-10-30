@@ -9,7 +9,7 @@
 <div><a href="#keyboard_shortcuts">Keyboard shortcuts</a></div>
 <div>Note: If page stays blank for a while, layer still needs to be prepared in the background. Stay tuned, or reload after a while.</div>
 <p/>
-<b>Hold "e" key to overlay output from <a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a> or navigate to right-most layer to show just inferred data.</b>
+<b>Hold "1" or "2" key to overlay output from <a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a> or navigate to right-most layer to show just inferred data.</b>
 <div id="openseadragon1" style="width: 100%; height: 80%;"></div>
 <script src="/openseadragon/openseadragon.min.js"></script>
 <script src="/js/jquery-3.7.1.min.js.js"></script>
@@ -30,7 +30,6 @@ var viewer = OpenSeadragon({
     debugMode: false,
 });
 
-extra_image = 16;
 index = 7;
 
 function sibling(index, shownIndex) {
@@ -147,14 +146,22 @@ viewer.addHandler('open', function() {
         show(7);
 });
 
+function idxOfLayer(layer) {
+  return layers.indexOf(layer);
+}
+
+var keyMapping = { '1': idxOfLayer('2342'), '2': idxOfLayer('2343') };
+
 viewer.addHandler('canvas-key', function(event) {
-    if (event.originalEvent.keyCode == 69) {
-        viewer.world.getItemAt(extra_image).setOpacity(0.75);
+    var idx = keyMapping[event.originalEvent.key];
+    if (idx) {
+        viewer.world.getItemAt(idx).setOpacity(0.75);
     }
 });
 viewer.innerTracker.keyUpHandler = function(event) {
-    if (event.keyCode == 69) {
-        viewer.world.getItemAt(extra_image).setOpacity(0);
+    var idx = keyMapping[event.originalEvent.key];
+    if (idx) {
+        viewer.world.getItemAt(idx).setOpacity(0);
     }
 };
 
@@ -180,7 +187,7 @@ viewer.pixelsPerArrowPress = 250;
 </p>
 
 <ul>
-    <li><strong>[ e ]</strong> - hold to overlay ink detection model output</li>
+    <li><strong>[ 1, 2 ]</strong> - hold to overlay different ink detection model outputs</li>
     <li><strong>[ w, up arrow ]</strong> - move viewport <strong>up</strong></li>
     <li><strong>[ s, down arrow ]</strong> - move viewport <strong>down</strong></li>
     <li><strong>[ a, left arrow ]</strong> - move viewport <strong>left</strong></li>
