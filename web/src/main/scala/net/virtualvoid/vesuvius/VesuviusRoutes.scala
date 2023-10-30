@@ -237,13 +237,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           Future.successful(webpVersion)
         else {
           val url = f"${segment.baseUrl}layers/$layer%02d.tif"
-          val tmpFile = File.createTempFile("download", ".tif", targetFile.getParentFile)
+          val tmpFile = File.createTempFile(".tmp.download", ".tif", targetFile.getParentFile)
           download(url, tmpFile)
         }
 
       tmpFile
         .map { tmpFile =>
-          val tmpFile2 = File.createTempFile("convert", ".jp2", targetFile.getParentFile)
+          val tmpFile2 = File.createTempFile(".tmp.convert", ".jp2", targetFile.getParentFile)
           import sys.process._
           val cmd = s"""vips copy $tmpFile "$tmpFile2[lossless]""""
           println(s"Convert big image to jp2: $cmd")
