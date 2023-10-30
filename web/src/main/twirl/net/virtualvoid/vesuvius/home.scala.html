@@ -5,7 +5,12 @@
 <h2>Segments</h2>
 
 <table>
-    <tr><th>Scroll</th><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th><th><a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a></th><th>Mask</th></tr>
+    <tr>
+        <th>Scroll</th><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th>
+        <th><a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a></th>
+        <th><a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model (reversed layers)</a></th>
+        <th>Mask</th>
+    </tr>
     @for(info <- infos.sortBy(x => (x.segmentId, x.scroll)).reverse) {
         <tr>
             <td>Scroll @info.scroll</td>
@@ -14,6 +19,7 @@
             <td>@info.width</td>
             <td>@info.height</td>
             <td><img src="/scroll/@info.scroll/segment/@info.segmentId/inferred/youssef-test" height="50"/></td>
+            <td><img src="/scroll/@info.scroll/segment/@info.segmentId/inferred/youssef-test-reversed" height="50"/></td>
             <td><img src="/scroll/@info.scroll/segment/@info.segmentId/mask" height="50"/></td>
         </tr>
     }

@@ -101,8 +101,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                 resizedMask(segment).deliver
               },
               path("inferred" / Segment) { model =>
+                val info = model match {
+                  case "youssef-test"          => requestedInferences(0)
+                  case "youssef-test-reversed" => requestedInferences(1)
+                }
                 concat(
-                  resizedInferred(segment, model).await.orReject.deliver,
+                  resizedInferred(segment, info).await.orReject.deliver,
                   complete(ImageTools.EmptyImageResponse)
                 )
               },
@@ -243,6 +247,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
     if (targetFile.exists) Future.successful(targetFile)
     else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32.png"))
+    else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32_reverse.png"))
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
 
@@ -301,11 +306,14 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     resizedX(maskFor(segment), new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small.png")).map(_.get)
   }
 
-  def resizedInferred(segment: SegmentReference, model: String): Future[Option[File]] = {
+  def resizedInferred(segment: SegmentReference, info: InferenceInfo): Future[Option[File]] = {
     import segment._
-    resizedX(inferredFor(segment), new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${model}_15_32_small.png"))
+    val file = inferredFileForInfo(segment, info)
+    resizedX(file, new File(file.getParentFile, file.getName.dropRight(4) + "_small.png"))
   }
 
+  def resizedX(orig: File, target: File): Future[Option[File]] =
+    resizedX(Future.successful(orig), target)
   def resizedX(orig: Future[File], target: File): Future[Option[File]] =
     orig.flatMap { f0 =>
       cached(target, negTtlSeconds = 10, isValid = f => f0.exists() && f0.lastModified() < f.lastModified()) { () =>
@@ -318,11 +326,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         Future.successful(target)
       }
     }.transform(x => Success(x.toOption))
-
-  def inferredFor(segment: SegmentReference): Future[File] = {
-    import segment._
-    Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32.png"))
-  }
 
   def maskFor(segment: SegmentReference): Future[File] = {
     import segment._
