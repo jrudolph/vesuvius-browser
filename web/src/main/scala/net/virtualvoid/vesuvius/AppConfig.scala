@@ -9,6 +9,8 @@ case class AppConfig(
     port:               Int,
     dataServerUsername: String,
     dataServerPassword: String,
+    adminPassword:      String,
+    serverKey:          String,
     dataDir:            File,
     concurrentResizes:  Int
 )
@@ -20,6 +22,8 @@ object AppConfig {
       port = config.getInt("app.port"),
       dataServerUsername = config.getString("app.data-username"),
       dataServerPassword = config.getString("app.data-password"),
+      adminPassword = config.getString("app.admin-password"),
+      serverKey = config.getString("app.server-key"),
       dataDir = new File(config.getString("app.data-dir")),
       concurrentResizes = config.getInt("app.concurrent-resizes")
     )

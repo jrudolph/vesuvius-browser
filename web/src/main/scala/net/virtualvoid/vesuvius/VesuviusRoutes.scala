@@ -6,8 +6,9 @@ import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.marshalling.ToResponseMarshallable
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, Uri, headers }
-import org.apache.pekko.http.scaladsl.server.{ Directive1, Directives, Route }
+import org.apache.pekko.http.scaladsl.server.{ Directive0, Directive1, Directives, Route }
 import org.apache.pekko.stream.scaladsl.{ FileIO, Flow, PartitionHub, Sink, Source }
+import play.twirl.api.Html
 import spray.json.*
 
 import java.io.File
@@ -40,7 +41,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   val cpuBound = system.dispatchers.lookup("cpu-bound-dispatcher")
 
-  lazy val main = encodeResponse(mainRoute)
+  val userManagement = UserManagement(config)
+
+  lazy val main =
+    encodeResponse { mainRoute }
 
   val NameR = """(\d+)_(\d+).jpg""".r
 
@@ -63,12 +67,27 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       pathSingleSlash {
         get {
           scrollSegments.await { infos =>
-            complete(html.home(infos))
+            page(html.home(infos))
           }
         }
       },
+      path("login") {
+        concat(
+          post {
+            formField("user", "password") { (user, password) =>
+              userManagement.login(user, password)
+            }
+          },
+          get {
+            page(html.login())
+          }
+        )
+      },
+      path("logout") {
+        userManagement.logout
+      },
       path("license") {
-        complete(html.license())
+        page(html.license())
       },
       pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>
         resolveRef(scroll, segmentId) { segment =>
@@ -76,7 +95,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           imageInfo(segment).await.orReject { (info: ImageInfo) =>
             concat(
               pathSingleSlash {
-                complete(html.segment(info))
+                page(html.segment(info))
               },
               path("mask") {
                 resizedMask(segment).deliver
@@ -134,7 +153,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                       case item: InferenceWorkItem => // FIXME
                         println(s"Got result data request for $workItemId from $workerId, item: $item")
 
-                        val file = new File(dataDir, s"inferred/scroll${item.segment.scroll}/${item.segment.segmentId}/inference_${item.model}_${item.startLayer}_${item.stride}.png")
+                        val file = inferredFileForInfo(item)
                         file.getParentFile.mkdirs()
                         val tmpFile = File.createTempFile(".tmp.result", ".png", file.getParentFile)
 
@@ -164,11 +183,28 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
             )
           },
           path("app")(getFromResource("app.jar")),
-          path("deps")(depsFile(getFromFile))
+          path("deps")(depsFile(getFromFile)),
+          adminRoutes
         )
       },
       getFromResourceDirectory("web")
     )
+
+  def adminRoutes =
+    userManagement.ensureAdmin {
+      get {
+        pathEnd {
+          workItemManager.await { manager =>
+            page(html.work(manager.itemStates.toSeq))
+          }
+        }
+      }
+    }
+
+  def page(html: Html): Route =
+    userManagement.loggedIn { implicit user =>
+      complete(html)
+    }
 
   val InfoCache = LfuCache[SegmentReference, Option[ImageInfo]]
 
@@ -215,13 +251,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           Future.successful(webpVersion)
         else {
           val url = f"${segment.baseUrl}layers/$layer%02d.tif"
-          val tmpFile = File.createTempFile("download", ".tif", targetFile.getParentFile)
+          val tmpFile = File.createTempFile(".tmp.download", ".tif", targetFile.getParentFile)
           download(url, tmpFile)
         }
 
       tmpFile
         .map { tmpFile =>
-          val tmpFile2 = File.createTempFile("convert", ".jp2", targetFile.getParentFile)
+          val tmpFile2 = File.createTempFile(".tmp.convert", ".jp2", targetFile.getParentFile)
           import sys.process._
           val cmd = s"""vips copy $tmpFile "$tmpFile2[lossless]""""
           println(s"Convert big image to jp2: $cmd")
@@ -351,14 +387,26 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map { _ => tmpFile.renameTo(to); to }
   }
 
+  def inferredFileForInfo(segment: SegmentReference, info: InferenceInfo): File = {
+    import segment._
+    val reversed = if (info.reverseLayers) "_reverse" else ""
+    new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${info.model}_${info.startLayer}_${info.stride}$reversed.png")
+  }
+  def inferredFileForInfo(workItem: InferenceWorkItem): File =
+    inferredFileForInfo(workItem.segment, InferenceInfo(workItem.model, workItem.startLayer, workItem.stride, workItem.reverseLayers))
+
   def inferenceInfoExistsFor(ref: SegmentReference, info: InferenceInfo): Boolean = {
     import ref._
-    val target = new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${info.model}_${info.startLayer}_${info.stride}.png")
+    val target = inferredFileForInfo(ref, info)
     target.exists
   }
 
-  case class InferenceInfo(model: String, startLayer: Int, stride: Int)
-  lazy val requestedInferences: Seq[InferenceInfo] = Seq(InferenceInfo("youssef-test", 15, 32))
+  case class InferenceInfo(model: String, startLayer: Int, stride: Int, reverseLayers: Boolean)
+  lazy val requestedInferences: Seq[InferenceInfo] =
+    Seq(
+      InferenceInfo("youssef-test", 15, 32, false),
+      InferenceInfo("youssef-test", 15, 32, true)
+    )
 
   val runnerId = System.currentTimeMillis().toString
   lazy val workItems: Future[Seq[WorkItem]] =
@@ -366,46 +414,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .mapConcat(img => requestedInferences.map(info => img.ref -> info))
       .filter { case (ref, info) => !inferenceInfoExistsFor(ref, info) }
       .zipWithIndex
-      .map { case ((ref, info), id) => InferenceWorkItem(s"$runnerId-$id", ref, info.model, info.startLayer, info.stride) }
+      .map { case ((ref, info), id) => InferenceWorkItem(s"$runnerId-$id", ref, info.model, info.startLayer, info.stride, info.reverseLayers) }
       .runWith(Sink.seq)
 
   lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))
 
   lazy val depsFile: Directive1[File] =
     provide(sys.props("java.class.path").split(":").find(_.contains("deps.jar")).map(new File(_))).orReject
-}
-
-trait WorkItemManager {
-  def assignNext(workerId: String): Option[WorkItem]
-
-  def findItem(id: String): Option[WorkItem]
-  def markDone(workerId: String, workItem: WorkItem): Unit
-}
-
-object WorkItemManager {
-  def apply(initialItems: Seq[WorkItem]): WorkItemManager = {
-    sealed trait ItemState
-    case object Queued extends ItemState
-    case class Assigned(workerId: String, atMillis: Long) extends ItemState
-
-    var itemState = ListMap[WorkItem, ItemState](initialItems.map(_ -> Queued): _*)
-
-    new WorkItemManager {
-      def assignNext(workerId: String): Option[WorkItem] =
-        synchronized {
-          itemState.find(_._2 == Queued).map {
-            case (item, _) =>
-              itemState = itemState.updated(item, Assigned(workerId, System.currentTimeMillis()))
-              item
-          }
-        }
-
-      def findItem(id: String): Option[WorkItem] = itemState.keys.find(_.id == id)
-
-      def markDone(workerId: String, workItem: WorkItem): Unit =
-        synchronized {
-          itemState = itemState.removed(workItem)
-        }
-    }
-  }
 }
