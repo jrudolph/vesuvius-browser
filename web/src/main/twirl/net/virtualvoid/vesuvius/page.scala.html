@@ -1,6 +1,6 @@
 @import net.virtualvoid.vesuvius._
 
-@(content: Html)
+@(content: Html, user: Option[LoggedInUser])
 
 <html>
 <head>
@@ -12,7 +12,11 @@
 <body>
 
 <nav>
-    <span><a href="/"><b>Vesuvius Challenge Segment Browser</b></a></span> | <span><a href="/license">License</a>
+    <span><a href="/"><b>Vesuvius Challenge Segment Browser</b></a></span> | <span><a href="/license">License</a></span>
+    @if(user.isDefined) {
+        <span>| User: @{user.get.name}</span><span> | <a href="/logout">Logout</a></span>
+    } else {
+    }
 </nav>
 
 <div class="container">

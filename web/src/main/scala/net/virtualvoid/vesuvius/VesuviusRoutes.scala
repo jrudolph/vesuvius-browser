@@ -6,7 +6,7 @@ import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.marshalling.ToResponseMarshallable
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, Uri, headers }
-import org.apache.pekko.http.scaladsl.server.{ Directive1, Directives, Route }
+import org.apache.pekko.http.scaladsl.server.{ Directive0, Directive1, Directives, Route }
 import org.apache.pekko.stream.scaladsl.{ FileIO, Flow, PartitionHub, Sink, Source }
 import spray.json.*
 
@@ -40,7 +40,14 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   val cpuBound = system.dispatchers.lookup("cpu-bound-dispatcher")
 
-  lazy val main = encodeResponse(mainRoute)
+  val userManagement = UserManagement(config)
+
+  lazy val main =
+    encodeResponse {
+      userManagement.loggedIn { user =>
+        mainRoute(user)
+      }
+    }
 
   val NameR = """(\d+)_(\d+).jpg""".r
 
@@ -58,7 +65,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def resolveRef(scroll: Int, segmentId: String): Directive1[SegmentReference] =
     scrollSegmentsMap.map(_.get((scroll, segmentId))).await.orReject
 
-  lazy val mainRoute =
+  def mainRoute(implicit user: Option[LoggedInUser]) =
     concat(
       pathSingleSlash {
         get {
@@ -66,6 +73,21 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
             complete(html.home(infos))
           }
         }
+      },
+      path("login") {
+        concat(
+          post {
+            formField("user", "password") { (user, password) =>
+              userManagement.login(user, password)
+            }
+          },
+          get {
+            complete(html.login())
+          }
+        )
+      },
+      path("logout") {
+        userManagement.logout
       },
       path("license") {
         complete(html.license())
