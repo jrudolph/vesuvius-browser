@@ -13,4 +13,4 @@ COPY worker/run-worker.sh /run-worker.sh
 
 WORKDIR /
 
-CMD ["./run-worker.sh"]
+CMD ["/run-worker.sh"]
