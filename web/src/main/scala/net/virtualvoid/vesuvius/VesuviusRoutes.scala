@@ -153,7 +153,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                       case item: InferenceWorkItem => // FIXME
                         println(s"Got result data request for $workItemId from $workerId, item: $item")
 
-                        val file = new File(dataDir, s"inferred/scroll${item.segment.scroll}/${item.segment.segmentId}/inference_${item.model}_${item.startLayer}_${item.stride}.png")
+                        val file = inferredFileForInfo(item)
                         file.getParentFile.mkdirs()
                         val tmpFile = File.createTempFile(".tmp.result", ".png", file.getParentFile)
 
@@ -387,14 +387,26 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map { _ => tmpFile.renameTo(to); to }
   }
 
+  def inferredFileForInfo(segment: SegmentReference, info: InferenceInfo): File = {
+    import segment._
+    val reversed = if (info.reverseLayers) "_reverse" else ""
+    new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${info.model}_${info.startLayer}_${info.stride}$reversed.png")
+  }
+  def inferredFileForInfo(workItem: InferenceWorkItem): File =
+    inferredFileForInfo(workItem.segment, InferenceInfo(workItem.model, workItem.startLayer, workItem.stride, workItem.reverseLayers))
+
   def inferenceInfoExistsFor(ref: SegmentReference, info: InferenceInfo): Boolean = {
     import ref._
-    val target = new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${info.model}_${info.startLayer}_${info.stride}.png")
+    val target = inferredFileForInfo(ref, info)
     target.exists
   }
 
   case class InferenceInfo(model: String, startLayer: Int, stride: Int, reverseLayers: Boolean)
-  lazy val requestedInferences: Seq[InferenceInfo] = Seq(InferenceInfo("youssef", 15, 32, false))
+  lazy val requestedInferences: Seq[InferenceInfo] =
+    Seq(
+      InferenceInfo("youssef", 15, 32, false),
+      InferenceInfo("youssef", 15, 32, false)
+    )
 
   val runnerId = System.currentTimeMillis().toString
   lazy val workItems: Future[Seq[WorkItem]] =

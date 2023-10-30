@@ -94,12 +94,13 @@ object Tasks {
     Future {
       val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
 
-      def downloadLayers(segment: SegmentReference, from: Int, num: Int, to: File): Future[File] =
+      def downloadLayers(segment: SegmentReference, from: Int, num: Int, to: File, reverse: Boolean): Future[File] =
         Source(from until from + num)
           .mapAsync(config.concurrentDownloads) { layer =>
+            val targetId = if (reverse) from + num - 1 - (layer - from) else layer
             download(
               f"${segment.baseUrl}layers/$layer%02d.tif",
-              new File(to, f"layers/$layer%02d.tif")
+              new File(to, f"layers/$targetId%02d.tif")
             )
           }
           .runWith(Sink.ignore)
@@ -125,8 +126,8 @@ object Tasks {
           }
       }
 
-      val workDir = new File(config.dataDir, item.id.toString)
-      val segmentDir = new File(workDir, item.segment.segmentId.toString)
+      val workDir = new File(config.dataDir, item.id)
+      val segmentDir = new File(workDir, item.segment.segmentId)
       segmentDir.mkdirs()
 
       val inferenceScriptDir = config.inferenceScriptDir
@@ -147,7 +148,7 @@ object Tasks {
       }
 
       println(s"Working on $item")
-      downloadLayers(item.segment, item.startLayer, 30, segmentDir)
+      downloadLayers(item.segment, item.startLayer, 30, segmentDir, item.reverseLayers)
         .flatMap { res =>
           val maskFileName = s"${item.segment.segmentId}_mask.png"
           download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName))
