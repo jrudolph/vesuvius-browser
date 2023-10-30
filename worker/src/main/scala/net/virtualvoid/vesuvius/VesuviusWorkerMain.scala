@@ -12,6 +12,8 @@ import scala.concurrent.Future
 import java.io.File
 
 object VesuviusWorkerMain extends App {
+  println(s"Booting up Vesuvius worker version ${BuildInfo.version} built at ${BuildInfo.builtAtString}")
+
   implicit val system: ActorSystem = ActorSystem()
   import system.dispatcher
 

@@ -7,6 +7,8 @@ import java.io.File
 import scala.util.{ Failure, Success }
 
 object VesuviusWebMain extends App {
+  println(s"Booting up Vesuvius web server version ${BuildInfo.version} built at ${BuildInfo.builtAtString}")
+
   implicit val system: ActorSystem = ActorSystem()
   import system.dispatcher
 

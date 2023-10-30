@@ -11,6 +11,7 @@ val root = project.in(file("."))
   .aggregate(common, web, worker)
 
 lazy val common = project.in(file("common"))
+  .enablePlugins(BuildInfoPlugin)
   .settings(
     libraryDependencies ++= Seq(
       "org.apache.pekko" %% "pekko-stream" % pekkoV,
@@ -20,6 +21,11 @@ lazy val common = project.in(file("common"))
       "io.spray" %% "spray-json" % "1.3.6",
 
       "org.scalatest" %% "scalatest" % scalaTestV % "test"
+
+    ),
+    buildInfoPackage := "net.virtualvoid.vesuvius",
+    buildInfoOptions += BuildInfoOption.BuildTime,
+    buildInfoKeys ++= Seq(
 
     )
   )
