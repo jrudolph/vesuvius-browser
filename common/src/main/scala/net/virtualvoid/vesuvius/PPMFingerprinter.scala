@@ -2,7 +2,9 @@ package net.virtualvoid.vesuvius
 
 import java.io.File
 
-case class Span(min: Int, max: Int)
+case class Span(min: Int, max: Int) {
+  def contains(v: Int): Boolean = v >= min && v <= max
+}
 
 case class RadarEntry(
     theta: Float,
@@ -42,7 +44,7 @@ object PPMFingerprinter {
 
     val zDir = findZDirection(ppm)
     val (xSpan, ySpan, zSpan) = calculateBoundingBox(ppm)
-    val radar = calculateRadar(ppm)
+    val radar = calculateRadar(zSpan)(ppm)
 
     PPMFingerprint(segment, xSpan, ySpan, zSpan, zDir, radar)
   }
@@ -104,21 +106,24 @@ object PPMFingerprinter {
           math.max(maxZ, uv.z)
         )
     }
-    val s = reader.uvs.foldLeft(State(Int.MaxValue, 0, Int.MaxValue, 0, Int.MaxValue, 0))(_.update(_))
+    println("Calculating bounding box")
+    val s = reader.uvs.iterator.foldLeft(State(Int.MaxValue, 0, Int.MaxValue, 0, Int.MaxValue, 0))(_.update(_))
     (Span(s.minX, s.maxX), Span(s.minY, s.maxY), Span(s.minZ, s.maxZ))
   }
 
-  def calculateRadar(implicit reader: PPMReader): Seq[RadarLayer] = {
+  def calculateRadar(zSpan: Span)(implicit reader: PPMReader): Seq[RadarLayer] = {
     import reader.uvs
 
     // traces found with distance smaller than below are folded together
     val minLayerThickness = 10
 
     def at(z: Int): RadarLayer = {
+      println(s"Radar scan at layer $z")
       val (centerX, centerY) = scroll1Center(z)
 
-      val entries: Iterable[(Float, Double, UV)] =
+      val entries: Iterable[(Long, Double, UV)] =
         uvs
+          .iterator
           .filter(_.z == z)
           .flatMap { uv =>
             val theta = math.atan2(uv.x - centerX, uv.y - centerY) + math.Pi
@@ -130,7 +135,7 @@ object PPMFingerprinter {
               Some((thetaQ / 2 % 360, r, uv))
             } else
               None
-          }
+          }.toVector
 
       def combineUV(uv1: UV, uv2: UV): UV =
         UV((uv1.u + uv2.u) / 2, (uv1.v + uv2.v) / 2)
@@ -161,7 +166,7 @@ object PPMFingerprinter {
       RadarLayer(z, radarEntries)
     }
 
-    scroll1Center.keys.toVector.sorted.map(at)
+    scroll1Center.keys.toVector.sorted.filter(zSpan.contains).map(at)
   }
 
   // center of the scroll in different z-layers in (z,x,y)

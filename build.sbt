@@ -8,7 +8,8 @@ inThisBuild(Def.settings(
   scalacOptions ++= Seq(
     "-Wunused:all",
     "-deprecation"
-  )
+  ),
+  run / fork := true
 ))
 
 val root = project.in(file("."))
