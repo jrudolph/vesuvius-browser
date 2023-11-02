@@ -73,6 +73,14 @@ object VesuviusWorkerMain extends App {
               Marshal(WorkFailed(workItem, ex.getMessage, "")).to[RequestEntity]
                 .flatMap(post(completeEndpoint, _))
           }
+          .map { res =>
+            // cleanup workdir
+            val workDir = new File(config.dataDir, workItem.id)
+            import sys.process._
+            if (workDir.exists)
+              s"rm -r ${workDir.getAbsolutePath}".!!
+            res
+          }
       }
 
   def worker: Future[Any] =
