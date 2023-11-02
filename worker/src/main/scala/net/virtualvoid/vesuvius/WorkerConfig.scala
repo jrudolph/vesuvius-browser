@@ -11,7 +11,8 @@ case class WorkerConfig(
     dataServerPassword:  String,
     dataDir:             File,
     inferenceScriptDir:  File,
-    concurrentDownloads: Int
+    concurrentDownloads: Int,
+    supportedWorkTypes:  Seq[String]
 )
 
 object WorkerConfig {
@@ -23,7 +24,13 @@ object WorkerConfig {
       dataServerPassword = config.getString("app.data-password"),
       dataDir = new File(config.getString("app.data-dir")),
       inferenceScriptDir = new File(config.getString("app.inference-script-dir")),
-      concurrentDownloads = config.getInt("app.concurrent-downloads")
+      concurrentDownloads = config.getInt("app.concurrent-downloads"),
+      supportedWorkTypes = config.getString("app.supported-work-types").split(",").map(_.trim).toVector.map(parseWorkType)
     )
+  }
+
+  def parseWorkType: String => String = {
+    case "inference"   => "InferenceWorkItem"
+    case "fingerprint" => "PPMFingerprintWorkItem"
   }
 }

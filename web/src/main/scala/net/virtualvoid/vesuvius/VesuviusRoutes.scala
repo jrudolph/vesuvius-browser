@@ -133,9 +133,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           post {
             concat(
               path("next") {
-                parameter("workerId") { workerId =>
+                parameter("workerId", "workTypes") { (workerId, workType) =>
+                  val allowed = workType.split(',').toSet
                   workItemManager.await { man =>
-                    val item = man.assignNext(workerId)
+                    val item = man.assignNext(workerId, allowed)
                     println(s"Assigned $item to $workerId")
                     provide(item).orReject(complete(_))
                   }

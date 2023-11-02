@@ -5,7 +5,7 @@ import org.apache.pekko.http.scaladsl.model.DateTime
 import scala.collection.immutable.ListMap
 
 trait WorkItemManager {
-  def assignNext(workerId: String): Option[WorkItem]
+  def assignNext(workerId: String, allowedTypes: String => Boolean): Option[WorkItem]
   def findItem(id: String): Option[WorkItem]
   def markDone(workerId: String, workItem: WorkItem): Unit
 
@@ -24,9 +24,9 @@ object WorkItemManager {
     var itemState = ListMap[WorkItem, ItemState](initialItems.map(_ -> Queued): _*)
 
     new WorkItemManager {
-      def assignNext(workerId: String): Option[WorkItem] =
+      def assignNext(workerId: String, allowedTypes: String => Boolean): Option[WorkItem] =
         synchronized {
-          itemState.find(_._2 == Queued).map {
+          itemState.find(x => allowedTypes(x._1.productPrefix) && x._2 == Queued).map {
             case (item, _) =>
               itemState = itemState.updated(item, Assigned(workerId, System.currentTimeMillis()))
               item
