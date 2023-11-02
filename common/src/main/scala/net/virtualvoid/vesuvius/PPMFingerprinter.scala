@@ -75,7 +75,7 @@ object PPMFingerprinter {
 
     val samples = 100
     val angles = 500
-    val r = 500
+    val r = math.min(500, math.min(width, height) / 4)
     val results =
       (0 until samples).flatMap { _ =>
         val uv = UV(util.Random.nextInt(width - 2 * r) + r, util.Random.nextInt(height - 2 * r) + r)
