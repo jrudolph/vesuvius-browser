@@ -12,24 +12,28 @@
     <th>Stride</th>
     <th>Reverse Layers</th>
 </tr>
-@for((item: InferenceWorkItem, state) <- itemStates) {
+@for((item: WorkItem, state) <- itemStates) {
 <tr>
     <td>@item.id</td>
     <td>@item.segment.scroll</td>
     <td><a href="/scroll/@item.segment.scroll/segment/@item.segment.segmentId/">@item.segment.segmentId</a></td>
-    <td>@item.model</td>
-    <td>@item.startLayer</td>
-    <td>@item.stride</td>
-    <td>@item.reverseLayers</td>
+    <td>@{item.`type`}</td>
     @if(state == WorkItemManager.Queued) {
-        <td>Queued</td>
+    <td colspan="3">Queued</td>
     } else {}
     @for(
-        state@WorkItemManager.Assigned(_, _) <- Seq(state)
+      case state: WorkItemManager.Assigned <- Seq(state)
     ) {
-        <td>@state.workerId</td>
-        <td>@state.at</td>
-        <td>@state.runningForSeconds s ago</td>
+    <td>@state.workerId</td>
+    <td>@state.at</td>
+    <td>@state.runningForSeconds s ago</td>
+    }
+
+    @for(case item: InferenceWorkItemInput <- Seq(item.input)) {
+        <td>@item.model</td>
+        <td>@item.startLayer</td>
+        <td>@item.stride</td>
+        <td>@item.reverseLayers</td>
     }
 </tr>
 }

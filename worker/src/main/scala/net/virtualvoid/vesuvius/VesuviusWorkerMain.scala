@@ -3,7 +3,7 @@ package net.virtualvoid.vesuvius
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, HttpHeader, HttpMethods, HttpRequest, HttpResponse, RequestEntity, StatusCodes, headers}
-import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
+import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import org.apache.pekko.http.scaladsl.marshalling.Marshal
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
 import org.apache.pekko.stream.scaladsl.{FileIO, Sink, Source}
@@ -23,9 +23,9 @@ object VesuviusWorkerMain extends App {
 
   def runWorkItem(item: WorkItem): Future[(File, WorkItemResult)] = {
     implicit val ctx = contextFor(item)
-    item match {
-      case i: InferenceWorkItem      => Tasks.infer(i)
-      case p: PPMFingerprintWorkItem => Tasks.ppmFingerprint(p)
+    item.input match {
+      case i: InferenceWorkItemInput      => Tasks.infer(item, i)
+      case p@PPMFingerprintWorkItemInput => Tasks.ppmFingerprint(item)
     }
   }
 
@@ -110,7 +110,7 @@ object WorkContext {
 }
 
 object Tasks {
-  def infer(item: InferenceWorkItem)(implicit ctx: WorkContext): Future[(File, WorkItemResult)] = {
+  def infer(item: WorkItem, input: InferenceWorkItemInput)(implicit ctx: WorkContext): Future[(File, WorkItemResult)] = {
     import ctx._
 
     Future {
@@ -136,11 +136,11 @@ object Tasks {
       require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
       def runInference(): Future[(File, WorkItemResult)] = Future {
         import sys.process._
-        val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${item.stride} --start_idx ${item.startLayer} --workers 6"
+        val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
         println(s"Running [$cmdLine]")
 
         val res = cmdLine.!!(ProcessLogger(println))
-        val outputFile = new File(workDir, s"${item.segment.segmentId}_${item.stride}_${item.startLayer}.png")
+        val outputFile = new File(workDir, s"${item.segment.segmentId}_${input.stride}_${input.startLayer}.png")
         require(outputFile.exists, s"Output file $outputFile does not exist")
         println(s"Output file $outputFile exists")
         s"rm -r ${segmentDir.getAbsolutePath}".!!
@@ -148,7 +148,7 @@ object Tasks {
       }
 
       println(s"Working on $item")
-      downloadLayers(item.segment, item.startLayer, 30, segmentDir, item.reverseLayers)
+      downloadLayers(item.segment, input.startLayer, 30, segmentDir, input.reverseLayers)
         .flatMap { res =>
           val maskFileName = s"${item.segment.segmentId}_mask.png"
           download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName))
@@ -160,7 +160,7 @@ object Tasks {
     }.flatten
   }
 
-  def ppmFingerprint(item: PPMFingerprintWorkItem)(implicit ctx: WorkContext): Future[(File, WorkItemResult)] = {
+  def ppmFingerprint(item: WorkItem)(implicit ctx: WorkContext): Future[(File, WorkItemResult)] = {
     import ctx._
     val workDir = new File(config.dataDir, item.id)
     val segmentDir = new File(workDir, item.segment.segmentId)

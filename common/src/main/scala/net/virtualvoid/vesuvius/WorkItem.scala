@@ -2,42 +2,52 @@ package net.virtualvoid.vesuvius
 
 import spray.json._
 
-sealed trait WorkItem extends Product {
-  def id: String
-}
+case class WorkItem(
+    id:      String,
+    segment: SegmentReference,
+    `type`:  String,
+    input:   WorkItemInput
+)
 object WorkItem {
   import DefaultJsonProtocol._
+  implicit val workItemFormat: RootJsonFormat[WorkItem] = jsonFormat4(WorkItem.apply)
+}
 
-  implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItem] = jsonFormat6(InferenceWorkItem.apply)
-  implicit val ppmFingerprintWorkItemFormat: JsonFormat[PPMFingerprintWorkItem] = jsonFormat2(PPMFingerprintWorkItem.apply)
-  implicit val workItemFormat: RootJsonFormat[WorkItem] = new RootJsonFormat[WorkItem] {
-    override def write(obj: WorkItem): JsValue = {
+sealed trait WorkItemInput extends Product {
+  def `type`: String
+}
+object WorkItemInput {
+  import DefaultJsonProtocol._
+
+  implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItemInput] = jsonFormat4(InferenceWorkItemInput.apply)
+  implicit val ppmFingerprintWorkItemFormat: JsonFormat[PPMFingerprintWorkItemInput.type] = jsonFormat0(() => PPMFingerprintWorkItemInput)
+  implicit val workItemFormat: RootJsonFormat[WorkItemInput] = new RootJsonFormat[WorkItemInput] {
+    override def write(obj: WorkItemInput): JsValue = {
       val res =
         obj match {
-          case i: InferenceWorkItem      => inferenceWorkItemFormat.write(i)
-          case p: PPMFingerprintWorkItem => ppmFingerprintWorkItemFormat.write(p)
+          case i: InferenceWorkItemInput   => inferenceWorkItemFormat.write(i)
+          case PPMFingerprintWorkItemInput => ppmFingerprintWorkItemFormat.write(PPMFingerprintWorkItemInput)
         }
       res.asJsObject + ("type" -> JsString(obj.productPrefix))
     }
-    override def read(json: JsValue): WorkItem = json.asJsObject.fields("type") match {
+    override def read(json: JsValue): WorkItemInput = json.asJsObject.fields("type") match {
       case JsString("InferenceWorkItem")      => inferenceWorkItemFormat.read(json)
       case JsString("PPMFingerprintWorkItem") => ppmFingerprintWorkItemFormat.read(json)
       case _                                  => throw new IllegalArgumentException(s"Work item type not specified")
     }
   }
 }
-case class InferenceWorkItem(
-    id:            String,
-    segment:       SegmentReference,
+case class InferenceWorkItemInput(
     model:         String,
     startLayer:    Int,
     stride:        Int,
     reverseLayers: Boolean
-) extends WorkItem
-case class PPMFingerprintWorkItem(
-    id:      String,
-    segment: SegmentReference
-) extends WorkItem
+) extends WorkItemInput {
+  def `type`: String = "inference"
+}
+case object PPMFingerprintWorkItemInput extends WorkItemInput {
+  def `type`: String = "fingerprint"
+}
 
 case class AssetReference()
 object AssetReference {

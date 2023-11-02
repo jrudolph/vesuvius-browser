@@ -100,12 +100,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                 resizedMask(segment).deliver
               },
               path("inferred" / Segment) { model =>
-                val info = model match {
-                  case "youssef-test"          => requestedInferences(0)
-                  case "youssef-test-reversed" => requestedInferences(1)
+                val input = model match {
+                  // FIXME: use constants instead
+                  case "youssef-test"          => requestedWorkInputs(0).asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test-reversed" => requestedWorkInputs(1).asInstanceOf[InferenceWorkItemInput]
                 }
                 concat(
-                  resizedInferred(segment, info).await.orReject.deliver,
+                  resizedInferred(segment, input).await.orReject.deliver,
                   complete(ImageTools.EmptyImageResponse)
                 )
               },
@@ -154,12 +155,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                 parameter("workerId", "workId".as[String]) { (workerId, workItemId) =>
                   workItemManager.await { man =>
                     provide(man.findItem(workItemId)).orReject {
-                      case item: InferenceWorkItem => // FIXME
+                      case item @ WorkItem(_, _, _, input) =>
                         println(s"Got result data request for $workItemId from $workerId, item: $item")
 
-                        val file = inferredFileForInfo(item)
+                        val file = targetFileForInput(item.segment, input)
                         file.getParentFile.mkdirs()
-                        val tmpFile = File.createTempFile(".tmp.result", ".png", file.getParentFile)
+                        val tmpFile = File.createTempFile(".tmp.result", ".tmp", file.getParentFile)
 
                         extractRequestEntity { entity =>
                           val result =
@@ -307,9 +308,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       resizedX(maskFor(segment), new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small_autorotated.png"), height = 100, rotate90 = !info.get.isLandscape).map(_.get)
     }
 
-  def resizedInferred(segment: SegmentReference, info: InferenceInfo): Future[Option[File]] =
+  def resizedInferred(segment: SegmentReference, input: InferenceWorkItemInput): Future[Option[File]] =
     imageInfo(segment).flatMap { i =>
-      val file = inferredFileForInfo(segment, info)
+      val file = targetFileForInput(segment, input)
       resizedX(file, new File(file.getParentFile, file.getName.dropRight(4) + "_small_autorotated.png"), height = 100, rotate90 = !i.get.isLandscape)
     }
 
@@ -401,34 +402,46 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map { _ => tmpFile.renameTo(to); to }
   }
 
-  def inferredFileForInfo(segment: SegmentReference, info: InferenceInfo): File = {
+  /*def inferredFileForInfo(segment: SegmentReference, info: InferenceInfo): File = {
     import segment._
     val reversed = if (info.reverseLayers) "_reverse" else ""
     new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${info.model}_${info.startLayer}_${info.stride}$reversed.png")
   }
-  def inferredFileForInfo(workItem: InferenceWorkItem): File =
-    inferredFileForInfo(workItem.segment, InferenceInfo(workItem.model, workItem.startLayer, workItem.stride, workItem.reverseLayers))
+  def inferredFileForInfo(workItem: WorkItem, input: InferenceWorkItemInput): File =
+    inferredFileForInfo(workItem.segment, InferenceInfo(input.model, input.startLayer, input.stride, input.reverseLayers))
 
   def inferenceInfoExistsFor(ref: SegmentReference, info: InferenceInfo): Boolean = {
     import ref._
     val target = inferredFileForInfo(ref, info)
     target.exists
+  }*/
+
+  def targetFileForInput(segment: SegmentReference, input: WorkItemInput): File = {
+    import segment._
+    input match {
+      case InferenceWorkItemInput(model, startLayer, stride, reverseLayers) =>
+        val reversed = if (reverseLayers) "_reverse" else ""
+        new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${model}_${startLayer}_${stride}$reversed.png")
+      case PPMFingerprintWorkItemInput =>
+        new File(dataDir, s"ppm/scroll${segment.scroll}/${segment.segmentId}/fingerprint.json")
+    }
   }
 
-  case class InferenceInfo(model: String, startLayer: Int, stride: Int, reverseLayers: Boolean)
-  lazy val requestedInferences: Seq[InferenceInfo] =
+  //case class InferenceInfo(model: String, startLayer: Int, stride: Int, reverseLayers: Boolean)
+  lazy val requestedWorkInputs: Seq[WorkItemInput] =
     Seq(
-      InferenceInfo("youssef-test", 15, 32, false),
-      InferenceInfo("youssef-test", 15, 32, true)
+      InferenceWorkItemInput("youssef-test", 15, 32, false),
+      InferenceWorkItemInput("youssef-test", 15, 32, true),
+      PPMFingerprintWorkItemInput
     )
 
   val runnerId = System.currentTimeMillis().toString
   lazy val workItems: Future[Seq[WorkItem]] =
     Source.futureSource(scrollSegments.map(x => Source(x.sortBy(_.segmentId).reverse)))
-      .mapConcat(img => requestedInferences.map(info => img.ref -> info))
-      .filter { case (ref, info) => !inferenceInfoExistsFor(ref, info) }
+      .mapConcat(img => requestedWorkInputs.map(info => img.ref -> info))
+      .filter { case (ref, input) => !targetFileForInput(ref, input).exists() }
       .zipWithIndex
-      .map { case ((ref, info), id) => InferenceWorkItem(s"$runnerId-$id", ref, info.model, info.startLayer, info.stride, info.reverseLayers) }
+      .map { case ((ref, input), id) => WorkItem(s"$runnerId-$id", ref, input.`type`, input) }
       .runWith(Sink.seq)
 
   lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))
