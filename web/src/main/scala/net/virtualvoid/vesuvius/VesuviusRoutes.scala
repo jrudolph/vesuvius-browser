@@ -402,20 +402,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map { _ => tmpFile.renameTo(to); to }
   }
 
-  /*def inferredFileForInfo(segment: SegmentReference, info: InferenceInfo): File = {
-    import segment._
-    val reversed = if (info.reverseLayers) "_reverse" else ""
-    new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${info.model}_${info.startLayer}_${info.stride}$reversed.png")
-  }
-  def inferredFileForInfo(workItem: WorkItem, input: InferenceWorkItemInput): File =
-    inferredFileForInfo(workItem.segment, InferenceInfo(input.model, input.startLayer, input.stride, input.reverseLayers))
-
-  def inferenceInfoExistsFor(ref: SegmentReference, info: InferenceInfo): Boolean = {
-    import ref._
-    val target = inferredFileForInfo(ref, info)
-    target.exists
-  }*/
-
   def targetFileForInput(segment: SegmentReference, input: WorkItemInput): File = {
     import segment._
     input match {
