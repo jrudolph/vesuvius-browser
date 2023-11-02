@@ -442,6 +442,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .filter { case (ref, input) => !targetFileForInput(ref, input).exists() }
       .zipWithIndex
       .map { case ((ref, input), id) => WorkItem(s"$runnerId-$id", ref, input.`type`, input) }
+      .filter(x => x.segment.scroll == 1)
       .runWith(Sink.seq)
 
   lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))
