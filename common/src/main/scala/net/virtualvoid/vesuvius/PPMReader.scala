@@ -3,8 +3,8 @@ package net.virtualvoid.vesuvius
 
 import java.awt.image.BufferedImage
 import java.io.{File, RandomAccessFile}
-import java.nio.{ByteOrder, DoubleBuffer}
 import java.nio.channels.FileChannel.MapMode
+import java.nio.{ByteOrder, DoubleBuffer}
 import javax.imageio.ImageIO
 import scala.io.Source
 
@@ -39,7 +39,7 @@ object PPMReader {
     val vChunks = (_height + _chunkHeight - 1) / _chunkHeight
 
     val chunks = (0 until vChunks).map { vChunk =>
-      val off = offset + vChunk * _width * 48 * _chunkHeight
+      val off = offset + vChunk.toLong * _width * 48 * _chunkHeight
       val size = math.min(_width * 48 * _chunkHeight, file.length() - off)
       println(s"Mapping chunk $vChunk at $off with size $size chunkHeight=$_chunkHeight yChunks=$vChunks")
       val map = raf.getChannel.map(MapMode.READ_ONLY, off, size)
@@ -101,14 +101,15 @@ object PPMReaderTest extends App {
   //20231011111857
   //20230520175435
   //20230504093154
-  val segment = "20230504093154"
+  //20230827161847
+  val segment = "20230926164853"
   val file = new File(s"/tmp/$segment.ppm")
   implicit val reader: PPMReader = PPMReader(file)
 
   val width = reader.width
   val height = reader.height
 
-  import reader.{uvs, allUvs}
+  import reader.{allUvs, uvs}
 
   def compressionExperiments(): Unit = {
     println("Scanning")
@@ -183,6 +184,7 @@ object PPMReaderTest extends App {
     val avgAngle = math.atan2(dirSum._1, dirSum._2)
     println(f"Avg angle: ${avgAngle / 2 / math.Pi * 360}%7.4f")
   }
+  rotAngleExample()
 
   lazy val centerByZ =
     uvs.groupBy(_.z).mapValues { uvs =>
@@ -274,12 +276,39 @@ object PPMReaderTest extends App {
     println(f"Center: $centerX%10d / $centerY%10d")
 
     println("Tracing at middle z")
-    uvs.foreach { uv =>
+    val entries =
+    uvs.flatMap { uv =>
       val theta = math.atan2(uv.x - centerX, uv.y - centerY) + math.Pi
       val r = math.hypot(uv.x - centerX, uv.y - centerY)
+      val thetaQ = math.round(theta / 2f / math.Pi * 720)
 
-      if (uv.z == middleZ && math.round(theta / 2f / math.Pi * 720).toInt % 90 == 0)
-        println(f"At $uv theta=${theta / 2f / math.Pi * 360f}%7.4f r=$r%7.4f")
+      if (uv.z == middleZ && thetaQ.toInt % 90 == 0) {
+        println(f"At $uv theta=${thetaQ / 2}%7.4f r=$r%7.4f")
+        Some(thetaQ / 2 % 360-> r)
+      } else
+        None
     }
+
+    val minLayerThickness = 10
+    def simplify(entries: Seq[Double]): Seq[Double] =
+      (entries :+ 100000d).scanLeft((0.0 -> Option.empty[Double])) { (cur, next) =>
+        if (math.abs(cur._1 - next) < minLayerThickness) ((cur._1 + next) / 2, None)
+        else (next, Some(cur._1))
+      }.flatMap(_._2).drop(1)
+
+      /*entries.sliding(2).flatMap {
+        case Seq(a, b) =>
+          if (math.abs(a - b) < minLayerThickness) None
+          else Some(a + b / 2)
+      }.toVector*/
+
+    entries.groupBy(_._1)
+      .toVector
+      .flatMap {
+        case (theta, entries) =>
+          simplify(entries.map(_._2).toVector.sorted).map(theta -> _)
+      }
+      .foreach(println)
   }
+  findExtents()
 }
