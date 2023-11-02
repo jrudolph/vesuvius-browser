@@ -16,7 +16,7 @@ object WorkItem {
 sealed trait WorkItemInput extends Product {
   def `type`: String
 }
-object WorkItemInput {
+object WorkItemInput extends SprayJsonHelpers {
   import DefaultJsonProtocol._
 
   implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItemInput] = jsonFormat4(InferenceWorkItemInput.apply)
@@ -31,9 +31,9 @@ object WorkItemInput {
       res.asJsObject + ("type" -> JsString(obj.productPrefix))
     }
     override def read(json: JsValue): WorkItemInput = json.asJsObject.fields("type") match {
-      case JsString("InferenceWorkItem")      => inferenceWorkItemFormat.read(json)
-      case JsString("PPMFingerprintWorkItem") => ppmFingerprintWorkItemFormat.read(json)
-      case _                                  => throw new IllegalArgumentException(s"Work item type not specified")
+      case JsString("InferenceWorkItemInput")      => inferenceWorkItemFormat.read(json)
+      case JsString("PPMFingerprintWorkItemInput") => ppmFingerprintWorkItemFormat.read(json)
+      case _                                       => throw new IllegalArgumentException(s"Work item type not specified")
     }
   }
 }

@@ -26,7 +26,7 @@ object WorkItemManager {
     new WorkItemManager {
       def assignNext(workerId: String, allowedTypes: String => Boolean): Option[WorkItem] =
         synchronized {
-          itemState.find(x => allowedTypes(x._1.productPrefix) && x._2 == Queued).map {
+          itemState.find(x => allowedTypes(x._1.input.productPrefix) && x._2 == Queued).map {
             case (item, _) =>
               itemState = itemState.updated(item, Assigned(workerId, System.currentTimeMillis()))
               item

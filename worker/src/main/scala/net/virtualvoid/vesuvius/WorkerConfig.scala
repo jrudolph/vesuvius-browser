@@ -25,12 +25,12 @@ object WorkerConfig {
       dataDir = new File(config.getString("app.data-dir")),
       inferenceScriptDir = new File(config.getString("app.inference-script-dir")),
       concurrentDownloads = config.getInt("app.concurrent-downloads"),
-      supportedWorkTypes = config.getString("app.supported-work-types").split(",").map(_.trim).toVector.map(parseWorkType)
+      supportedWorkTypes = config.getString("app.work-types").split(",").map(_.trim).toVector.map(parseWorkType)
     )
   }
 
   def parseWorkType: String => String = {
-    case "inference"   => "InferenceWorkItem"
-    case "fingerprint" => "PPMFingerprintWorkItem"
+    case "inference"   => InferenceWorkItemInput("", 0, 0, false).productPrefix
+    case "fingerprint" => PPMFingerprintWorkItemInput.productPrefix
   }
 }
