@@ -7,6 +7,9 @@
     <th>ID</th>
     <th>Scroll</th>
     <th>Segment</th>
+    <th>Type</th>
+    <th>Worker ID</th>
+    <th>Started</th>
     <th>Model</th>
     <th>Start Layer</th>
     <th>Stride</th>
@@ -19,14 +22,13 @@
     <td><a href="/scroll/@item.segment.scroll/segment/@item.segment.segmentId/">@item.segment.segmentId</a></td>
     <td>@{item.`type`}</td>
     @if(state == WorkItemManager.Queued) {
-    <td colspan="3">Queued</td>
+    <td colspan="2">Queued</td>
     } else {}
     @for(
       case state: WorkItemManager.Assigned <- Seq(state)
     ) {
     <td>@state.workerId</td>
-    <td>@state.at</td>
-    <td>@state.runningForSeconds s ago</td>
+    <td title="@state.at">@state.runningForSeconds s ago</td>
     }
 
     @for(case item: InferenceWorkItemInput <- Seq(item.input)) {
