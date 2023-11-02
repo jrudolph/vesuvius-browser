@@ -3,7 +3,6 @@ package net.virtualvoid.vesuvius
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
 
-import java.io.File
 import scala.util.{ Failure, Success }
 
 object VesuviusWebMain extends App {

@@ -2,7 +2,7 @@ package net.virtualvoid.vesuvius
 
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.stream.{ Attributes, Outlet, SourceShape }
-import org.apache.pekko.stream.scaladsl.{ Sink, Source, SourceQueue }
+import org.apache.pekko.stream.scaladsl.{ Sink, Source }
 import org.apache.pekko.stream.stage.{ GraphStageLogic, GraphStageWithMaterializedValue, OutHandler }
 
 import scala.collection.mutable

@@ -5,6 +5,10 @@ val scalaTestV = "3.2.16"
 
 inThisBuild(Def.settings(
   scalaVersion := scalaV,
+  scalacOptions ++= Seq(
+    "-Wunused:all",
+    "-deprecation"
+  )
 ))
 
 val root = project.in(file("."))
