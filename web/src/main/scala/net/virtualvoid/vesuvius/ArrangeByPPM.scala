@@ -3,8 +3,9 @@ package net.virtualvoid.vesuvius
 import java.io.File
 import spray.json.*
 
-import java.awt.Graphics2D
+import java.awt.{ AlphaComposite, Graphics2D }
 import java.awt.image.BufferedImage
+import javax.imageio.ImageIO
 import scala.io.Source
 
 class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
@@ -150,13 +151,24 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
 
   def debugImageFor(segment: SegmentReference, to: File): File = {
     val info = segmentInfos(segment)
+    import segment._
     println(info)
+
     val img = new BufferedImage(info.width, info.height, BufferedImage.TYPE_INT_ARGB)
+    val img2 = ImageIO.read(new File(s"../data/raw/scroll$scroll/$segmentId/mask.png"))
+
     val g = img.createGraphics()
+    g.setColor(java.awt.Color.WHITE)
+    g.fillRect(0, 0, info.width, info.height)
+    val oldComp = g.getComposite
+    //g.setComposite(AlphaComposite.DstOut)
+
+    g.setXORMode(java.awt.Color.BLACK)
+    g.drawImage(img2, 0, 0, null)
+    g.setComposite(oldComp)
     // enable antialiasing
     g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
-    g.setColor(java.awt.Color.BLACK)
-    g.fillRect(0, 0, info.width, info.height)
+
     g.setColor(java.awt.Color.RED)
     //g.setFont(Font.)
     g.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 300))
@@ -188,7 +200,7 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
 
     g.dispose()
 
-    javax.imageio.ImageIO.write(img, "png", to)
+    ImageIO.write(img, "png", to)
     to
   }
 
@@ -198,7 +210,7 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
       .groupBy(_._1._1).toVector
       .sortBy(_._2.map(_._2).min)
       //.filter(_._1.segmentId.contains("151000"))
-      //.filter(x => x._1.segmentId.contains("2745") || x._1.segmentId.contains("0314") || x._1.segmentId.contains("3333"))
+      //.filter(x => x._1.segmentId.contains("2745") || x._1.segmentId.contains("0314") /*|| x._1.segmentId.contains("3333")*/ )
       .flatMap {
         case (segment: SegmentReference, entries: Seq[((SegmentReference, RadarEntry), Int)]) =>
           val es = entries.map(x => x._1._2 -> x._2).sortBy(_._2)
@@ -222,15 +234,21 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
             val height = segmentInfos(segment).height
 
             val tx = -thetaToX.find(_._1 == t1).get._2
-            val rotate = math.Pi - math.atan2(dv, du)
+            val rotate =
+              if (!flip)
+                math.Pi - math.atan2(dv, du)
+              else
+                math.atan2(dv, du)
 
             val protate = rotate // math.Pi / 2 //2 * math.Pi - rotate
 
             val centerU = width / 2
             val centerV = height / 2
 
-            val nu = (e1.u - centerU) * math.cos(protate) - (e1.v - centerV) * math.sin(protate) + centerU
-            val nv = (e1.u - centerU) * math.sin(protate) + (e1.v - centerV) * math.cos(protate) + centerV
+            val u = if (flip) width - e1.u else e1.u
+
+            val nu = (u - centerU) * math.cos(protate) - (e1.v - centerV) * math.sin(protate) + centerU
+            val nv = (u - centerU) * math.sin(protate) + (e1.v - centerV) * math.cos(protate) + centerV
 
             val u1 = tx - nu
             val v1 = -10000 - nv
@@ -241,11 +259,11 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
             Seq(
               ImagePart(
                 segment,
-                s"/scroll/$scroll/segment/$segmentId/2342",
+                s"/scroll/$scroll/segment/$segmentId/2999",
                 u1, //u1, //-tx + nu,
                 v1,
                 protate / 2 / math.Pi * 360, //rotate / 2 / math.Pi * 360,
-                width, 0, false
+                width, 0, flip
               /*-tx + nu,
                 14000 - 10000 + nv,
                 180 - rotate / 2 / math.Pi * 360,
@@ -256,6 +274,6 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
         //val theta = entries.map(_._2).sum / entries.size
         //val x = thetaToX.find(_._1 == theta).get._2
         //ImagePart(segment, x, entries.map(_._1._2))
-      } //.drop(1).take(1)
+      } //.take(1) //.drop(1).take(1)
   }
 }

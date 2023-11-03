@@ -95,8 +95,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       },
       path("universe") {
         infoMap.await { infoMap =>
-          val parts = new ArrangeByPPM(infoMap).imageParts
-          page(html.universe(parts))
+          val arranger = new ArrangeByPPM(infoMap)
+          page(html.universe(arranger.imageParts, arranger.thetaToX))
         }
       },
       pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>

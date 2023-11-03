@@ -1,18 +1,18 @@
 @import net.virtualvoid.vesuvius._
 
-@(parts: Seq[ImagePart])
+@(parts: Seq[ImagePart], thetaToX: Seq[(Int, Double)])
 
 <div class="info" style="float: left; width: 200px;">
     <div class="position"></div>
 </div>
-<div id="openseadragon1" style="width: 1000; height: 500;"></div>
+<div id="openseadragon1" style="width: 100%; height: 80%;"></div>
 <script src="/openseadragon/openseadragon.min.js"></script>
 <script src="/js/jquery-3.7.1.min.js.js"></script>
 <script type="text/javascript">
 var viewer = OpenSeadragon({
     id: "openseadragon1",
     prefixUrl: "/openseadragon/images/",
-    tileSources: [@for(p <- parts) { { tileSource: "@p.location/dzi", x: @p.x, y: @p.y, degrees: @p.rotation, flip: @p.flip, opacity: 1, width: @p.width },
+    tileSources: [@for(p <- parts) { { tileSource: "@p.location/dzi", x: @p.x, y: @p.y, degrees: @p.rotation, flipped: @p.flip, opacity: 1, width: @p.width },
     }],
     showNavigator: true,
     showRotationControl: true,
@@ -21,8 +21,10 @@ var viewer = OpenSeadragon({
     //preload: true,
     debugMode: false,
     minZoomImageRatio: 0,
-    compositeOperation: 'screen'
+    compositeOperation: 'multiply'
 });
+
+var thetaToX = [@for((theta, x) <- thetaToX) { { theta: @theta, x: @x }, }];
 
 //width: 100%; height: 80%;
 
@@ -43,16 +45,35 @@ viewer.addHandler('update-viewport', function() {
     var y2 = (y - bounds.y) / bounds.height;
     var y3 = y2 * canvas.height;
 
+    function convertX(x) {
+        return (x - bounds.x) / bounds.width * canvas.width;
+    }
     var x3 = (-116765.66 - bounds.x) / bounds.width * canvas.width;
     //console.log(y, y1, y2, y3, x3);
+    ctx.font = '20px Arial';
+    ctx.fillStyle = 'white';
 
     ctx.beginPath();
     ctx.moveTo(0, y3);
     ctx.lineTo(canvas.width, y3);
-    ctx.moveTo(x3, 0);
-    ctx.lineTo(x3, canvas.height);
+
+    // for all thetaToX
+    for (var i = 0; i < thetaToX.length; i++) {
+        var theta = thetaToX[i].theta;
+        var x = -thetaToX[i].x;
+        var x1 = convertX(x);
+        ctx.moveTo(x1, 0);
+        ctx.lineTo(x1, canvas.height);
+        ctx.fillText(theta.toString() + '°', x1 + 10, y3 + 30);
+    }
+
+    //ctx.moveTo(x3, 0);
+    //ctx.lineTo(x3, canvas.height);
 
     ctx.stroke();
+
+    ctx.fillStyle = 'blue';
+    ctx.fillText('z = 10000', 10, y3 + 30);
 });
 
 var positionEl = document.querySelectorAll('.info .position')[0];
