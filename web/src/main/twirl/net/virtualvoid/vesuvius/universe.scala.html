@@ -21,7 +21,7 @@ var viewer = OpenSeadragon({
     //preload: true,
     debugMode: false,
     minZoomImageRatio: 0,
-    compositeOperation: 'multiply'
+    //compositeOperation: 'screen'
 });
 
 var thetaToX = [@for((theta, x) <- thetaToX) { { theta: @theta, x: @x }, }];
@@ -30,9 +30,7 @@ var thetaToX = [@for((theta, x) <- thetaToX) { { theta: @theta, x: @x }, }];
 
 viewer.pixelsPerArrowPress = 250;
 
-viewer.addHandler('update-viewport', function() {
-    var canvas = viewer.drawer.canvas;
-    var ctx = viewer.drawer.context;
+function drawHelpers(canvas, ctx) {
     ctx.strokeStyle = 'blue';
     ctx.lineWidth = 3;
     // paint from viewport left_x to right_x an y = 10000
@@ -48,6 +46,7 @@ viewer.addHandler('update-viewport', function() {
     function convertX(x) {
         return (x - bounds.x) / bounds.width * canvas.width;
     }
+
     var x3 = (-116765.66 - bounds.x) / bounds.width * canvas.width;
     //console.log(y, y1, y2, y3, x3);
     ctx.font = '20px Arial';
@@ -74,6 +73,12 @@ viewer.addHandler('update-viewport', function() {
 
     ctx.fillStyle = 'blue';
     ctx.fillText('z = 10000', 10, y3 + 30);
+}
+
+viewer.addHandler('update-viewport', function() {
+    var canvas = viewer.drawer.canvas;
+    var ctx = viewer.drawer.context;
+    //drawHelpers(canvas, ctx);
 });
 
 var positionEl = document.querySelectorAll('.info .position')[0];

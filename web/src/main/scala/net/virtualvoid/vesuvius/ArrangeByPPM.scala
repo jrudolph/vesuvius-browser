@@ -3,7 +3,7 @@ package net.virtualvoid.vesuvius
 import java.io.File
 import spray.json.*
 
-import java.awt.{ AlphaComposite, Graphics2D }
+import java.awt.{AlphaComposite, BasicStroke, Color, Graphics2D}
 import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 import scala.io.Source
@@ -158,18 +158,19 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
     val img2 = ImageIO.read(new File(s"../data/raw/scroll$scroll/$segmentId/mask.png"))
 
     val g = img.createGraphics()
-    g.setColor(java.awt.Color.WHITE)
-    g.fillRect(0, 0, info.width, info.height)
+    g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
+    //g.setColor(new Color(0,0,0,0))
+    //g.fillRect(0, 0, info.width, info.height)
     val oldComp = g.getComposite
+    g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER))
     //g.setComposite(AlphaComposite.DstOut)
 
-    g.setXORMode(java.awt.Color.BLACK)
-    g.drawImage(img2, 0, 0, null)
-    g.setComposite(oldComp)
+    //g.setXORMode(Color.BLACK)
+    //g.drawImage(img2, 0, 0, null)
+    //g.setComposite(oldComp)
     // enable antialiasing
-    g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
 
-    g.setColor(java.awt.Color.RED)
+    g.setColor(Color.RED)
     //g.setFont(Font.)
     g.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 300))
 
@@ -180,22 +181,68 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
       g.setTransform(oldTransform)
     }
 
-    val radius = 100
+    val radius = 70
 
+    val globalPoints =
     globalTheta
       .flatMap(x => x._1.map(_ -> x._2))
       .groupBy(_._1._1).toVector
       .filter(_._1 == segment)
       .flatMap(_._2)
+
+    def withThickStroke(thickness: Int)(f: => Unit): Unit = {
+      val origStroke = g.getStroke
+      val thickStroke = new BasicStroke(thickness)
+      g.setStroke(thickStroke)
+      f
+      g.setStroke(origStroke)
+    }
+
+    println(s"Drawing global for $segment")
+    globalPoints
       .foreach {
         case ((_, entry), global) =>
           val x = entry.u
           val y = entry.v
+          g.setColor(Color.RED)
           g.fillOval(x - radius, y - radius, radius * 2, radius * 2)
 
           withRotate(x, y) {
-            g.drawString(f"${global}%5.2f / ${entry.theta}%5.2f", x + radius + 5, y)
+            g.drawString(f"${global}%5.0f° / ${entry.theta}%3.0f° / z = ${10000}%d", x + radius + 5, y)
           }
+
+          // draw +
+          g.setColor(Color.BLACK)
+          withThickStroke(20) {
+            g.drawLine(x, y - radius, x, y + radius)
+            g.drawLine(x - radius, y, x + radius, y)
+          }
+      }
+
+    g.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 100))
+    println(s"Drawing local for $segment")
+    val local = fingerprints.find(_.segment == segment).get
+    local.radar
+      .flatMap(l => l.entries.map(l.z -> _))
+      .filterNot { case (z, e) => globalPoints.exists(_._1._2 == e) }
+      .filter(_._1 % 1000 == 0)
+      .foreach { case (z, entry) =>
+        val x = entry.u
+        val y = entry.v
+        val radius = 20
+
+        g.setColor(Color.getHSBColor(entry.theta / 360, 1, 1))
+        g.fillOval(x - radius, y - radius, radius * 2, radius * 2)
+
+        withRotate(x, y) {
+          g.drawString(f"${entry.theta}%3.0f° / z = $z%d", x + radius + 5, y)
+        }
+
+        g.setColor(Color.BLACK)
+        withThickStroke(5) {
+          g.drawLine(x, y - radius, x, y + radius)
+          g.drawLine(x - radius, y, x + radius, y)
+        }
       }
 
     g.dispose()
@@ -204,41 +251,88 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
     to
   }
 
+  def rotateFlip(segment: SegmentReference): (Double, Boolean) = {
+    val fp = fingerprints.find(_.segment == segment).get
+    val spans =
+      fp.radar
+        .flatMap(r => r.entries.map(r.z -> _))
+        .groupBy(e => (e._1, e._2.theta))
+        .filter(_._2.size > 1)
+
+    if (spans.isEmpty) {
+      println(s"Segment $segment has no spans, cannot determine flip")
+      (math.Pi / 2 - fp.zDirection, false)
+    } else {
+      val entries = spans.maxBy(_._2.size)._2.map(_._2)
+      val e1 = entries.maxBy(_.r)
+      val e2 = entries.minBy(_.r)
+
+      val du = e2.u - e1.u
+      val dv = e2.v - e1.v
+
+      val flip = dv < 0
+
+      val rotatedvdu = math.atan2(dv, du)
+
+      val rotateFlipdvdu =
+        if (!flip)
+          math.Pi - rotatedvdu
+        else
+          rotatedvdu
+      (rotateFlipdvdu, flip)
+    }
+  }
+
   lazy val imageParts: Seq[ImagePart] = {
     globalTheta
       .flatMap(x => x._1.map(_ -> x._2))
       .groupBy(_._1._1).toVector
       .sortBy(_._2.map(_._2).min)
       //.filter(_._1.segmentId.contains("151000"))
-      //.filter(x => x._1.segmentId.contains("2745") || x._1.segmentId.contains("0314") /*|| x._1.segmentId.contains("3333")*/ )
+      //.filter(x => x._1.segmentId.contains("2745") || x._1.segmentId.contains("0314") || x._1.segmentId.contains("1847"))
       .flatMap {
         case (segment: SegmentReference, entries: Seq[((SegmentReference, RadarEntry), Int)]) =>
           val es = entries.map(x => x._1._2 -> x._2).sortBy(_._2)
 
-          if (es.size < 2) {
-            println(s"Segment $segment has only ${es.size} entries")
-            Nil
-          } else {
-            val e1 = es.head._1
-            val t1 = es.head._2
+          val e1 = es.head._1
+          val t1 = es.head._2
 
-            val e2 = es.last._1
-            val t2 = es.last._2
+          val width = segmentInfos(segment).width
+          val height = segmentInfos(segment).height
+          thetaToX.find(_._1 == t1).map(-_._2).flatMap { tx =>
 
-            val du = e2.u - e1.u
-            val dv = e2.v - e1.v
+            val (rotate: Double, flip: Boolean) =
+              if (es.size < 2) {
+                rotateFlip(segment)
+                /*println(s"Segment $segment has only ${es.size} entries")
+                val flip = false
+                val rotate0 = (math.Pi / 2 - rotationFor(segment))
+                val rotate =
+                  if (!flip)
+                    rotate0
+                  else
+                    -rotate0
 
-            val flip = dv < 0
+                (rotate, flip)*/
+              } else {
+                val e2 = es.last._1
+                val t2 = es.last._2
 
-            val width = segmentInfos(segment).width
-            val height = segmentInfos(segment).height
+                val du = e2.u - e1.u
+                val dv = e2.v - e1.v
 
-            val tx = -thetaToX.find(_._1 == t1).get._2
-            val rotate =
-              if (!flip)
-                math.Pi - math.atan2(dv, du)
-              else
-                math.atan2(dv, du)
+                val flip = dv < 0
+
+                val rotatedvdu = math.atan2(dv, du)
+
+                val rotateFlipdvdu =
+                  if (!flip)
+                    math.Pi - rotatedvdu
+                  else
+                    rotatedvdu
+
+                (rotateFlipdvdu, flip)
+              }
 
             val protate = rotate // math.Pi / 2 //2 * math.Pi - rotate
 
@@ -253,27 +347,31 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
             val u1 = tx - nu
             val v1 = -10000 - nv
 
-            println(f"Segment $segment: e1: $e1 t1: $t1 du: $du%5.2f dv: $dv%5.2f rotate: ${rotate / 2 / math.Pi * 360}%5.2f tx: $tx%5.2f nu: $nu%5.2f nv: $nv%5.2f v: ${e1.v}")
+            //println(f"Segment $segment: e1: $e1 t1: $t1 du: $du%5.2f dv: $dv%5.2f flip: $flip rotate0: ${rotate0 * 360 / 2 / math.Pi}%5.2f rotateFlipdvdu: ${rotateFlipdvdu * 360 / 2 / math.Pi}%5.2f rotatedvdu: ${rotatedvdu * 360 / 2 / math.Pi}%5.2f zDir: ${rotationFor(segment) * 360 / 2 / math.Pi}%5.2f rotate: ${rotate / 2 / math.Pi * 360}%5.2f tx: $tx%5.2f nu: $nu%5.2f nv: $nv%5.2f v: ${e1.v}")
+
+            val targetLayer = "2999" //if (flip) "2343" else "2342"
 
             import segment._
-            Seq(
+            Some(
               ImagePart(
                 segment,
-                s"/scroll/$scroll/segment/$segmentId/2999",
+                s"/scroll/$scroll/segment/$segmentId/$targetLayer",
                 u1, //u1, //-tx + nu,
                 v1,
                 protate / 2 / math.Pi * 360, //rotate / 2 / math.Pi * 360,
                 width, 0, flip
-              /*-tx + nu,
-                14000 - 10000 + nv,
-                180 - rotate / 2 / math.Pi * 360,
-                segmentInfos(segment).width, 0, flip*/ )
+              )
             )
           }
-
-        //val theta = entries.map(_._2).sum / entries.size
-        //val x = thetaToX.find(_._1 == theta).get._2
-        //ImagePart(segment, x, entries.map(_._1._2))
       } //.take(1) //.drop(1).take(1)
   }
+
+  fingerprints
+    .filter(!_.radar.exists(x => x.entries.nonEmpty && x.z == 10000))
+    .sortBy(_.segment.segmentId)
+    .foreach { fp =>
+      val info = segmentInfos(fp.segment)
+      println(s"Segment ${fp.segment} has no radar at z=10000 bounds: ${fp.zSpan} width: ${info.width} height: ${info.height} area: ${info.width * info.height / 1_000_000} MP")
+
+    }
 }

@@ -47,7 +47,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   lazy val main =
     encodeResponse { mainRoute }
 
-  val NameR = """(\d+)_(\d+).jpg""".r
+  val NameR = """(\d+)_(\d+)\.(?:jpg|webp)""".r
 
   lazy val scrollSegments: Future[Seq[ImageInfo]] =
     for {
@@ -59,6 +59,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   lazy val infoMap: Future[Map[SegmentReference, ImageInfo]] =
     scrollSegments.map(_.map(i => i.ref -> i).toMap)
+
+  lazy val arranger =
+    infoMap.map(new ArrangeByPPM(_))
 
   lazy val scrollSegmentsMap: Future[Map[(Int, String), SegmentReference]] =
     scrollSegments.map(_.map(i => (i.scroll, i.segmentId) -> i.ref).toMap)
@@ -94,8 +97,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         page(html.license())
       },
       path("universe") {
-        infoMap.await { infoMap =>
-          val arranger = new ArrangeByPPM(infoMap)
+        arranger.await { arranger =>
           page(html.universe(arranger.imageParts, arranger.thetaToX))
         }
       },
@@ -124,7 +126,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               pathPrefix(IntNumber) { z =>
                 concat(
                   path("dzi") {
-                    val dziImage = DZIImage("jpg", 0, 512, info.width, info.height) // FIXME: imagesize
+                    val tpe = if (z == 2999) "webp" else "jpg"
+                    val dziImage = DZIImage(tpe, 0, 512, info.width, info.height) // FIXME: imagesize
                     complete(JsObject("Image" -> dziImage.toJson))
                   },
                   path("dzi_files" / IntNumber / Segment) { (layer, name) =>
@@ -260,7 +263,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     if (targetFile.exists) Future.successful(targetFile)
     else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32.png"))
     else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32_reverse.png"))
-    else if (layer == 2999) infoMap.map { infoMap =>
+    else if (layer == 2999) arranger.map { arranger =>
       val t = new File(dataDir, s"debug/scroll$scroll/$segmentId/debugv1.png")
       val tiles = new File(dataDir, s"tiles-dz/scroll$scroll/$segmentId/layers/2999_files")
       if (tiles.exists) {
@@ -269,7 +272,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         s"rm -rf ${tiles.getAbsolutePath}".!!
       } else println(s"Tiles dir $tiles does not exist")
       t.getParentFile.mkdirs()
-      new ArrangeByPPM(infoMap).debugImageFor(segment, t)
+      arranger.debugImageFor(segment, t)
     }
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
@@ -300,7 +303,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def resizer(info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): Future[File] =
     dzdir(info, z).map { dir =>
-      new File(dir, s"$layer/${tileX}_$tileY.jpg")
+      val tpe = if (z == 2999) "webp" else "jpg"
+      new File(dir, s"$layer/${tileX}_$tileY.$tpe")
     }
 
   val DZDirCache = LfuCache[(ImageInfo, Int), File]
@@ -315,7 +319,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       targetDir.getParentFile.mkdirs()
       import sys.process._
       val tmpFile = File.createTempFile(s".tmp.$z", "", targetDir.getParentFile)
-      val cmd = s"""vips dzsave $imageFile $tmpFile --suffix .jpg --tile-size 512 --overlap 0"""
+      val tpe = if (z == 2999) "webp" else "jpg"
+      val cmd = s"""vips dzsave $imageFile $tmpFile --suffix .$tpe --tile-size 512 --overlap 0"""
       println(s"Extracting DZ: $cmd")
       cmd.!!
       val tmpDir = new File(tmpFile.getParentFile, tmpFile.getName + "_files")
