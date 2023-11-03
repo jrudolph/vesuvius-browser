@@ -15,6 +15,8 @@ import java.io.File
 import scala.concurrent.Future
 import scala.util.Success
 
+case class ImagePart(segment: SegmentReference, location: String, x: Double, y: Double, rotation: Double, width: Int, height: Int, flip: Boolean)
+
 case class DZISize(Width: Int, Height: Int)
 case class DZIImage(
     xmlns:    String, // constant: "http://schemas.microsoft.com/deepzoom/2008"
@@ -55,6 +57,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       infos <- Future.traverse(id1 ++ id2)(imageInfo)
     } yield infos.flatten.sortBy(i => (i.scroll, i.segmentId))
 
+  lazy val infoMap: Future[Map[SegmentReference, ImageInfo]] =
+    scrollSegments.map(_.map(i => i.ref -> i).toMap)
+
   lazy val scrollSegmentsMap: Future[Map[(Int, String), SegmentReference]] =
     scrollSegments.map(_.map(i => (i.scroll, i.segmentId) -> i.ref).toMap)
 
@@ -87,6 +92,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       },
       path("license") {
         page(html.license())
+      },
+      path("universe") {
+        infoMap.await { infoMap =>
+          val parts = new ArrangeByPPM(infoMap).imageParts
+          page(html.universe(parts))
+        }
       },
       pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>
         resolveRef(scroll, segmentId) { segment =>
@@ -249,6 +260,17 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     if (targetFile.exists) Future.successful(targetFile)
     else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32.png"))
     else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32_reverse.png"))
+    else if (layer == 2999) infoMap.map { infoMap =>
+      val t = new File(dataDir, s"debug/scroll$scroll/$segmentId/debugv1.png")
+      val tiles = new File(dataDir, s"tiles-dz/scroll$scroll/$segmentId/layers/2999_files")
+      if (tiles.exists) {
+        // rm
+        import sys.process._
+        s"rm -rf ${tiles.getAbsolutePath}".!!
+      } else println(s"Tiles dir $tiles does not exist")
+      t.getParentFile.mkdirs()
+      new ArrangeByPPM(infoMap).debugImageFor(segment, t)
+    }
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
 
@@ -298,6 +320,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       cmd.!!
       val tmpDir = new File(tmpFile.getParentFile, tmpFile.getName + "_files")
       require(tmpDir.renameTo(targetDir))
+      tmpFile.delete()
       targetDir
     }(cpuBound)
   }

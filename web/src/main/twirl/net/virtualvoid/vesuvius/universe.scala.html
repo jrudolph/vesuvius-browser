@@ -1,0 +1,100 @@
+@import net.virtualvoid.vesuvius._
+
+@(parts: Seq[ImagePart])
+
+<div class="info" style="float: left; width: 200px;">
+    <div class="position"></div>
+</div>
+<div id="openseadragon1" style="width: 1000; height: 500;"></div>
+<script src="/openseadragon/openseadragon.min.js"></script>
+<script src="/js/jquery-3.7.1.min.js.js"></script>
+<script type="text/javascript">
+var viewer = OpenSeadragon({
+    id: "openseadragon1",
+    prefixUrl: "/openseadragon/images/",
+    tileSources: [@for(p <- parts) { { tileSource: "@p.location/dzi", x: @p.x, y: @p.y, degrees: @p.rotation, flip: @p.flip, opacity: 1, width: @p.width },
+    }],
+    showNavigator: true,
+    showRotationControl: true,
+    //sequenceMode: true,
+    //preserveViewport: true,
+    //preload: true,
+    debugMode: false,
+    minZoomImageRatio: 0,
+    compositeOperation: 'screen'
+});
+
+//width: 100%; height: 80%;
+
+viewer.pixelsPerArrowPress = 250;
+
+viewer.addHandler('update-viewport', function() {
+    var canvas = viewer.drawer.canvas;
+    var ctx = viewer.drawer.context;
+    ctx.strokeStyle = 'blue';
+    ctx.lineWidth = 3;
+    // paint from viewport left_x to right_x an y = 10000
+    var bounds = viewer.viewport.getBounds();
+    var left_x = bounds.x;
+    var right_x = bounds.x + bounds.width;
+    var y = - 10000;
+
+    var y1 = viewer.viewport.viewportToWindowCoordinates(new OpenSeadragon.Point(0, y)).y;
+    var y2 = (y - bounds.y) / bounds.height;
+    var y3 = y2 * canvas.height;
+
+    var x3 = (-116765.66 - bounds.x) / bounds.width * canvas.width;
+    //console.log(y, y1, y2, y3, x3);
+
+    ctx.beginPath();
+    ctx.moveTo(0, y3);
+    ctx.lineTo(canvas.width, y3);
+    ctx.moveTo(x3, 0);
+    ctx.lineTo(x3, canvas.height);
+
+    ctx.stroke();
+});
+
+var positionEl = document.querySelectorAll('.info .position')[0];
+
+viewer.addHandler('open', function() {
+
+    var tracker = new OpenSeadragon.MouseTracker({
+        element: viewer.container,
+        moveHandler: function(event) {
+            var webPoint = event.position;
+            var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+            //var imagePoint = viewer.viewport.viewportToImageCoordinates(viewportPoint);
+            //var zoom = viewer.viewport.getZoom(true);
+            //var imageZoom = viewer.viewport.viewportToImageZoom(zoom);
+
+            positionEl.innerHTML = 'Web:<br>' + webPoint.toString() +
+                '<br><br>Viewport:<br>' + viewportPoint.toString();
+        }
+    });
+
+    tracker.setTracking(true);
+});
+
+</script>
+
+<a id="keyboard_shortcuts"></a>
+<p>
+    You can use the following keys to navigate:
+</p>
+
+<ul>
+    <li><strong>[ 1, 2 ]</strong> - hold to overlay different ink detection model outputs</li>
+    <li><strong>[ w, up arrow ]</strong> - move viewport <strong>up</strong></li>
+    <li><strong>[ s, down arrow ]</strong> - move viewport <strong>down</strong></li>
+    <li><strong>[ a, left arrow ]</strong> - move viewport <strong>left</strong></li>
+    <li><strong>[ d, right arrow ]</strong> - move viewport <strong>right</strong></li>
+    <li><strong>[ 0 ]</strong> - zoom / move viewport <strong>home</strong></li>
+    <li><strong>[ - / _, shift+W, shift+up arrow ]</strong> - zoom viewport <strong>out</strong></li>
+    <li><strong>[ = / +, shift+S, shift+down arrow ]</strong> - zoom viewport <strong>in</strong></li>
+    <li><strong>[ r ]</strong> - rotate <strong>clockwise</strong></li>
+    <li><strong>[ R ]</strong> - rotate <strong>counterclockwise</strong></li>
+    <li><strong>[ f ]</strong> - flip <strong>horizontally</strong></li>
+    <li><strong>[ j ]</strong> - change to <strong>previous</strong> layer</li>
+    <li><strong>[ k ]</strong> - change to <strong>next</strong> layer</li>
+</ul>

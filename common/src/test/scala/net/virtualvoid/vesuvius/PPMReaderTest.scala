@@ -5,7 +5,7 @@ import java.io.File
 import javax.imageio.ImageIO
 
 object PPMReaderTest {
-  def main(args: Array[String]): Unit =
+  def main2(args: Array[String]): Unit =
     new PPMReaderTest2(args)
 }
 
