@@ -14,6 +14,7 @@ object SegmentReference {
       def write(obj: ScrollServerBase): JsValue = JsString(obj.productPrefix)
       def read(json: JsValue): ScrollServerBase = json.convertTo[String] match {
         case "FullScrollsBase" => FullScrollsBase
+        case "PHercBase"       => PHercBase
       }
     }
   implicit val segmentReferenceFormat: JsonFormat[SegmentReference] = jsonFormat3(SegmentReference.apply)
