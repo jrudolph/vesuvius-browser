@@ -2,10 +2,16 @@
 
 @(info: ImageInfo)
 
+@for(
+    selectedLayers <- Seq(if (info.ref.scroll == 332) (60 to 105 by 3) else (20 to 50 by 2));
+    extraLayers = if (info.ref.scroll == 332) Seq(2350, 2351) else Seq(2342, 2343);
+    allLayers = selectedLayers ++ extraLayers
+) {
+
 <h2>Scroll @info.scroll / @info.segmentId</h2>
 
 <div>Full data: <a href="@{info.ref.baseUrl}">@{info.ref.baseUrl}</a></div>
-<div>Selected layers: @{(20 to 50 by 2).mkString(", ")}</div>
+<div>Selected layers: @{selectedLayers.mkString(", ")}</div>
 <div><a href="#keyboard_shortcuts">Keyboard shortcuts</a></div>
 <div>Note: If page stays blank for a while, layer still needs to be prepared in the background. Stay tuned, or reload after a while.</div>
 <p/>
@@ -16,11 +22,11 @@
 <script type="text/javascript">
 
     var origHash = window.location.hash.substring(1);
-    var layers = [@for(l <- ((if (info.ref.scroll == 332) (60 to 105 by 3) else (20 to 50 by 2)) :+ 2342 :+ 2343)) { "@l", }];
+    var layers = [@for(l <- allLayers) { "@l", }];
 var viewer = OpenSeadragon({
     id: "openseadragon1",
     prefixUrl: "/openseadragon/images/",
-    tileSources: [@for(l <- ((if (info.ref.scroll == 332) (60 to 105 by 3) else (20 to 50 by 2)) :+ 2342 :+ 2343)) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
+    tileSources: [@for(l <- allLayers) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
     initialPage: 6,
     showNavigator: true,
     showRotationControl: true,
@@ -150,7 +156,7 @@ function idxOfLayer(layer) {
   return layers.indexOf(layer);
 }
 
-var keyMapping = { '1': idxOfLayer('2342'), '2': idxOfLayer('2343') };
+var keyMapping = { '1': idxOfLayer('@{extraLayers(0)}'), '2': idxOfLayer('@{extraLayers(1)}') };
 
 viewer.addHandler('canvas-key', function(event) {
     var idx = keyMapping[event.originalEvent.key];
@@ -201,3 +207,4 @@ viewer.pixelsPerArrowPress = 250;
     <li><strong>[ j ]</strong> - change to <strong>previous</strong> layer</li>
     <li><strong>[ k ]</strong> - change to <strong>next</strong> layer</li>
 </ul>
+}

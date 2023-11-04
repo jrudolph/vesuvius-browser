@@ -102,8 +102,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               path("inferred" / Segment) { model =>
                 val input = model match {
                   // FIXME: use constants instead
-                  case "youssef-test"          => requestedWorkInputs(0).asInstanceOf[InferenceWorkItemInput]
-                  case "youssef-test-reversed" => requestedWorkInputs(1).asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test" if segment.scroll == 332          => requestedWorkInputs(2)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test-reversed" if segment.scroll == 332 => requestedWorkInputs(3)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test"                                   => requestedWorkInputs(0)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test-reversed"                          => requestedWorkInputs(1)._1.asInstanceOf[InferenceWorkItemInput]
                 }
                 concat(
                   resizedInferred(segment, input).await.orReject.deliver,
@@ -249,6 +251,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     if (targetFile.exists) Future.successful(targetFile)
     else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32.png"))
     else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32_reverse.png"))
+    else if (layer == 2350) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_63_32.png"))
+    else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_63_32_reverse.png"))
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
 
