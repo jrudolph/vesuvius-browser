@@ -413,22 +413,27 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }
   }
 
-  //case class InferenceInfo(model: String, startLayer: Int, stride: Int, reverseLayers: Boolean)
-  lazy val requestedWorkInputs: Seq[WorkItemInput] =
+  type Filter = SegmentReference => Boolean
+  lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
-      InferenceWorkItemInput("youssef-test", 15, 32, false),
-      InferenceWorkItemInput("youssef-test", 15, 32, true),
-      PPMFingerprintWorkItemInput
+      InferenceWorkItemInput("youssef-test", 15, 32, false) -> (s => s.scroll == 1 || s.scroll == 2),
+      InferenceWorkItemInput("youssef-test", 15, 32, true) -> (s => s.scroll == 1 || s.scroll == 2),
+      InferenceWorkItemInput("youssef-test", 63, 32, false) -> (s => s.scroll == 332),
+      InferenceWorkItemInput("youssef-test", 63, 32, true) -> (s => s.scroll == 332),
+      PPMFingerprintWorkItemInput -> (_.scroll == 1)
     )
 
   val runnerId = System.currentTimeMillis().toString
   lazy val workItems: Future[Seq[WorkItem]] =
     Source.futureSource(scrollSegments.map(x => Source(x.sortBy(_.segmentId).reverse)))
-      .mapConcat(img => requestedWorkInputs.map(info => img.ref -> info))
+      .mapConcat { info =>
+        requestedWorkInputs
+          .filter(_._2(info.ref))
+          .map(input => info.ref -> input._1)
+      }
       .filter { case (ref, input) => !targetFileForInput(ref, input).exists() }
       .zipWithIndex
       .map { case ((ref, input), id) => WorkItem(s"$runnerId-$id", ref, input.`type`, input) }
-      .filter(x => x.`type` != "fingerprint" || x.segment.scroll == 1)
       .runWith(Sink.seq)
 
   lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))
