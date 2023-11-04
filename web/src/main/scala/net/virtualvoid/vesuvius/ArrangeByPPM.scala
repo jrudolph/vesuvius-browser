@@ -34,17 +34,19 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
         .map(_.z)
     }
 
-  val radar10000 =
+  val mainZ = 7000
+
+  val radarMainZ =
     fingerprints
       .flatMap { p =>
         p.radar
-          .find(l => l.z == 10000 && l.entries.nonEmpty).toSeq
+          .find(l => l.z == mainZ && l.entries.nonEmpty).toSeq
           .flatMap(_.entries)
           .map(p.segment -> _)
       }
 
   val byTheta =
-    radar10000.groupBy(x => math.round(x._2.theta).toInt)
+    radarMainZ.groupBy(x => math.round(x._2.theta).toInt)
 
   /*byTheta.foreach {
     case (theta, entries) =>
@@ -208,7 +210,7 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
           g.fillOval(x - radius, y - radius, radius * 2, radius * 2)
 
           withRotate(x, y) {
-            g.drawString(f"${global}%5.0f° / ${entry.theta}%3.0f° / z = ${10000}%d", x + radius + 5, y)
+            g.drawString(f"${global}%5.0f° / ${entry.theta}%3.0f° / z = ${mainZ}%d", x + radius + 5, y)
           }
 
           // draw +
@@ -345,11 +347,11 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
             val nv = (u - centerU) * math.sin(protate) + (e1.v - centerV) * math.cos(protate) + centerV
 
             val u1 = tx - nu
-            val v1 = -10000 - nv
+            val v1 = -mainZ - nv
 
             //println(f"Segment $segment: e1: $e1 t1: $t1 du: $du%5.2f dv: $dv%5.2f flip: $flip rotate0: ${rotate0 * 360 / 2 / math.Pi}%5.2f rotateFlipdvdu: ${rotateFlipdvdu * 360 / 2 / math.Pi}%5.2f rotatedvdu: ${rotatedvdu * 360 / 2 / math.Pi}%5.2f zDir: ${rotationFor(segment) * 360 / 2 / math.Pi}%5.2f rotate: ${rotate / 2 / math.Pi * 360}%5.2f tx: $tx%5.2f nu: $nu%5.2f nv: $nv%5.2f v: ${e1.v}")
 
-            val targetLayer = "2999" //if (flip) "2343" else "2342"
+            val targetLayer = if (flip) "2343" else "2342"
 
             import segment._
             Some(
@@ -367,11 +369,11 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
   }
 
   fingerprints
-    .filter(!_.radar.exists(x => x.entries.nonEmpty && x.z == 10000))
+    .filter(!_.radar.exists(x => x.entries.nonEmpty && x.z == mainZ))
     .sortBy(_.segment.segmentId)
     .foreach { fp =>
       val info = segmentInfos(fp.segment)
-      println(s"Segment ${fp.segment} has no radar at z=10000 bounds: ${fp.zSpan} width: ${info.width} height: ${info.height} area: ${info.width * info.height / 1_000_000} MP")
+      println(s"Segment ${fp.segment} has no radar at z=$mainZ bounds: ${fp.zSpan} width: ${info.width} height: ${info.height} area: ${info.width * info.height / 1_000_000} MP")
 
     }
 }
