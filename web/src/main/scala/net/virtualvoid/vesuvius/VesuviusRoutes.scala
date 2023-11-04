@@ -51,8 +51,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     for {
       id1 <- segmentIds(FullScrollsBase, 1)
       id2 <- segmentIds(FullScrollsBase, 2)
-      //id3 <- segmentIds(HariSeldonUploadsBase, 1)
-      infos <- Future.traverse(id1 ++ id2)(imageInfo)
+      id3 <- segmentIds(PHercBase, 332)
+      infos <- Future.traverse(id1 ++ id2 ++ id3)(imageInfo)
     } yield infos.flatten.sortBy(i => (i.scroll, i.segmentId))
 
   lazy val scrollSegmentsMap: Future[Map[(Int, String), SegmentReference]] =
@@ -256,7 +256,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         if (webpVersion.exists())
           Future.successful(webpVersion)
         else {
-          val url = f"${segment.baseUrl}layers/$layer%02d.tif"
+          val url = segment.layerUrl(layer)
           val tmpFile = File.createTempFile(".tmp.download", ".tif", targetFile.getParentFile)
           download(url, tmpFile)
         }
@@ -428,7 +428,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .filter { case (ref, input) => !targetFileForInput(ref, input).exists() }
       .zipWithIndex
       .map { case ((ref, input), id) => WorkItem(s"$runnerId-$id", ref, input.`type`, input) }
-      .filter(x => x.segment.scroll == 1)
+      .filter(x => x.`type` != "fingerprint" || x.segment.scroll == 1)
       .runWith(Sink.seq)
 
   lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))

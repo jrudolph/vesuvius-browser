@@ -1,7 +1,9 @@
 package net.virtualvoid.vesuvius
 
 case class SegmentReference(scroll: Int, segmentId: String, base: ScrollServerBase) {
-  def baseUrl: String = s"${base.baseUrl(scroll)}$segmentId/"
+  def baseUrl: String = base.segmentUrl(this)
+
+  def layerUrl(z: Int): String = base.layerUrl(this, z)
 }
 object SegmentReference {
   import spray.json._
@@ -19,11 +21,24 @@ object SegmentReference {
 
 sealed trait ScrollServerBase extends Product {
   def baseUrl(scroll: Int): String
+  def segmentUrl(segment: SegmentReference): String =
+    s"${baseUrl(segment.scroll)}${segment.segmentId}/"
+
+  def layerUrl(segment: SegmentReference, z: Int): String =
+    f"${segmentUrl(segment)}layers/$z%02d.tif"
 }
 
 case object FullScrollsBase extends ScrollServerBase {
   def baseUrl(scroll: Int): String =
     s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/"
+}
+
+case object PHercBase extends ScrollServerBase {
+  def baseUrl(scroll: Int): String =
+    f"http://dl.ash2txt.org/full-scrolls/PHerc$scroll%04d.volpkg/paths/"
+
+  override def layerUrl(segment: SegmentReference, z: Int): String =
+    f"${segmentUrl(segment)}layers/$z%03d.tif"
 }
 
 case object HariSeldonUploadsBase extends ScrollServerBase {
