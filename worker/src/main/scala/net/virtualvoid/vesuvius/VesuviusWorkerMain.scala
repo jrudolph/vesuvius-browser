@@ -127,7 +127,7 @@ object Tasks {
           .mapAsync(config.concurrentDownloads) { layer =>
             val targetId = if (reverse) from + num - 1 - (layer - from) else layer
             download(
-              f"${segment.baseUrl}layers/$layer%02d.tif",
+              segment.layerUrl(layer),
               new File(to, f"layers/$targetId%02d.tif")
             )
           }
