@@ -18,6 +18,10 @@
 <p/>
 <b>Hold "1" or "2" key to overlay output from <a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a> or navigate to right-most layer to show just inferred data.</b>
 
+<div class="info" style="float: left; width: 200px;">
+    <div class="position"></div>
+</div>
+
 <div id="openseadragon1" style="width: 100%; height: 80%;"></div>
 <script src="/openseadragon/openseadragon.min.js"></script>
 <script src="/js/jquery-3.7.1.min.js.js"></script>
@@ -32,6 +36,7 @@ var viewer = OpenSeadragon({
     initialPage: 6,
     showNavigator: true,
     showRotationControl: true,
+    zoomPerClick: 1.0,
     //sequenceMode: true,
     preserveViewport: true,
     preload: true,
@@ -186,6 +191,102 @@ viewer.addHandler('full-screen', function(ev) {
 
 viewer.pixelsPerArrowPress = 250;
 
+var ppmSocket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + window.location.pathname + "ppm");
+
+var positionEl = document.querySelectorAll('.info .position')[0];
+
+viewer.addHandler('open', function() {
+    var lastRequest = {u:0, v:0};
+    var lastResponse = {x:0, y:0, z:0};
+    var callback = null;
+    function requestXYZ(webPoint, f) {
+        var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+        var tiledImage = viewer.world.getItemAt(index);
+        var imagePoint = tiledImage.viewportToImageCoordinates(viewportPoint);
+        var u = imagePoint.x.toFixed();
+        var v = imagePoint.y.toFixed();
+
+        if (lastRequest.u == u && lastRequest.v == v) {
+            f(lastResponse);
+        } else {
+            lastRequest = {u:u, v:v};
+            lastResponse = {x:0, y:0, z:0};
+            callback = f;
+            ppmSocket.send(`${u},${v}`);
+        }
+    }
+
+    var cachedPosition = null;
+    function updatePosition(position) {
+        if (position) {
+            var webPoint = position;
+            var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+            var tiledImage = viewer.world.getItemAt(index);
+            var imagePoint = tiledImage.viewportToImageCoordinates(viewportPoint);
+            var u = imagePoint.x.toFixed();
+            var v = imagePoint.y.toFixed();
+
+            requestXYZ(webPoint, data => {
+                cachedPosition = data;
+                positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + `x: ${data.x}, y: ${data.y}, z: ${data.z}`;
+            });
+
+            var scrollPosition = "";
+            if (cachedPosition && (cachedPosition.x > 0 || cachedPosition.y > 0 || cachedPosition.z > 0)) {
+                scrollPosition = `x: ${cachedPosition.x}, y: ${cachedPosition.y}, z: ${cachedPosition.z}`
+            }
+            positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + scrollPosition;
+        } else {
+            positionEl.innerHTML = '';
+        }
+    }
+
+    var tracker = new OpenSeadragon.MouseTracker({
+        element: viewer.container,
+        moveHandler: function(event) {
+            updatePosition(event.position);
+        },
+    });
+    var clickPosition = null;
+    var lastClickPosition = null;
+    viewer.addHandler('canvas-click', function(event) {
+        if (event.shift) {
+            // The canvas-click event gives us a position in web coordinates.
+            var webPoint = event.position;
+            var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+            var tiledImage = viewer.world.getItemAt(index);
+            var imagePoint = tiledImage.viewportToImageCoordinates(viewportPoint);
+            var u = imagePoint.x.toFixed();
+            var v = imagePoint.y.toFixed();
+            clickPosition = { u: u, v: v };
+            //console.log("click", u, v);
+
+            requestXYZ(webPoint, data => {
+                window.open(`http://37.19.207.113:5173/?x=${data.x}&y=${data.y}&zoom=1&layer=${(data.z / 50).toFixed() * 50}&segment=@{info.ref.segmentId}`);
+            });
+        }
+    });
+    ppmSocket.addEventListener("message", (event) => {
+        //console.log(event.data, clickPosition, lastClickPosition);
+        //var data = JSON.parse(event.data);
+        var els = event.data.split(',')
+        var u = parseInt(els[0]);
+        var v = parseInt(els[1]);
+        var x = parseInt(els[2]);
+        var y = parseInt(els[3]);
+        var z = parseInt(els[4]);
+        if (lastRequest.u == u && lastRequest.v == v) {
+            lastResponse = {x:x, y:y, z:z};
+            if (callback) {
+                callback(lastResponse);
+                callback = null;
+            }
+        }
+    });
+
+
+    tracker.setTracking(true);
+});
 
 </script>
 

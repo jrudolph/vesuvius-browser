@@ -5,14 +5,16 @@ import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.marshalling.ToResponseMarshallable
-import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, Uri, headers }
-import org.apache.pekko.http.scaladsl.server.{ Directive1, Directives, Route }
-import org.apache.pekko.stream.scaladsl.{ FileIO, Sink, Source }
+import org.apache.pekko.http.scaladsl.model.ws.{Message, TextMessage}
+import org.apache.pekko.http.scaladsl.model.{HttpMethods, HttpRequest, StatusCodes, Uri, headers}
+import org.apache.pekko.http.scaladsl.server.{Directive1, Directives, Route}
+import org.apache.pekko.stream.scaladsl.{FileIO, Flow, Sink, Source}
 import play.twirl.api.Html
 import spray.json.*
 
 import java.io.File
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import scala.util.Success
 
 case class DZISize(Width: Int, Height: Int)
@@ -125,6 +127,31 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                     }
                   }
                 )
+              },
+              path("ppm") {
+                println(s"at ppm for $segment")
+                val ppmFile = targetFileForInput(segment, DownSampleU16_2Input)
+                if (ppmFile.exists()) {
+                  val reader = SmallPPMReader(ppmFile, DownSampleU16_2Input, info.width, info.height)
+                  val Pattern = """(\d+),(\d+)""".r
+                  println(s"PPM reader: $info")
+                  handleWebSocketMessages(
+                    Flow[Message]
+                      .mapAsync(1) {
+                        case t: TextMessage =>
+                          t.toStrict(2.second).map(_.text)
+                      }
+                      .collect {
+                        case Pattern(uStr, vStr) =>
+                          val u = uStr.toInt
+                          val v = vStr.toInt
+                          val (x, y, z) = reader.xyz(u, v)
+                          val res = s"$u,$v,$x,$y,$z"
+                          //println(res)
+                          TextMessage(res)
+                      }
+                  )
+                } else reject
               },
               pathPrefix(IntNumber) { z =>
                 concat(
@@ -428,8 +455,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${model}_${startLayer}_${stride}$reversed.png")
       case PPMFingerprintWorkItemInput =>
         new File(dataDir, s"ppm/scroll${segment.scroll}/${segment.segmentId}/fingerprint.json")
+      case DownsamplePPMWorkItemInput(tpe, downsamplingBits) =>
+        new File(dataDir, s"ppm/scroll${segment.scroll}/${segment.segmentId}/uvmap-${tpe}-${downsamplingBits}.bin")
     }
   }
+
+  val DownSampleU16_2Input = DownsamplePPMWorkItemInput("u16", 2)
 
   type Filter = SegmentReference => Boolean
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
