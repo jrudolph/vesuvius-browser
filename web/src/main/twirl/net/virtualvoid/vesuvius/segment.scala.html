@@ -12,10 +12,12 @@
 
 <div>Full data: <a href="@{info.ref.baseUrl}">@{info.ref.baseUrl}</a></div>
 <div>Selected layers: @{selectedLayers.mkString(", ")}</div>
+<div><a href="#model_output">Model Output</a></div>
 <div><a href="#keyboard_shortcuts">Keyboard shortcuts</a></div>
 <div>Note: If page stays blank for a while, layer still needs to be prepared in the background. Stay tuned, or reload after a while.</div>
 <p/>
 <b>Hold "1" or "2" key to overlay output from <a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a> or navigate to right-most layer to show just inferred data.</b>
+
 <div id="openseadragon1" style="width: 100%; height: 80%;"></div>
 <script src="/openseadragon/openseadragon.min.js"></script>
 <script src="/js/jquery-3.7.1.min.js.js"></script>
@@ -187,7 +189,22 @@ viewer.pixelsPerArrowPress = 250;
 
 </script>
 
+<a id="model_output"></a>
+<h4>Model Output</h4>
+<table>
+    <tr>
+        <th>Model</th>
+    </tr>
+    @for((id, modelName) <- Seq("youssef-test" -> "Youssef Layer 15 Up Stride 32", "youssef-test-reversed" -> "Youssef Layer 44 Down Stride 32 (reverse layering)")) {
+    <tr>
+        <td><a href="inferred/@id/full">@modelName</a></td>
+        <td><img src="inferred/@id"/></td>
+    </tr>
+    }
+</table>
+
 <a id="keyboard_shortcuts"></a>
+<h4>Keyboard Shortcuts</h4>
 <p>
     You can use the following keys to navigate:
 </p>

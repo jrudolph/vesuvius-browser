@@ -99,7 +99,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               path("mask") {
                 resizedMask(segment).deliver
               },
-              path("inferred" / Segment) { model =>
+              pathPrefix("inferred" / Segment) { model =>
                 val input = model match {
                   // FIXME: use constants instead
                   case "youssef-test" if segment.scroll == 332          => requestedWorkInputs(2)._1.asInstanceOf[InferenceWorkItemInput]
@@ -108,8 +108,15 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   case "youssef-test-reversed"                          => requestedWorkInputs(1)._1.asInstanceOf[InferenceWorkItemInput]
                 }
                 concat(
-                  resizedInferred(segment, input).await.orReject.deliver,
-                  complete(ImageTools.EmptyImageResponse)
+                  pathEnd {
+                    concat(
+                      resizedInferred(segment, input).await.orReject.deliver,
+                      complete(ImageTools.EmptyImageResponse)
+                    )
+                  },
+                  path("full") {
+                    getFromFile(targetFileForInput(segment, input))
+                  }
                 )
               },
               pathPrefix(IntNumber) { z =>
