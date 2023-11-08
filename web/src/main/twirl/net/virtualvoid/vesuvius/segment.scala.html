@@ -197,8 +197,8 @@ viewer.pixelsPerArrowPress = 250;
     </tr>
     @for((id, modelName) <- Seq("youssef-test" -> "Youssef Layer 15 Up Stride 32", "youssef-test-reversed" -> "Youssef Layer 44 Down Stride 32 (reverse layering)")) {
     <tr>
-        <td><a href="inferred/@id/full">@modelName</a></td>
-        <td><img src="inferred/@id"/></td>
+        <td><a href="inferred/@id/full" download>@modelName</a></td>
+        <td><a href="inferred/@id/full?show"><img src="inferred/@id"/></a></td>
     </tr>
     }
 </table>
