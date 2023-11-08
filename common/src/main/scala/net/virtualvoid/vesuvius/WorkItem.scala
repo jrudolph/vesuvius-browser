@@ -21,18 +21,21 @@ object WorkItemInput extends SprayJsonHelpers {
 
   implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItemInput] = jsonFormat4(InferenceWorkItemInput.apply)
   implicit val ppmFingerprintWorkItemFormat: JsonFormat[PPMFingerprintWorkItemInput.type] = jsonFormat0(() => PPMFingerprintWorkItemInput)
+  implicit val downsamplePPMWorkItemFormat: JsonFormat[DownsamplePPMWorkItemInput] = jsonFormat2(DownsamplePPMWorkItemInput.apply)
   implicit val workItemFormat: RootJsonFormat[WorkItemInput] = new RootJsonFormat[WorkItemInput] {
     override def write(obj: WorkItemInput): JsValue = {
       val res =
         obj match {
-          case i: InferenceWorkItemInput   => inferenceWorkItemFormat.write(i)
-          case PPMFingerprintWorkItemInput => ppmFingerprintWorkItemFormat.write(PPMFingerprintWorkItemInput)
+          case i: InferenceWorkItemInput     => inferenceWorkItemFormat.write(i)
+          case PPMFingerprintWorkItemInput   => ppmFingerprintWorkItemFormat.write(PPMFingerprintWorkItemInput)
+          case d: DownsamplePPMWorkItemInput => downsamplePPMWorkItemFormat.write(d)
         }
       res.asJsObject + ("type" -> JsString(obj.productPrefix))
     }
     override def read(json: JsValue): WorkItemInput = json.asJsObject.fields("type") match {
       case JsString("InferenceWorkItemInput")      => inferenceWorkItemFormat.read(json)
       case JsString("PPMFingerprintWorkItemInput") => ppmFingerprintWorkItemFormat.read(json)
+      case JsString("DownsamplePPMWorkItemInput")  => downsamplePPMWorkItemFormat.read(json)
       case _                                       => throw new IllegalArgumentException(s"Work item type not specified")
     }
   }
@@ -47,6 +50,16 @@ case class InferenceWorkItemInput(
 }
 case object PPMFingerprintWorkItemInput extends WorkItemInput {
   def `type`: String = "fingerprint"
+}
+
+/**
+ * A workitem to download and downsample a PPM file.
+ *
+ * positionType: u16
+ * downsamplingBits: u8 How many data items to discard. 0 means no downsampling, 1 means discard every second item, 2 means discard every fourth item, etc.
+ */
+case class DownsamplePPMWorkItemInput(positionType: String, downsamplingBits: Int) extends WorkItemInput {
+  def `type`: String = "downsample_ppm"
 }
 
 case class AssetReference()
