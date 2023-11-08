@@ -198,6 +198,7 @@ var positionEl = document.querySelectorAll('.info .position')[0];
 viewer.addHandler('open', function() {
     var lastRequest = {u:0, v:0};
     var lastResponse = {x:0, y:0, z:0};
+    var nextRequest = {u:0, v:0};
     var callback = null;
     function requestXYZ(webPoint, f) {
         var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
@@ -208,15 +209,15 @@ viewer.addHandler('open', function() {
 
         if (lastRequest.u == u && lastRequest.v == v) {
             f(lastResponse);
-        } else {
-            lastRequest = {u:u, v:v};
-            lastResponse = {x:0, y:0, z:0};
+        } else if (ppmSocket.readyState == 1) {
+            nextRequest = {u:u, v:v};
+
             callback = f;
             ppmSocket.send(`${u},${v}`);
-        }
+        } else console.log("socket not ready", ppmSocket);
     }
 
-    var cachedPosition = null;
+    var cachedPosition = { x: 0, y: 0, z: 0 };
     function updatePosition(position) {
         if (position) {
             var webPoint = position;
@@ -231,11 +232,7 @@ viewer.addHandler('open', function() {
                 positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + `x: ${data.x}, y: ${data.y}, z: ${data.z}`;
             });
 
-            var scrollPosition = "";
-            if (cachedPosition && (cachedPosition.x > 0 || cachedPosition.y > 0 || cachedPosition.z > 0)) {
-                scrollPosition = `x: ${cachedPosition.x}, y: ${cachedPosition.y}, z: ${cachedPosition.z}`
-            }
-            positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + scrollPosition;
+            positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + `x: ${cachedPosition.x}, y: ${cachedPosition.y}, z: ${cachedPosition.z}`;
         } else {
             positionEl.innerHTML = '';
         }
@@ -262,7 +259,7 @@ viewer.addHandler('open', function() {
             //console.log("click", u, v);
 
             requestXYZ(webPoint, data => {
-                window.open(`http://37.19.207.113:5173/?x=${data.x}&y=${data.y}&zoom=1&layer=${(data.z / 50).toFixed() * 50}&segment=@{info.ref.segmentId}`);
+                window.open(`http://37.19.207.113:5173/?x=${data.x}&y=${data.y}&zoom=6&layer=${(data.z / 50).toFixed() * 50}&segment=@{info.ref.segmentId}`);
             });
         }
     });
@@ -275,8 +272,9 @@ viewer.addHandler('open', function() {
         var x = parseInt(els[2]);
         var y = parseInt(els[3]);
         var z = parseInt(els[4]);
-        if (lastRequest.u == u && lastRequest.v == v) {
+        if (nextRequest.u == u && nextRequest.v == v) {
             lastResponse = {x:x, y:y, z:z};
+            lastRequest = nextRequest;
             if (callback) {
                 callback(lastResponse);
                 callback = null;
