@@ -191,7 +191,7 @@ viewer.addHandler('full-screen', function(ev) {
 
 viewer.pixelsPerArrowPress = 250;
 
-var ppmSocket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + window.location.pathname + "ppm");
+var ppmSocket;
 
 var positionEl = document.querySelectorAll('.info .position')[0];
 
@@ -209,12 +209,12 @@ viewer.addHandler('open', function() {
 
         if (lastRequest.u == u && lastRequest.v == v) {
             f(lastResponse);
-        } else if (ppmSocket.readyState == 1) {
+        } else if (ppmSocket && ppmSocket.readyState == 1) {
             nextRequest = {u:u, v:v};
 
             callback = f;
             ppmSocket.send(`${u},${v}`);
-        } else console.log("socket not ready", ppmSocket);
+        }
     }
 
     var cachedPosition = { x: 0, y: 0, z: 0 };
@@ -232,7 +232,13 @@ viewer.addHandler('open', function() {
                 positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + `x: ${data.x}, y: ${data.y}, z: ${data.z}`;
             });
 
-            positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + `x: ${cachedPosition.x}, y: ${cachedPosition.y}, z: ${cachedPosition.z}`;
+            var color;
+            if (lastRequest.u == u && lastRequest.v == v) {
+                color = "";
+            } else {
+                color = "color: #eee;";
+            }
+            positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + `<span style="${color}">x: ${cachedPosition.x}, y: ${cachedPosition.y}, z: ${cachedPosition.z}</span>`;
         } else {
             positionEl.innerHTML = '';
         }
@@ -263,7 +269,7 @@ viewer.addHandler('open', function() {
             });
         }
     });
-    ppmSocket.addEventListener("message", (event) => {
+    function handleMessage(event) {
         //console.log(event.data, clickPosition, lastClickPosition);
         //var data = JSON.parse(event.data);
         var els = event.data.split(',')
@@ -280,8 +286,28 @@ viewer.addHandler('open', function() {
                 callback = null;
             }
         }
-    });
+    }
+    var timerId;
+    function connectSocket() {
+        var socket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + window.location.pathname + "ppm");
+        socket.onopen = function() {
+            //console.log("socket open");
+            if (timerId) clearInterval(timerId);
 
+            socket.onclose = function() {
+                //console.log("socket closed");
+                if (timerId) clearInterval(timerId);
+                timerId = setInterval(() => { connectSocket(); }, 3000);
+            };
+            socket.onerror = function() {
+                console.log("socket error");
+                socket.close();
+            };
+            socket.onmessage = handleMessage;
+            ppmSocket = socket;
+        };
+    }
+    connectSocket();
 
     tracker.setTracking(true);
 });
