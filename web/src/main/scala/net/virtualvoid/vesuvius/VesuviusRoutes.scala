@@ -469,7 +469,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       InferenceWorkItemInput("youssef-test", 15, 32, true) -> (s => s.scroll == 1 || s.scroll == 2),
       InferenceWorkItemInput("youssef-test", 63, 32, false) -> (s => s.scroll == 332),
       InferenceWorkItemInput("youssef-test", 63, 32, true) -> (s => s.scroll == 332),
-      PPMFingerprintWorkItemInput -> (_.scroll == 1)
+      PPMFingerprintWorkItemInput -> (_.scroll == 1),
+      DownSampleU16_2Input -> (s => s.scroll == 1),
     )
 
   val runnerId = System.currentTimeMillis().toString
