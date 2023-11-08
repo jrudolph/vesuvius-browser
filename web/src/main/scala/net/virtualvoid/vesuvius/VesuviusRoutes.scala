@@ -115,7 +115,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                     )
                   },
                   path("full") {
-                    getFromFile(targetFileForInput(segment, input))
+                    respondWithHeader(headers.`Content-Disposition`(headers.ContentDispositionTypes.attachment, Map("filename" -> s"${segment.segmentId}_inference_${model}.png"))) {
+                      getFromFile(targetFileForInput(segment, input))
+                    }
                   }
                 )
               },
