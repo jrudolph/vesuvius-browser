@@ -291,7 +291,10 @@ viewer.addHandler('open', function() {
     }
     var timerId;
     function connectSocket() {
-        var socket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + window.location.pathname + "ppm");
+        var subdomain;
+        if (window.location.host.startsWith("localhost")) subdomain = "";
+        else subdomain = "ws."
+        var socket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + subdomain + window.location.host + window.location.pathname + "ppm");
         socket.onopen = function() {
             //console.log("socket open");
             if (timerId) clearInterval(timerId);
