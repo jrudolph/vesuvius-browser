@@ -3,6 +3,7 @@ package net.virtualvoid.vesuvius
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
 
+import scala.concurrent.Future
 import scala.util.{ Failure, Success }
 
 object VesuviusWebMain extends App {
@@ -15,10 +16,12 @@ object VesuviusWebMain extends App {
 
   val routes = new VesuviusRoutes(appConfig).main
 
-  val server = Http().newServerAt(appConfig.host, appConfig.port).bind(routes)
-  server.onComplete {
+  val ports = Seq(appConfig.port, appConfig.port + 1)
+  // run two servers on adjacent port to allow different K8s services with different configs
+  val servers = Future.traverse(ports)(port => Http().newServerAt(appConfig.host, port).bind(routes))
+  servers.onComplete {
     case Success(s) =>
-      println(s"Server started on http:/${s.localAddress}")
+      println(s"Servers started on ${s.map(_.localAddress).mkString(", ")}")
     case Failure(ex) =>
       println(s"Server could not be started: $ex")
       system.terminate()
