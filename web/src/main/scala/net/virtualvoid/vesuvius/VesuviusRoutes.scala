@@ -54,7 +54,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       id1 <- segmentIds(FullScrollsBase, 1)
       id2 <- segmentIds(FullScrollsBase, 2)
       id3 <- segmentIds(PHercBase, 332)
-      infos <- Future.traverse(id1 ++ id2 ++ id3)(imageInfo)
+      id4 <- segmentIds(PHercBase, 1667)
+      infos <- Future.traverse(id1 ++ id2 ++ id3 ++ id4)(imageInfo)
     } yield infos.flatten.sortBy(i => (i.scroll, i.segmentId))
 
   lazy val scrollSegmentsMap: Future[Map[(Int, String), SegmentReference]] =
