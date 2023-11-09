@@ -21,7 +21,9 @@ object SegmentReference {
 }
 
 sealed trait ScrollServerBase extends Product {
-  def baseUrl(scroll: Int): String
+  def scrollUrl(scroll: Int): String
+
+  def baseUrl(scroll: Int): String = s"${scrollUrl(scroll)}/paths/"
   def segmentUrl(segment: SegmentReference): String =
     s"${baseUrl(segment.scroll)}${segment.segmentId}/"
 
@@ -30,23 +32,18 @@ sealed trait ScrollServerBase extends Product {
 }
 
 case object FullScrollsBase extends ScrollServerBase {
-  def baseUrl(scroll: Int): String =
-    s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/paths/"
+
+  def scrollUrl(scroll: Int): String =
+    s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/"
 }
 
 case object PHercBase extends ScrollServerBase {
-  def baseUrl(scroll: Int): String =
-    f"http://dl.ash2txt.org/full-scrolls/PHerc$scroll%04d.volpkg/paths/"
+  def scrollUrl(scroll: Int): String =
+    f"http://dl.ash2txt.org/full-scrolls/PHerc$scroll%04d.volpkg/"
 
   override def layerUrl(segment: SegmentReference, z: Int): String =
     f"${segmentUrl(segment)}layers/$z%03d.tif"
 }
-
-case object HariSeldonUploadsBase extends ScrollServerBase {
-  def baseUrl(scroll: Int): String =
-    s"http://dl.ash2txt.org/hari-seldon-uploads/team-finished-paths/scroll$scroll/"
-}
-
 case class ImageInfo(
     ref:    SegmentReference,
     width:  Int,
