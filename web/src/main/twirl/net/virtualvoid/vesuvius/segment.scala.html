@@ -290,19 +290,23 @@ viewer.addHandler('open', function() {
         }
     }
     var timerId;
+    var num = 0;
     function connectSocket() {
+        num += 1;
+        var thisnum = num;
+        console.log("trying to create socket", thisnum);
         var socket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + window.location.pathname + "ppm");
         socket.onopen = function() {
-            //console.log("socket open");
+            console.log("socket open", thisnum);
             if (timerId) clearInterval(timerId);
 
             socket.onclose = function() {
-                //console.log("socket closed");
+                console.log("socket closed", thisnum);
                 if (timerId) clearInterval(timerId);
                 timerId = setInterval(() => { connectSocket(); }, 3000);
             };
             socket.onerror = function() {
-                console.log("socket error");
+                console.log("socket error", thisnum);
                 socket.close();
             };
             socket.onmessage = handleMessage;
