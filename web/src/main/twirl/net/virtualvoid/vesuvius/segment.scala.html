@@ -197,6 +197,8 @@ var ppmSocket;
 
 var positionEl = document.querySelectorAll('.info .position')[0];
 
+var traceWS = false;
+
 viewer.addHandler('open', function() {
     var lastRequest = {u:0, v:0};
     var lastResponse = {x:0, y:0, z:0};
@@ -295,19 +297,19 @@ viewer.addHandler('open', function() {
     function connectSocket() {
         num += 1;
         var thisnum = num;
-        console.log("trying to create socket", thisnum);
+        if (traceWS) console.log("trying to create socket", thisnum);
         var socket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + window.location.pathname + "ppm");
         socket.onopen = function() {
-            console.log("socket open", thisnum);
+            if (traceWS) console.log("socket open", thisnum);
             if (timerId) clearInterval(timerId);
 
             socket.onclose = function() {
-                console.log("socket closed", thisnum);
+                if (traceWS) console.log("socket closed", thisnum);
                 if (timerId) clearInterval(timerId);
                 timerId = setInterval(() => { connectSocket(); }, 3000);
             };
             socket.onerror = function() {
-                console.log("socket error", thisnum);
+                if (traceWS) console.log("socket error", thisnum);
                 socket.close();
             };
             socket.onmessage = handleMessage;
