@@ -1,6 +1,8 @@
 package net.virtualvoid.vesuvius
 
-case class SegmentReference(scroll: Int, segmentId: String, base: ScrollServerBase) {
+case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
+  def scroll: Int = scrollRef.scroll
+  def base: ScrollServerBase = scrollRef.base
   def baseUrl: String = base.segmentUrl(this)
 
   def layerUrl(z: Int): String = base.layerUrl(this, z)
@@ -9,21 +11,36 @@ object SegmentReference {
   import spray.json._
   import DefaultJsonProtocol._
 
-  implicit val scrollServerBaseFormat: JsonFormat[ScrollServerBase] =
-    new JsonFormat[ScrollServerBase] {
+  implicit val scrollServerBaseFormat: RootJsonFormat[ScrollServerBase] =
+    new RootJsonFormat[ScrollServerBase] {
       def write(obj: ScrollServerBase): JsValue = JsString(obj.productPrefix)
       def read(json: JsValue): ScrollServerBase = json.convertTo[String] match {
         case "FullScrollsBase" => FullScrollsBase
         case "PHercBase"       => PHercBase
       }
     }
-  implicit val segmentReferenceFormat: JsonFormat[SegmentReference] = jsonFormat3(SegmentReference.apply)
+  implicit val scrollReferenceFormat: RootJsonFormat[ScrollReference] = jsonFormat2(ScrollReference.apply)
+  implicit val segmentReferenceFormat: RootJsonFormat[SegmentReference] = jsonFormat2(SegmentReference.apply)
+}
+
+case class ScrollReference(scroll: Int, base: ScrollServerBase) {
+  def baseUrl: String = base.baseUrl(scroll)
+  def scrollUrl: String = base.scrollUrl(scroll)
+}
+
+object ScrollReference {
+  val scrolls: Seq[ScrollReference] = Seq(
+    ScrollReference(1, FullScrollsBase),
+    ScrollReference(2, FullScrollsBase),
+    ScrollReference(332, PHercBase),
+    ScrollReference(1667, PHercBase)
+  )
 }
 
 sealed trait ScrollServerBase extends Product {
   def scrollUrl(scroll: Int): String
 
-  def baseUrl(scroll: Int): String = s"${scrollUrl(scroll)}/paths/"
+  def baseUrl(scroll: Int): String = s"${scrollUrl(scroll)}paths/"
   def segmentUrl(segment: SegmentReference): String =
     s"${baseUrl(segment.scroll)}${segment.segmentId}/"
 

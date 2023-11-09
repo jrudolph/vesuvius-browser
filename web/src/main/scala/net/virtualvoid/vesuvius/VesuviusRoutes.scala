@@ -51,11 +51,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   lazy val scrollSegments: Future[Seq[ImageInfo]] =
     for {
-      id1 <- segmentIds(FullScrollsBase, 1)
-      id2 <- segmentIds(FullScrollsBase, 2)
-      id3 <- segmentIds(PHercBase, 332)
-      id4 <- segmentIds(PHercBase, 1667)
-      infos <- Future.traverse(id1 ++ id2 ++ id3 ++ id4)(imageInfo)
+      ids <- Future.traverse(ScrollReference.scrolls)(segmentIds)
+      infos <- Future.traverse(ids.flatten)(imageInfo)
     } yield infos.flatten.sortBy(i => (i.scroll, i.segmentId))
 
   lazy val scrollSegmentsMap: Future[Map[(Int, String), SegmentReference]] =
@@ -403,9 +400,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .transform(x => Success(x.toOption))
   }
 
-  def segmentIds(base: ScrollServerBase, scroll: Int): Future[Seq[SegmentReference]] =
-    segmentIds(base.baseUrl(scroll), new File(config.dataDir, s"raw/scroll$scroll/${base}-path-listing.html"))
-      .map(_.map(id => SegmentReference(scroll, id, base)))
+  def segmentIds(scroll: ScrollReference): Future[Seq[SegmentReference]] =
+    segmentIds(scroll.baseUrl, new File(config.dataDir, s"raw/scroll${scroll.scroll}/${scroll.base}-path-listing.html"))
+      .map(_.map(segment => SegmentReference(scroll, segment)))
 
   val LinkR = """.*href="(.*)/".*""".r
   def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
