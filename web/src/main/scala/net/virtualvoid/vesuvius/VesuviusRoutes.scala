@@ -128,7 +128,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   }
                 )
               },
-              path("ppm") {
+              (path("ppm") & withRequestTimeout(10.minutes)) {
                 println(s"at ppm for $segment")
                 val ppmFile = targetFileForInput(segment, DownSampleU16_2Input)
                 if (ppmFile.exists()) {
@@ -150,6 +150,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                           //println(res)
                           TextMessage(res)
                       }
+                      .keepAlive(30.second, () => TextMessage("ping"))
                   )
                 } else reject
               },

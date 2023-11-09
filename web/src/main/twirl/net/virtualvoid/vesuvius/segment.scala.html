@@ -272,6 +272,7 @@ viewer.addHandler('open', function() {
         }
     });
     function handleMessage(event) {
+        if (event.data == "ping") return;
         //console.log(event.data, clickPosition, lastClickPosition);
         //var data = JSON.parse(event.data);
         var els = event.data.split(',')
