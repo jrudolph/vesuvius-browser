@@ -23,10 +23,11 @@ object SegmentReference {
   implicit val segmentReferenceFormat: RootJsonFormat[SegmentReference] = jsonFormat2(SegmentReference.apply)
 }
 
-case class ScrollReference(scroll: Int, base: ScrollServerBase, volumeId: String) {
+case class ScrollReference(scroll: Int, base: ScrollServerBase, defaultVolumeId: String) {
   def baseUrl: String = base.baseUrl(scroll)
   def scrollUrl: String = base.scrollUrl(scroll)
-  def volumeMetadataUrl: String = s"$scrollUrl/volumes/$volumeId/meta.json"
+  def volumeMetadataUrl(volumeId: String): String = s"${volumeUrl(volumeId)}meta.json"
+  def volumeUrl(volumeId: String): String = s"${scrollUrl}volumes/$volumeId/"
 }
 
 object ScrollReference {
