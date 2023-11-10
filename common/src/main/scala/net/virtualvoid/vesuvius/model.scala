@@ -19,21 +19,22 @@ object SegmentReference {
         case "PHercBase"       => PHercBase
       }
     }
-  implicit val scrollReferenceFormat: RootJsonFormat[ScrollReference] = jsonFormat2(ScrollReference.apply)
+  implicit val scrollReferenceFormat: RootJsonFormat[ScrollReference] = jsonFormat3(ScrollReference.apply)
   implicit val segmentReferenceFormat: RootJsonFormat[SegmentReference] = jsonFormat2(SegmentReference.apply)
 }
 
-case class ScrollReference(scroll: Int, base: ScrollServerBase) {
+case class ScrollReference(scroll: Int, base: ScrollServerBase, volumeId: String) {
   def baseUrl: String = base.baseUrl(scroll)
   def scrollUrl: String = base.scrollUrl(scroll)
+  def volumeMetadataUrl: String = s"$scrollUrl/volumes/$volumeId/meta.json"
 }
 
 object ScrollReference {
   val scrolls: Seq[ScrollReference] = Seq(
-    ScrollReference(1, FullScrollsBase),
-    ScrollReference(2, FullScrollsBase),
-    ScrollReference(332, PHercBase),
-    ScrollReference(1667, PHercBase)
+    ScrollReference(1, FullScrollsBase, "20230205180739"),
+    ScrollReference(2, FullScrollsBase, "20230210143520"),
+    ScrollReference(332, PHercBase, "20230210143520"),
+    ScrollReference(1667, PHercBase, "20231027191953")
   )
 
   def byId(id: Int): Option[ScrollReference] =
