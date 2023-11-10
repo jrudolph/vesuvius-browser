@@ -13,7 +13,7 @@ case class AppConfig(
     serverKey:          String,
     dataDir:            File,
     concurrentResizes:  Int
-)
+) extends DataServerConfig
 
 object AppConfig {
   def fromConfig(config: Config): AppConfig = {

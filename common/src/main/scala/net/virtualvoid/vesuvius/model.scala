@@ -35,6 +35,9 @@ object ScrollReference {
     ScrollReference(332, PHercBase),
     ScrollReference(1667, PHercBase)
   )
+
+  def byId(id: Int): Option[ScrollReference] =
+    scrolls.find(_.scroll == id)
 }
 
 sealed trait ScrollServerBase extends Product {
