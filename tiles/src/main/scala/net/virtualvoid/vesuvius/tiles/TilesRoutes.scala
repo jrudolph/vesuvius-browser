@@ -5,16 +5,17 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.model.headers.ByteRange
-import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, Multipart, headers }
+import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, HttpResponse, Multipart, headers }
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
+import org.apache.pekko.stream.scaladsl.{ Sink, Source }
 import org.apache.pekko.util.ByteString
 import spray.json.*
 
 import java.awt.image.BufferedImage
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
-import scala.concurrent.Future
+import scala.concurrent.{ Future, Promise }
 import scala.util.Success
 
 case class VolumeMetadata(
@@ -76,6 +77,22 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     )(() => createBlock128x16(scroll, metadata, target, x, y, z))
   }
 
+  val queue =
+    Source.queue[(HttpRequest, Promise[HttpResponse])](20000)
+      .mapAsyncUnordered(2000) {
+        case (request, promise) =>
+          Http().singleRequest(request).onComplete(promise.complete)
+          promise.future
+      }
+      .to(Sink.ignore)
+      .run()
+
+  def queueRequest(request: HttpRequest): Future[HttpResponse] = {
+    val promise = Promise[HttpResponse]()
+    queue.offer(request -> promise)
+    promise.future
+  }
+
   def createBlock128x16(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int): Future[File] = {
     def downloadLayerSlice(z: Int): Future[Array[Byte]] = {
       val rangeStarts =
@@ -92,7 +109,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         val request =
           HttpRequest(HttpMethods.GET, uri = f"${scroll.volumeUrl(meta.uuid)}$z%05d.tif", headers = Seq(rangeHeader, downloadUtils.auth))
 
-        Http().singleRequest(request).flatMap { response =>
+        queueRequest(request).flatMap { response =>
           Unmarshal(response).to[Multipart.ByteRanges].flatMap { ranges =>
             ranges.parts
               .flatMapConcat(_.entity.dataBytes)
