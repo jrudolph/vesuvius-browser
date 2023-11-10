@@ -112,7 +112,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
     def writeBlock(slices: Seq[Array[Byte]]): File = {
       println(s"Writing block $x $y $z")
-      val tmp = File.createTempFile(".tmp.block", ".bin")
+      target.getParentFile.mkdirs()
+      val tmp = File.createTempFile(".tmp.block", ".bin", target.getParentFile)
       val fos = new BufferedOutputStream(new FileOutputStream(tmp))
 
       var i = 0
