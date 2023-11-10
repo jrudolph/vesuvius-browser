@@ -41,4 +41,4 @@ EXPOSE 8095/tcp
 
 WORKDIR /
 
-CMD ["java", "-javaagent:jmx_prometheus_javaagent-0.16.1.jar=9001:config.yaml", "-cp", "/app.jar:/deps.jar", "net.virtualvoid.vesuvius.TilesMain"]
+CMD ["java", "-javaagent:jmx_prometheus_javaagent-0.16.1.jar=9001:config.yaml", "-cp", "/app.jar:/deps.jar", "net.virtualvoid.vesuvius.tiles.TilesMain"]
