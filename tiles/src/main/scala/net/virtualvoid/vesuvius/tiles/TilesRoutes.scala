@@ -102,7 +102,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         }
       }
 
-      Future.traverse(ranges.grouped(64))(requestRanges)
+      Future.traverse(ranges.grouped(128 / config.requestsPerLayer))(requestRanges)
         //.flatMap(x => requestRanges(x.toSeq))
         .map(_.foldLeft(ByteString.empty)(_ ++ _).toArray)
         .map { u16a =>
