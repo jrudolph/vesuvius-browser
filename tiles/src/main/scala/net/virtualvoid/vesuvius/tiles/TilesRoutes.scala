@@ -127,7 +127,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         }
     }
 
-    def writeBlock(slices: Seq[Array[Byte]]): File = {
+    def writeBlock(data: (Int, Int, Int) => Int): File = {
       println(s"Writing block $x $y $z")
       target.getParentFile.mkdirs()
       val tmp = File.createTempFile(".tmp.block", ".bin", target.getParentFile)
@@ -148,7 +148,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         val y = by * 16 + py
         val z = bz * 16 + pz
 
-        fos.write(slices(z)(y * 128 + x))
+        fos.write(data(x, y, z))
         i += 1
       }
 
@@ -164,22 +164,10 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
           println(s"Got slice $i from $x $y $z")
           data
         }
-    ).map(writeBlock)
-    /*.onComplete {
-        case Success(bufs) =>
-          val buf = bufs(0)
-          println(buf.size)
-          val image = new BufferedImage(256, 256, BufferedImage.TYPE_INT_ARGB)
-          for {
-            y <- 0 until 256
-            x <- 0 until 256
-          } {
-            val value = buf(y * 256 + x) & 0xff
-            image.setRGB(x, y, 0xff000000 | (value << 16) | (value << 8) | (value << 0))
-          }
-          javax.imageio.ImageIO.write(image, "png", new File(s"test-image.png"))
+    ).map { slices =>
+      writeBlock { (x, y, z) =>
+        slices(z)(y * 128 + x)
       }
-
-    ???*/
+    }
   }
 }
