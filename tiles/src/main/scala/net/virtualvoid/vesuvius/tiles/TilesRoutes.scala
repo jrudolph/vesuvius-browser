@@ -52,8 +52,6 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
             path("download" / "128-16") {
               parameter("x".as[Int], "y".as[Int], "z".as[Int]) { (x, y, z) =>
                 block128x16(scroll, meta, x, y, z).deliver
-                /*
-                complete("Hello")*/
               }
             }
           )
@@ -145,6 +143,11 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     }
   }
   def createBlock128x16FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int): Future[File] = {
+    val gridZSpacing = meta.uuid match {
+      case "20231027191953" => 500262
+      case "20230205180739" => 500147
+    }
+
     def grid(i: Int): Int = (i * 128) / 500 + 1
     def gridEnd(i: Int): Int = ((i * 128) + 127) / 500 + 1
 
@@ -183,8 +186,12 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
           val ty = globalY % 500
           val tz = globalZ % 500
 
-          val offset = 500262 * tz + (ty * 500 + tx) * 2
+          val offset = gridZSpacing * tz + (ty * 500 + tx) * 2
 
+          /*val u16 = data.get(offset) & 0xff |
+            (data.get(offset + 1) & 0xff) << 8
+
+          ((u16 - 0x5000).max(0) / 0x90).min(255)*/
           data.get(offset + 1) & 0xff
         }
       println(s"Writing block $x $y $z done")
