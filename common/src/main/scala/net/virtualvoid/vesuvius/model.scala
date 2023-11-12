@@ -28,6 +28,7 @@ case class ScrollReference(scroll: Int, base: ScrollServerBase, defaultVolumeId:
   def scrollUrl: String = base.scrollUrl(scroll)
   def volumeMetadataUrl(volumeId: String): String = s"${volumeUrl(volumeId)}meta.json"
   def volumeUrl(volumeId: String): String = s"${scrollUrl}volumes/$volumeId/"
+  def volumeGridUrl(volumeId: String): String = s"${scrollUrl}volume_grids/$volumeId/"
 }
 
 object ScrollReference {

@@ -12,3 +12,4 @@ Dockerfile
 /*.svg
 /.idea
 /.bsp
+/*.ckpt

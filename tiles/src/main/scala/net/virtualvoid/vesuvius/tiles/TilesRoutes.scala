@@ -2,6 +2,7 @@ package net.virtualvoid.vesuvius
 package tiles
 
 import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.model.headers.ByteRange
@@ -74,7 +75,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${metadata.uuid}/128-16/z$z%03d/xyz-$x%03d-$y%03d-$z%03d.bin")
     downloadUtils.cached(
       target
-    )(() => createBlock128x16(scroll, metadata, target, x, y, z))
+    )(() => createBlock128x16FromGrid(scroll, metadata, target, x, y, z))
   }
 
   val queue =
@@ -127,37 +128,6 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         }
     }
 
-    def writeBlock(data: (Int, Int, Int) => Int): File = {
-      println(s"Writing block $x $y $z")
-      target.getParentFile.mkdirs()
-      val tmp = File.createTempFile(".tmp.block", ".bin", target.getParentFile)
-      val fos = new BufferedOutputStream(new FileOutputStream(tmp))
-
-      var i = 0
-      while (i < 128 * 128 * 128) {
-        // 2^21 = 2097152, 2^12 = 4096, numBlocks = 512 = 2^9, 8 blocks in each direction
-        val bz = i >> 18
-        val by = (i >> 15) & 0x7
-        val bx = (i >> 12) & 0x7
-
-        val pz = (i >> 8) & 0xf
-        val py = (i >> 4) & 0xf
-        val px = i & 0xf
-
-        val x = bx * 16 + px
-        val y = by * 16 + py
-        val z = bz * 16 + pz
-
-        fos.write(data(x, y, z))
-        i += 1
-      }
-
-      fos.close()
-      println(s"Writing block $x $y $z done")
-      tmp.renameTo(target)
-      target
-    }
-
     Future.traverse(0 until 128)(i =>
       downloadLayerSlice(z * 128 + i)
         .map { data =>
@@ -165,9 +135,101 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
           data
         }
     ).map { slices =>
-      writeBlock { (x, y, z) =>
-        slices(z)(y * 128 + x)
-      }
+      println(s"Writing block $x $y $z")
+      val res =
+        writeBlock(target) { (x, y, z) =>
+          slices(z)(y * 128 + x)
+        }
+      println(s"Writing block $x $y $z done")
+      res
     }
+  }
+  def createBlock128x16FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int): Future[File] = {
+    def grid(i: Int): Int = (i * 128) / 500 + 1
+    def gridEnd(i: Int): Int = ((i * 128) + 127) / 500 + 1
+
+    val gridFilesNeeded: Seq[(Int, Int, Int)] =
+      for {
+        gx <- grid(x) to gridEnd(x)
+        gy <- grid(y) to gridEnd(y)
+        gz <- grid(z) to gridEnd(z)
+      } yield (gx, gy, gz)
+
+    val files =
+      Future.traverse(gridFilesNeeded) {
+        case id @ (gx, gy, gz) =>
+          tileFor(scroll, meta, gx, gy, gz)
+            .map { target =>
+              val raf = new java.io.RandomAccessFile(target, "r")
+              val mmap = raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
+              id -> mmap
+            }
+      }.map(_.toMap)
+
+    files.map { gridMap =>
+      println(s"Writing block $x $y $z")
+      val res =
+        writeBlock(target) { (lx, ly, lz) =>
+          val globalX = x * 128 + lx
+          val globalY = y * 128 + ly
+          val globalZ = z * 128 + lz
+
+          val gx = globalX / 500 + 1
+          val gy = globalY / 500 + 1
+          val gz = globalZ / 500 + 1
+
+          val data = gridMap((gx, gy, gz))
+          val tx = globalX % 500
+          val ty = globalY % 500
+          val tz = globalZ % 500
+
+          val offset = 500262 * tz + (ty * 500 + tx) * 2
+
+          data.get(offset + 1) & 0xff
+        }
+      println(s"Writing block $x $y $z done")
+      res
+    }
+  }
+
+  lazy val TileCache = LfuCache[(ScrollReference, String, Int, Int, Int), File]
+  def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
+    TileCache.getOrLoad((scroll, meta.uuid, gx, gy, gz), _ => {
+      val url = f"${scroll.volumeGridUrl(meta.uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif"
+      val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${meta.uuid}/grid/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif")
+      downloadUtils.cacheDownload(
+        url,
+        target,
+        ttlSeconds = 5L * 365 * 24 * 3600
+      )
+    })
+
+  def writeBlock(target: File)(data: (Int, Int, Int) => Int): File = {
+    target.getParentFile.mkdirs()
+    val tmp = File.createTempFile(".tmp.block", ".bin", target.getParentFile)
+    val fos = new BufferedOutputStream(new FileOutputStream(tmp))
+
+    var i = 0
+    while (i < 128 * 128 * 128) {
+      // 2^21 = 2097152, 2^12 = 4096, numBlocks = 512 = 2^9, 8 blocks in each direction
+      val bz = i >> 18
+      val by = (i >> 15) & 0x7
+      val bx = (i >> 12) & 0x7
+
+      val pz = (i >> 8) & 0xf
+      val py = (i >> 4) & 0xf
+      val px = i & 0xf
+
+      val x = bx * 16 + px
+      val y = by * 16 + py
+      val z = bz * 16 + pz
+
+      fos.write(data(x, y, z))
+      i += 1
+    }
+
+    fos.close()
+    tmp.renameTo(target)
+    target
   }
 }
