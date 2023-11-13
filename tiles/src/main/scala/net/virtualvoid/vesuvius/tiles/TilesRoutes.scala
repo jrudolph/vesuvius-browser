@@ -207,7 +207,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
     TileCache.getOrLoad((scroll, meta.uuid, gx, gy, gz), _ => {
       val url = f"${scroll.volumeGridUrl(meta.uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif"
-      val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${meta.uuid}/grid/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif")
+      val target = new File(config.dataDir, f"grid/scroll${scroll.scroll}/${meta.uuid}/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif")
       downloadUtils.cacheDownload(
         url,
         target,
