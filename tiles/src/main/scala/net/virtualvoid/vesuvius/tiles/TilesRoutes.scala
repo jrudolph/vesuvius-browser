@@ -6,7 +6,7 @@ import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.model.headers.ByteRange
-import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, HttpResponse, Multipart, headers }
+import org.apache.pekko.http.scaladsl.model.*
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
@@ -14,10 +14,8 @@ import org.apache.pekko.stream.scaladsl.{ Sink, Source }
 import org.apache.pekko.util.ByteString
 import spray.json.*
 
-import java.awt.image.BufferedImage
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
 import scala.concurrent.{ Future, Promise }
-import scala.util.Success
 
 case class VolumeMetadata(
     name:      String,
@@ -30,7 +28,7 @@ case class VolumeMetadata(
     max:       Double,
     voxelsize: Double)
 object VolumeMetadata {
-  import DefaultJsonProtocol._
+  import DefaultJsonProtocol.*
   implicit val format: RootJsonFormat[VolumeMetadata] = jsonFormat9(apply)
 }
 
@@ -50,8 +48,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
               complete(meta)
             },
             path("download" / "128-16") {
-              parameter("x".as[Int], "y".as[Int], "z".as[Int]) { (x, y, z) =>
-                block128x16(scroll, meta, x, y, z).deliver
+              parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
+                block128x16(scroll, meta, x, y, z, bitmask, downsampling).deliver
               }
             }
           )
@@ -61,20 +59,25 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   lazy val Scroll = IntNumber.flatMap(ScrollReference.byId)
 
+  val MetadataCache = LfuCache[(ScrollReference, String), VolumeMetadata]
   def metadataForVolume(scroll: ScrollReference, volumeId: String): Future[VolumeMetadata] =
-    downloadUtils.cacheDownload(
-      scroll.volumeMetadataUrl(volumeId),
-      new File(config.dataDir, s"metadata/${scroll.scroll}-${volumeId}.json")
-    ).map { metadata =>
-        scala.io.Source.fromFile(metadata).mkString.parseJson.convertTo[VolumeMetadata]
-      }
+    MetadataCache.getOrLoad((scroll, volumeId), { _ =>
+      downloadUtils.cacheDownload(
+        scroll.volumeMetadataUrl(volumeId),
+        new File(config.dataDir, s"metadata/${scroll.scroll}-${volumeId}.json")
+      ).map { metadata =>
+          scala.io.Source.fromFile(metadata).mkString.parseJson.convertTo[VolumeMetadata]
+        }
+    })
 
-  def block128x16(scroll: ScrollReference, metadata: VolumeMetadata, x: Int, y: Int, z: Int): Future[File] = {
-    val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${metadata.uuid}/128-16/z$z%03d/xyz-$x%03d-$y%03d-$z%03d.bin")
-    downloadUtils.cached(
-      target
-    )(() => createBlock128x16FromGrid(scroll, metadata, target, x, y, z))
-  }
+  val BlockCache = LfuCache[(ScrollReference, String, Int, Int, Int, Int, Int), File]
+  def block128x16(scroll: ScrollReference, metadata: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
+    BlockCache.getOrLoad((scroll, metadata.uuid, x, y, z, bitmask, downsampling), _ => {
+      val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${metadata.uuid}/128-16/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin")
+      downloadUtils.cached(
+        target
+      )(() => createBlock128x16FromGrid(scroll, metadata, target, x, y, z, bitmask, downsampling))
+    })
 
   val queue =
     Source.queue[(HttpRequest, Promise[HttpResponse])](20000)
@@ -135,21 +138,22 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     ).map { slices =>
       println(s"Writing block $x $y $z")
       val res =
-        writeBlock(target) { (x, y, z) =>
+        writeBlock(target, 1) { (x, y, z) =>
           slices(z)(y * 128 + x)
         }
       println(s"Writing block $x $y $z done")
       res
     }
   }
-  def createBlock128x16FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int): Future[File] = {
+
+  def createBlock128x16FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
     val gridZSpacing = meta.uuid match {
       case "20231027191953" => 500262
       case "20230205180739" => 500147
     }
 
-    def grid(i: Int): Int = (i * 128) / 500 + 1
-    def gridEnd(i: Int): Int = ((i * 128) + 127) / 500 + 1
+    def grid(i: Int): Int = (i * downsampling * 128) / 500 + 1
+    def gridEnd(i: Int): Int = (((i * downsampling + downsampling) * 128) - 1) / 500 + 1
 
     val gridFilesNeeded: Seq[(Int, Int, Int)] =
       for {
@@ -172,10 +176,10 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     files.map { gridMap =>
       println(s"Writing block $x $y $z")
       val res =
-        writeBlock(target) { (lx, ly, lz) =>
-          val globalX = x * 128 + lx
-          val globalY = y * 128 + ly
-          val globalZ = z * 128 + lz
+        writeBlock(target, downsampling) { (lx, ly, lz) =>
+          val globalX = (x * 128 + lx) * downsampling
+          val globalY = (y * 128 + ly) * downsampling
+          val globalZ = (z * 128 + lz) * downsampling
 
           val gx = globalX / 500 + 1
           val gy = globalY / 500 + 1
@@ -192,7 +196,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
             (data.get(offset + 1) & 0xff) << 8
 
           ((u16 - 0x5000).max(0) / 0x90).min(255)*/
-          data.get(offset + 1) & 0xff
+          data.get(offset + 1) & bitmask
         }
       println(s"Writing block $x $y $z done")
       res
@@ -211,7 +215,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       )
     })
 
-  def writeBlock(target: File)(data: (Int, Int, Int) => Int): File = {
+  def writeBlock(target: File, downsampling: Int)(data: (Int, Int, Int) => Int): File = {
     target.getParentFile.mkdirs()
     val tmp = File.createTempFile(".tmp.block", ".bin", target.getParentFile)
     val fos = new BufferedOutputStream(new FileOutputStream(tmp))
@@ -231,7 +235,9 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       val y = by * 16 + py
       val z = bz * 16 + pz
 
-      fos.write(data(x, y, z))
+      val value = data(x, y, z)
+      fos.write(value)
+
       i += 1
     }
 
