@@ -10,7 +10,7 @@ import org.apache.pekko.stream.scaladsl.{ FileIO, Keep, Sink, Source }
 import java.io.File
 import scala.concurrent.{ Future, Promise }
 import scala.concurrent.duration.*
-import scala.util.Success
+import scala.util.{ Failure, Success }
 
 trait DataServerConfig {
   def dataServerUsername: String
@@ -119,7 +119,12 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
         .toMat(Sink.ignore)(Keep.both)
         .run()
 
-    res.onComplete(res => println(s"Semaphore queue stopped: $res"))
+    res.onComplete {
+      case Success(_) => println("Semaphore stopped")
+      case Failure(t) =>
+        println(s"Semaphore stopped with failure: $t")
+        t.printStackTrace()
+    }
 
     t => {
       val promise = Promise[U]()
