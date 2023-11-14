@@ -79,22 +79,6 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   def block64x4(scroll: ScrollReference, metadata: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
     BlockCache((scroll, metadata, x, y, z, bitmask, downsampling))
 
-  val queue =
-    Source.queue[(HttpRequest, Promise[HttpResponse])](20000)
-      .mapAsyncUnordered(2000) {
-        case (request, promise) =>
-          Http().singleRequest(request).onComplete(promise.complete)
-          promise.future
-      }
-      .to(Sink.ignore)
-      .run()
-
-  def queueRequest(request: HttpRequest): Future[HttpResponse] = {
-    val promise = Promise[HttpResponse]()
-    queue.offer(request -> promise)
-    promise.future
-  }
-
   def createBlock64x4FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
     val gridZSpacing = meta.uuid match {
       case "20230205180739" => 500147 // scroll 1
@@ -158,7 +142,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   lazy val TileCache = downloadUtils.downloadCache[(ScrollReference, String, Int, Int, Int)](
     { case (scroll, uuid, gx, gy, gz) => f"${scroll.volumeGridUrl(uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif" },
     { case (scroll, uuid, gx, gy, gz) => new File(config.dataDir, f"grid/scroll${scroll.scroll}/$uuid/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif") },
-    ttlSeconds = 5L * 365 * 24 * 3600
+    ttlSeconds = 5L * 365 * 24 * 3600,
+    maxConcurrentRequests = config.maxConcurrentGridRequests
   )
   def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
     TileCache((scroll, meta.uuid, gx, gy, gz))

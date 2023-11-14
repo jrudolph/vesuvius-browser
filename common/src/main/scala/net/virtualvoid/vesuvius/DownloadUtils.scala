@@ -4,10 +4,10 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, headers }
-import org.apache.pekko.stream.scaladsl.FileIO
+import org.apache.pekko.stream.scaladsl.{ FileIO, Sink, Source }
 
 import java.io.File
-import scala.concurrent.Future
+import scala.concurrent.{ Future, Promise }
 
 trait DataServerConfig {
   def dataServerUsername: String
@@ -25,10 +25,11 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     t => cache.getOrLoad(t, _ => cached(filePattern(t), ttlSeconds, negTtlSeconds, isValid)(() => compute(t)))
   }
 
-  def downloadCache[T](urlPattern: T => String, filePattern: T => File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true): T => Future[File] =
-    computeCache(filePattern, ttlSeconds, negTtlSeconds, isValid) { t =>
-      download(urlPattern(t), filePattern(t))
-    }
+  def downloadCache[T](urlPattern: T => String, filePattern: T => File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true, maxConcurrentRequests: Int = 16): T => Future[File] = {
+    val limited = semaphore[T, File](maxConcurrentRequests)(t => download(urlPattern(t), filePattern(t)))
+    computeCache(filePattern, ttlSeconds, negTtlSeconds, isValid)(limited)
+  }
+
   def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
     cached(to, ttlSeconds, negTtlSeconds) { () => download(url, to) }
   def cached(to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: () => Future[File]): Future[File] = {
@@ -56,5 +57,23 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
         res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
       }
       .map { _ => tmpFile.renameTo(to); to }
+  }
+
+  def semaphore[T, U](numRequests: Int, queueLength: Int = 1000)(f: T => Future[U]): T => Future[U] = {
+    val queue =
+      Source.queue[(T, Promise[U])](queueLength)
+        .mapAsyncUnordered(numRequests) {
+          case (t, promise) =>
+            f(t).onComplete(promise.complete)
+            promise.future
+        }
+        .to(Sink.ignore)
+        .run()
+
+    t => {
+      val promise = Promise[U]()
+      queue.offer(t -> promise)
+      promise.future
+    }
   }
 }
