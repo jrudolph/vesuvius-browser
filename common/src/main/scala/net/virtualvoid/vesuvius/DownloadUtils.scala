@@ -1,6 +1,7 @@
 package net.virtualvoid.vesuvius
 
 import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, headers }
 import org.apache.pekko.stream.scaladsl.FileIO
@@ -19,9 +20,17 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   val DefaultPositiveTtl = 3600 * 24 * 365
   val DefaultNegativeTtl = 7200
 
+  def computeCache[T](filePattern: T => File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(compute: T => Future[File]): T => Future[File] = {
+    val cache = LfuCache[T, File]
+    t => cache.getOrLoad(t, _ => cached(filePattern(t), ttlSeconds, negTtlSeconds, isValid)(() => compute(t)))
+  }
+
+  def downloadCache[T](urlPattern: T => String, filePattern: T => File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true): T => Future[File] =
+    computeCache(filePattern, ttlSeconds, negTtlSeconds, isValid) { t =>
+      download(urlPattern(t), filePattern(t))
+    }
   def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
     cached(to, ttlSeconds, negTtlSeconds) { () => download(url, to) }
-
   def cached(to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: () => Future[File]): Future[File] = {
     to.getParentFile.mkdirs()
     val neg = new File(to.getParentFile, s".neg-${to.getName}")
@@ -38,7 +47,6 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   }
 
   val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
-
   def download(url: String, to: File): Future[File] = {
     println(s"Downloading $url")
     val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")

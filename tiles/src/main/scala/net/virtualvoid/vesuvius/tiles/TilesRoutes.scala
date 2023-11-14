@@ -59,25 +59,25 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   lazy val Scroll = IntNumber.flatMap(ScrollReference.byId)
 
-  val MetadataCache = LfuCache[(ScrollReference, String), VolumeMetadata]
+  val MetadataCache = downloadUtils.downloadCache[(ScrollReference, String)](
+    { case (scroll, volumeId) => scroll.volumeMetadataUrl(volumeId) },
+    { case (scroll, volumeId) => new File(config.dataDir, s"metadata/${scroll.scroll}-${volumeId}.json") }
+  )
   def metadataForVolume(scroll: ScrollReference, volumeId: String): Future[VolumeMetadata] =
-    MetadataCache.getOrLoad((scroll, volumeId), { _ =>
-      downloadUtils.cacheDownload(
-        scroll.volumeMetadataUrl(volumeId),
-        new File(config.dataDir, s"metadata/${scroll.scroll}-${volumeId}.json")
-      ).map { metadata =>
-          scala.io.Source.fromFile(metadata).mkString.parseJson.convertTo[VolumeMetadata]
-        }
-    })
+    MetadataCache((scroll, volumeId))
+      .map { metadata =>
+        scala.io.Source.fromFile(metadata).mkString.parseJson.convertTo[VolumeMetadata]
+      }
 
-  val BlockCache = LfuCache[(ScrollReference, String, Int, Int, Int, Int, Int), File]
+  val BlockCache = downloadUtils.computeCache[(ScrollReference, VolumeMetadata, Int, Int, Int, Int, Int)](
+    { case (scroll, meta, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${meta.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") }
+  ) {
+      case (scroll, metadata, x, y, z, bitmask, downsampling) =>
+        val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${metadata.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: dry
+        createBlock64x4FromGrid(scroll, metadata, target, x, y, z, bitmask, downsampling)
+    }
   def block64x4(scroll: ScrollReference, metadata: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
-    BlockCache.getOrLoad((scroll, metadata.uuid, x, y, z, bitmask, downsampling), _ => {
-      val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${metadata.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin")
-      downloadUtils.cached(
-        target
-      )(() => createBlock64x4FromGrid(scroll, metadata, target, x, y, z, bitmask, downsampling))
-    })
+    BlockCache((scroll, metadata, x, y, z, bitmask, downsampling))
 
   val queue =
     Source.queue[(HttpRequest, Promise[HttpResponse])](20000)
@@ -97,8 +97,11 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   def createBlock64x4FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
     val gridZSpacing = meta.uuid match {
-      case "20231027191953" => 500262
-      case "20230205180739" => 500147
+      case "20230205180739" => 500147 // scroll 1
+      case "20230210143520" => 500147 // scroll 2 fine
+      case "20230212125146" => 500147 // scroll 2 coarse
+      case "20231027191953" => 500262 // scroll 0332
+      case "20231107190228" => 500262 // scroll 1667
     }
 
     def grid(i: Int): Int = (i * downsampling * 64) / 500 + 1
@@ -152,17 +155,13 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     }
   }
 
-  lazy val TileCache = LfuCache[(ScrollReference, String, Int, Int, Int), File]
+  lazy val TileCache = downloadUtils.downloadCache[(ScrollReference, String, Int, Int, Int)](
+    { case (scroll, uuid, gx, gy, gz) => f"${scroll.volumeGridUrl(uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif" },
+    { case (scroll, uuid, gx, gy, gz) => new File(config.dataDir, f"grid/scroll${scroll.scroll}/$uuid/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif") },
+    ttlSeconds = 5L * 365 * 24 * 3600
+  )
   def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
-    TileCache.getOrLoad((scroll, meta.uuid, gx, gy, gz), _ => {
-      val url = f"${scroll.volumeGridUrl(meta.uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif"
-      val target = new File(config.dataDir, f"grid/scroll${scroll.scroll}/${meta.uuid}/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif")
-      downloadUtils.cacheDownload(
-        url,
-        target,
-        ttlSeconds = 5L * 365 * 24 * 3600
-      )
-    })
+    TileCache((scroll, meta.uuid, gx, gy, gz))
 
   def writeBlock(target: File, downsampling: Int)(data: (Int, Int, Int) => Int): File = {
     target.getParentFile.mkdirs()
