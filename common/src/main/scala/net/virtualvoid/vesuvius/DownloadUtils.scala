@@ -5,11 +5,12 @@ import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.caching.scaladsl.{ CachingSettings, LfuCacheSettings }
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, headers }
-import org.apache.pekko.stream.scaladsl.{ FileIO, Sink, Source }
+import org.apache.pekko.stream.scaladsl.{ FileIO, Keep, Sink, Source }
 
 import java.io.File
 import scala.concurrent.{ Future, Promise }
 import scala.concurrent.duration.*
+import scala.util.Success
 
 trait DataServerConfig {
   def dataServerUsername: String
@@ -108,15 +109,17 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   }
 
   def semaphore[T, U](numRequests: Int, queueLength: Int = 1000)(f: T => Future[U]): T => Future[U] = {
-    val queue =
+    val (queue, res) =
       Source.queue[(T, Promise[U])](queueLength)
         .mapAsyncUnordered(numRequests) {
           case (t, promise) =>
             f(t).onComplete(promise.complete)
-            promise.future
+            promise.future.transform(Success(_))
         }
-        .to(Sink.ignore)
+        .toMat(Sink.ignore)(Keep.both)
         .run()
+
+    res.onComplete(res => println(s"Semaphore queue stopped: $res"))
 
     t => {
       val promise = Promise[U]()
