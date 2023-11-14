@@ -136,7 +136,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   def cleanupCacheDir(settings: CacheSettings): Unit = {
     if (settings.maxCacheSize < Long.MaxValue)
       settings.baseDirectory.foreach { dir =>
-        val files = deepFileList(dir).toVector.sortBy(_.lastModified())
+        val files = deepFileList(dir).map(x => x -> x.lastModified()).toVector.sortBy(_._2).map(_._1)
         val size = files.map(_.length()).sum
         if (size > settings.cacheHighWatermark * settings.maxCacheSize) {
           val deleteTarget = (settings.cacheLowWatermark * settings.maxCacheSize).toLong
