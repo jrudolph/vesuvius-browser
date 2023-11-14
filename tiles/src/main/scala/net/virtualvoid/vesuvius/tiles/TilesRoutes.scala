@@ -2,20 +2,13 @@ package net.virtualvoid.vesuvius
 package tiles
 
 import org.apache.pekko.actor.ActorSystem
-import org.apache.pekko.http.caching.LfuCache
-import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import org.apache.pekko.http.scaladsl.model.headers.ByteRange
-import org.apache.pekko.http.scaladsl.model.*
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
-import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
-import org.apache.pekko.stream.scaladsl.{ Sink, Source }
-import org.apache.pekko.util.ByteString
 import spray.json.*
 
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
-import scala.concurrent.{ Future, Promise }
+import scala.concurrent.Future
 
 case class VolumeMetadata(
     name:      String,
@@ -142,8 +135,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   lazy val TileCache = downloadUtils.downloadCache[(ScrollReference, String, Int, Int, Int)](
     { case (scroll, uuid, gx, gy, gz) => f"${scroll.volumeGridUrl(uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif" },
     { case (scroll, uuid, gx, gy, gz) => new File(config.dataDir, f"grid/scroll${scroll.scroll}/$uuid/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif") },
-    ttlSeconds = 5L * 365 * 24 * 3600,
-    maxConcurrentRequests = config.maxConcurrentGridRequests
+    maxConcurrentRequests = config.maxConcurrentGridRequests,
+    settings = CacheSettings.Default.copy(maxCacheSize = config.maxGridCacheSize, baseDirectory = Some(new File(config.dataDir, "grid")))
   )
   def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
     TileCache((scroll, meta.uuid, gx, gy, gz))
