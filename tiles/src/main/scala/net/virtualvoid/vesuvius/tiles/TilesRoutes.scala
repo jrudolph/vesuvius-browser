@@ -3,6 +3,7 @@ package tiles
 
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
 import spray.json.*
@@ -42,7 +43,12 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
             },
             path("download" / "64-4") {
               parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
-                block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                if (gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
+                  block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                else {
+                  block64x4(scroll, meta, x, y, z, bitmask, downsampling)
+                  complete(StatusCodes.EnhanceYourCalm)
+                }
               }
             }
           )
@@ -73,6 +79,20 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   def block64x4(scroll: ScrollReference, metadata: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
     BlockCache((scroll, metadata, x, y, z, bitmask, downsampling))
 
+  def gridFileAvailableFor(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, downsampling: Int): Boolean =
+    gridFilesNeeded(x, y, z, downsampling).map(gridFile(scroll, meta.uuid, _, _, _)).forall(_.exists())
+
+  def gridFilesNeeded(x: Int, y: Int, z: Int, downsampling: Int): Seq[(Int, Int, Int)] = {
+    def grid(i: Int): Int = (i * downsampling * 64) / 500 + 1
+    def gridEnd(i: Int): Int = (((i * downsampling + downsampling) * 64) - 1) / 500 + 1
+
+    for {
+      gx <- grid(x) to gridEnd(x)
+      gy <- grid(y) to gridEnd(y)
+      gz <- grid(z) to gridEnd(z)
+    } yield (gx, gy, gz)
+  }
+
   def createBlock64x4FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
     val gridZSpacing = meta.uuid match {
       case "20230205180739" => 500147 // scroll 1
@@ -82,18 +102,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       case "20231107190228" => 500262 // scroll 1667
     }
 
-    def grid(i: Int): Int = (i * downsampling * 64) / 500 + 1
-    def gridEnd(i: Int): Int = (((i * downsampling + downsampling) * 64) - 1) / 500 + 1
-
-    val gridFilesNeeded: Seq[(Int, Int, Int)] =
-      for {
-        gx <- grid(x) to gridEnd(x)
-        gy <- grid(y) to gridEnd(y)
-        gz <- grid(z) to gridEnd(z)
-      } yield (gx, gy, gz)
-
     val files =
-      Future.traverse(gridFilesNeeded) {
+      Future.traverse(gridFilesNeeded(x, y, z, downsampling)) {
         case id @ (gx, gy, gz) =>
           tileFor(scroll, meta, gx, gy, gz)
             .map { target =>
@@ -104,7 +114,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       }.map(_.toMap)
 
     files.map { gridMap =>
-      println(s"Writing block $x $y $z")
+      println(s"Writing block $x $y $z q$downsampling")
       val res =
         writeBlock(target, downsampling) { (lx, ly, lz) =>
           val globalX = (x * 64 + lx) * downsampling
@@ -128,14 +138,16 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
           ((u16 - 0x5000).max(0) / 0x90).min(255)*/
           data.get(offset + 1) & bitmask
         }
-      println(s"Writing block $x $y $z done")
+      println(s"Writing block $x $y $z q$downsampling done")
       res
     }
   }
+  def gridFile(scroll: ScrollReference, uuid: String, gx: Int, gy: Int, gz: Int): File =
+    new File(config.dataDir, f"grid/scroll${scroll.scroll}/$uuid/cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif")
 
-  lazy val TileCache = downloadUtils.downloadCache[(ScrollReference, String, Int, Int, Int)](
+  lazy val GridTileCache = downloadUtils.downloadCache[(ScrollReference, String, Int, Int, Int)](
     { case (scroll, uuid, gx, gy, gz) => f"${scroll.volumeGridUrl(uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif" },
-    { case (scroll, uuid, gx, gy, gz) => new File(config.dataDir, f"grid/scroll${scroll.scroll}/$uuid/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif") },
+    { case (scroll, uuid, gx, gy, gz) => gridFile(scroll, uuid, gx, gy, gz) },
     maxConcurrentRequests = config.maxConcurrentGridRequests,
     settings = CacheSettings.Default.copy(
       negTtlSeconds = 60,
@@ -146,7 +158,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     )
   )
   def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
-    TileCache((scroll, meta.uuid, gx, gy, gz))
+    GridTileCache((scroll, meta.uuid, gx, gy, gz))
 
   def writeBlock(target: File, downsampling: Int)(data: (Int, Int, Int) => Int): File = {
     target.getParentFile.mkdirs()
