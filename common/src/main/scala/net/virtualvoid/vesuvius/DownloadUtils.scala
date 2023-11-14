@@ -109,7 +109,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
   def semaphore[T, U](numRequests: Int, queueLength: Int = 1000)(f: T => Future[U]): T => Future[U] = {
     val queue =
-      Source.queue[(T, Promise[U])](queueLength)
+      LifoQueue.queue[(T, Promise[U])]()
         .mapAsyncUnordered(numRequests) {
           case (t, promise) =>
             f(t).onComplete(promise.complete)
