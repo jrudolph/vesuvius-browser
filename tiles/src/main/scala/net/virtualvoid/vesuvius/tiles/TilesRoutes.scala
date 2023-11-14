@@ -47,9 +47,9 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
             pathSingleSlash {
               complete(meta)
             },
-            path("download" / "128-16") {
+            path("download" / "64-4") {
               parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
-                block128x16(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
               }
             }
           )
@@ -71,12 +71,12 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     })
 
   val BlockCache = LfuCache[(ScrollReference, String, Int, Int, Int, Int, Int), File]
-  def block128x16(scroll: ScrollReference, metadata: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
+  def block64x4(scroll: ScrollReference, metadata: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
     BlockCache.getOrLoad((scroll, metadata.uuid, x, y, z, bitmask, downsampling), _ => {
-      val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${metadata.uuid}/128-16/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin")
+      val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${metadata.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin")
       downloadUtils.cached(
         target
-      )(() => createBlock128x16FromGrid(scroll, metadata, target, x, y, z, bitmask, downsampling))
+      )(() => createBlock64x4FromGrid(scroll, metadata, target, x, y, z, bitmask, downsampling))
     })
 
   val queue =
@@ -95,65 +95,14 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     promise.future
   }
 
-  def createBlock128x16(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int): Future[File] = {
-    def downloadLayerSlice(z: Int): Future[Array[Byte]] = {
-      val rangeStarts =
-        for {
-          i <- 0 until 128
-        } yield 8 + (meta.width * (y * 128 + i) + (x * 128)) * 2 /* u16 */
-
-      val ranges = rangeStarts.map { starts =>
-        headers.ByteRange(starts, starts + (128 * 2) /*u16*/ - 1 /* inclusive */ )
-      }
-
-      def requestRanges(ranges: Seq[ByteRange]): Future[ByteString] = {
-        val rangeHeader = headers.`Range`(ranges)
-        val request =
-          HttpRequest(HttpMethods.GET, uri = f"${scroll.volumeUrl(meta.uuid)}$z%05d.tif", headers = Seq(rangeHeader, downloadUtils.auth))
-
-        queueRequest(request).flatMap { response =>
-          Unmarshal(response).to[Multipart.ByteRanges].flatMap { ranges =>
-            ranges.parts
-              .flatMapConcat(_.entity.dataBytes)
-              .runFold(ByteString.empty)(_ ++ _)
-
-          }
-        }
-      }
-
-      Future.traverse(ranges.grouped(128 / config.requestsPerLayer))(requestRanges)
-        //.flatMap(x => requestRanges(x.toSeq))
-        .map(_.foldLeft(ByteString.empty)(_ ++ _).toArray)
-        .map { u16a =>
-          Array.tabulate[Byte](128 * 128)(i => (u16a(i * 2 + 1) & 0xff).toByte)
-        }
-    }
-
-    Future.traverse(0 until 128)(i =>
-      downloadLayerSlice(z * 128 + i)
-        .map { data =>
-          println(s"Got slice $i from $x $y $z")
-          data
-        }
-    ).map { slices =>
-      println(s"Writing block $x $y $z")
-      val res =
-        writeBlock(target, 1) { (x, y, z) =>
-          slices(z)(y * 128 + x)
-        }
-      println(s"Writing block $x $y $z done")
-      res
-    }
-  }
-
-  def createBlock128x16FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
+  def createBlock64x4FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
     val gridZSpacing = meta.uuid match {
       case "20231027191953" => 500262
       case "20230205180739" => 500147
     }
 
-    def grid(i: Int): Int = (i * downsampling * 128) / 500 + 1
-    def gridEnd(i: Int): Int = (((i * downsampling + downsampling) * 128) - 1) / 500 + 1
+    def grid(i: Int): Int = (i * downsampling * 64) / 500 + 1
+    def gridEnd(i: Int): Int = (((i * downsampling + downsampling) * 64) - 1) / 500 + 1
 
     val gridFilesNeeded: Seq[(Int, Int, Int)] =
       for {
@@ -177,9 +126,9 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       println(s"Writing block $x $y $z")
       val res =
         writeBlock(target, downsampling) { (lx, ly, lz) =>
-          val globalX = (x * 128 + lx) * downsampling
-          val globalY = (y * 128 + ly) * downsampling
-          val globalZ = (z * 128 + lz) * downsampling
+          val globalX = (x * 64 + lx) * downsampling
+          val globalY = (y * 64 + ly) * downsampling
+          val globalZ = (z * 64 + lz) * downsampling
 
           val gx = globalX / 500 + 1
           val gy = globalY / 500 + 1
@@ -221,19 +170,21 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     val fos = new BufferedOutputStream(new FileOutputStream(tmp))
 
     var i = 0
-    while (i < 128 * 128 * 128) {
+    while (i < 64 * 64 * 64) {
       // 2^21 = 2097152, 2^12 = 4096, numBlocks = 512 = 2^9, 8 blocks in each direction
-      val bz = i >> 18
-      val by = (i >> 15) & 0x7
-      val bx = (i >> 12) & 0x7
+      // 128^3 in 16^3 blocks: zzzzzzzyyyyyyyxxxxxxx -> zzzyyyxxxzzzzyyyyxxxx
+      //  64^3 in  4^3 blocks:    zzzzzzyyyyyyxxxxxx ->    zzzzyyyyxxxxzzyyxx
+      val bz = i >> 14
+      val by = (i >> 10) & 0xf
+      val bx = (i >> 6) & 0xf
 
-      val pz = (i >> 8) & 0xf
-      val py = (i >> 4) & 0xf
-      val px = i & 0xf
+      val pz = (i >> 4) & 0x3
+      val py = (i >> 2) & 0x3
+      val px = i & 0x3
 
-      val x = bx * 16 + px
-      val y = by * 16 + py
-      val z = bz * 16 + pz
+      val x = bx * 4 + px
+      val y = by * 4 + py
+      val z = bz * 4 + pz
 
       val value = data(x, y, z)
       fos.write(value)
