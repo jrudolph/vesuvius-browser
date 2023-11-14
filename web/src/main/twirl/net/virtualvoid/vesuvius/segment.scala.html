@@ -269,7 +269,7 @@ viewer.addHandler('open', function() {
             //console.log("click", u, v);
 
             requestXYZ(webPoint, data => {
-                window.open(`http://37.19.207.113:5173/?x=${data.x}&y=${data.y}&zoom=6&layer=${(data.z / 50).toFixed() * 50}&segment=@{info.ref.segmentId}`);
+                window.open(`http://37.19.207.113:5174/?x=${data.x}&y=${data.y}&zoom=6&layer=${(data.z / 50).toFixed() * 50}&segment=@{info.ref.segmentId}`);
             });
         }
     });
