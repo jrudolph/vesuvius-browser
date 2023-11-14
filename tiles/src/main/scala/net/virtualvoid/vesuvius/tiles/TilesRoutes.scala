@@ -63,7 +63,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       }
 
   val BlockCache = downloadUtils.computeCache[(ScrollReference, VolumeMetadata, Int, Int, Int, Int, Int)](
-    { case (scroll, meta, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${meta.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") }
+    { case (scroll, meta, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${meta.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
+    CacheSettings.Default.copy(negTtlSeconds = 60)
   ) {
       case (scroll, metadata, x, y, z, bitmask, downsampling) =>
         val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${metadata.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: dry
@@ -137,6 +138,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     { case (scroll, uuid, gx, gy, gz) => new File(config.dataDir, f"grid/scroll${scroll.scroll}/$uuid/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif") },
     maxConcurrentRequests = config.maxConcurrentGridRequests,
     settings = CacheSettings.Default.copy(
+      negTtlSeconds = 60,
       baseDirectory = Some(new File(config.dataDir, "grid")),
       maxCacheSize = config.gridCacheMaxSize,
       cacheHighWatermark = config.gridCacheHighWatermark,
