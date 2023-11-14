@@ -45,21 +45,6 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
     lazy val self: T => Future[File] =
       t => cache.getOrLoad(t, _ => cached(filePattern(t), settings.ttlSeconds, settings.negTtlSeconds, settings.isValid) { () =>
-        if (settings.maxCacheSize < Long.MaxValue)
-          settings.baseDirectory.foreach { dir =>
-            val files = deepFileList(dir).toVector.sortBy(_.lastModified())
-            val size = files.map(_.length()).sum
-            if (size > settings.cacheHighWatermark * settings.maxCacheSize) {
-              val deleteTarget = (settings.cacheLowWatermark * settings.maxCacheSize).toLong
-              val toDeleteBytes = size - deleteTarget
-              println(s"Cache size of $dir with $size exceeds 90% of configured size ${settings.maxCacheSize}, deleting old files. Pruning to 75%, i.e. $deleteTarget, need to delete at least $toDeleteBytes")
-              val toDelete = files.scanLeft(0L)(_ + _.length()).indexWhere(_ > toDeleteBytes)
-              if (toDelete > 0) {
-                println(s"Deleting ${toDelete} files")
-                files.take(toDelete).foreach(_.delete())
-              }
-            }
-          }
         compute(t)
       })
         .flatMap { f =>
@@ -86,7 +71,10 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     filePattern:           T => File,
     settings:              CacheSettings = CacheSettings.Default,
     maxConcurrentRequests: Int           = 16): T => Future[File] = {
-    val limited = semaphore[T, File](maxConcurrentRequests)(t => download(urlPattern(t), filePattern(t)))
+    val limited = semaphore[T, File](maxConcurrentRequests) { t =>
+      cleanupCacheDir(settings)
+      download(urlPattern(t), filePattern(t))
+    }
     computeCache(filePattern, settings)(limited)
   }
 
@@ -135,5 +123,23 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       queue.offer(t -> promise)
       promise.future
     }
+  }
+
+  def cleanupCacheDir(settings: CacheSettings): Unit = {
+    if (settings.maxCacheSize < Long.MaxValue)
+      settings.baseDirectory.foreach { dir =>
+        val files = deepFileList(dir).toVector.sortBy(_.lastModified())
+        val size = files.map(_.length()).sum
+        if (size > settings.cacheHighWatermark * settings.maxCacheSize) {
+          val deleteTarget = (settings.cacheLowWatermark * settings.maxCacheSize).toLong
+          val toDeleteBytes = size - deleteTarget
+          println(s"Cache size of $dir with $size exceeds 90% of configured size ${settings.maxCacheSize}, deleting old files. Pruning to 75%, i.e. $deleteTarget, need to delete at least $toDeleteBytes")
+          val toDelete = files.scanLeft(0L)(_ + _.length()).indexWhere(_ > toDeleteBytes)
+          if (toDelete > 0) {
+            println(s"Deleting ${toDelete} files")
+            files.take(toDelete).foreach(_.delete())
+          }
+        }
+      }
   }
 }
