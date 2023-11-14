@@ -10,7 +10,9 @@ case class TilesConfig(
     dataServerPassword:        String,
     dataDir:                   File,
     maxConcurrentGridRequests: Int,
-    maxGridCacheSize:          Long,
+    gridCacheMaxSize:          Long,
+    gridCacheHighWatermark:    Double,
+    gridCacheLowWatermark:     Double,
     requestsPerLayer:          Int
 ) extends DataServerConfig
 object TilesConfig {
@@ -22,7 +24,9 @@ object TilesConfig {
       dataServerPassword = config.getString("app.data-password"),
       dataDir = new File(config.getString("app.data-dir")),
       maxConcurrentGridRequests = config.getInt("app.max-concurrent-grid-requests"),
-      maxGridCacheSize = config.getBytes("app.max-grid-cache-size"),
+      gridCacheMaxSize = config.getBytes("app.grid-cache.max-size"),
+      gridCacheHighWatermark = config.getDouble("app.grid-cache.high-watermark"),
+      gridCacheLowWatermark = config.getDouble("app.grid-cache.low-watermark"),
       requestsPerLayer = config.getInt("app.requests-per-layer")
     )
 }

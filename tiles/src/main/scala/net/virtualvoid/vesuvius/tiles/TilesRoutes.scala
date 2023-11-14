@@ -136,7 +136,12 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     { case (scroll, uuid, gx, gy, gz) => f"${scroll.volumeGridUrl(uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif" },
     { case (scroll, uuid, gx, gy, gz) => new File(config.dataDir, f"grid/scroll${scroll.scroll}/$uuid/cell_yxz_$gy%03d_$gx%03d+$gz%03d.tif") },
     maxConcurrentRequests = config.maxConcurrentGridRequests,
-    settings = CacheSettings.Default.copy(maxCacheSize = config.maxGridCacheSize, baseDirectory = Some(new File(config.dataDir, "grid")))
+    settings = CacheSettings.Default.copy(
+      baseDirectory = Some(new File(config.dataDir, "grid")),
+      maxCacheSize = config.gridCacheMaxSize,
+      cacheHighWatermark = config.gridCacheHighWatermark,
+      cacheLowWatermark = config.gridCacheLowWatermark
+    )
   )
   def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
     TileCache((scroll, meta.uuid, gx, gy, gz))

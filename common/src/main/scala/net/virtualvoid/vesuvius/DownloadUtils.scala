@@ -17,11 +17,13 @@ trait DataServerConfig {
 }
 
 case class CacheSettings(
-    ttlSeconds:    Long,
-    negTtlSeconds: Long,
-    isValid:       File => Boolean,
-    baseDirectory: Option[File],
-    maxCacheSize:  Long
+    ttlSeconds:         Long,
+    negTtlSeconds:      Long,
+    isValid:            File => Boolean,
+    baseDirectory:      Option[File],
+    maxCacheSize:       Long,
+    cacheHighWatermark: Double,
+    cacheLowWatermark:  Double
 ) {
   require(maxCacheSize >= 0, s"maxCacheSize must be >= 0, but was $maxCacheSize")
 }
@@ -29,7 +31,7 @@ object CacheSettings {
   val DefaultPositiveTtl = 3600 * 24 * 365
   val DefaultNegativeTtl = 7200
 
-  val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, Long.MaxValue)
+  val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, Long.MaxValue, 0.9, 0.75)
 }
 
 class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
@@ -47,8 +49,8 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
           settings.baseDirectory.foreach { dir =>
             val files = deepFileList(dir).toVector.sortBy(_.lastModified())
             val size = files.map(_.length()).sum
-            if (size > 0.9f * settings.maxCacheSize) {
-              val deleteTarget = settings.maxCacheSize * 3 / 4
+            if (size > settings.cacheHighWatermark * settings.maxCacheSize) {
+              val deleteTarget = (settings.cacheLowWatermark * settings.maxCacheSize).toLong
               val toDeleteBytes = size - deleteTarget
               println(s"Cache size of $dir with $size exceeds 90% of configured size ${settings.maxCacheSize}, deleting old files. Pruning to 75%, i.e. $deleteTarget, need to delete at least $toDeleteBytes")
               val toDelete = files.scanLeft(0L)(_ + _.length()).indexWhere(_ > toDeleteBytes)
