@@ -68,7 +68,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       }
 
       def contains(t: T): Boolean = cache.get(t).isDefined || fCache.contains(t)
-      def isReady(t: T): Boolean = contains(t) && cache.get(t).get.isCompleted
+      def isReady(t: T): Boolean = cache.get(t).exists(_.isCompleted) || fCache.isReady(t)
     }
     self
   }
