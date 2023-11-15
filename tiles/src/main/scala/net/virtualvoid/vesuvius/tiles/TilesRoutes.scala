@@ -10,7 +10,6 @@ import spray.json.*
 
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
 import scala.concurrent.Future
-import scala.util.Success
 
 case class VolumeMetadata(
     name:      String,
@@ -44,15 +43,10 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
             },
             path("download" / "64-4") {
               parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
-                val fut = block64x4(scroll, meta, x, y, z, bitmask, downsampling)
-                fut.value match {
-                  case Some(Success(file)) => getFromFile(file)
-                  case _ =>
-                    if (gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
-                      fut.deliver
-                    else
-                      complete(StatusCodes.EnhanceYourCalm)
-                }
+                if (block64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
+                  block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                else
+                  complete(StatusCodes.EnhanceYourCalm)
               }
             }
           )
