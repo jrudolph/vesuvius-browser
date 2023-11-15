@@ -10,6 +10,7 @@ import spray.json.*
 
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
 import scala.concurrent.Future
+import scala.util.Success
 
 case class VolumeMetadata(
     name:      String,
@@ -43,11 +44,14 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
             },
             path("download" / "64-4") {
               parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
-                if (gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
-                  block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
-                else {
-                  block64x4(scroll, meta, x, y, z, bitmask, downsampling)
-                  complete(StatusCodes.EnhanceYourCalm)
+                val fut = block64x4(scroll, meta, x, y, z, bitmask, downsampling)
+                fut.value match {
+                  case Some(Success(file)) => getFromFile(file)
+                  case _ =>
+                    if (gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
+                      fut.deliver
+                    else
+                      complete(StatusCodes.EnhanceYourCalm)
                 }
               }
             }
@@ -78,6 +82,9 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     }
   def block64x4(scroll: ScrollReference, metadata: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
     BlockCache((scroll, metadata, x, y, z, bitmask, downsampling))
+
+  def block64x4IsAvailable(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Boolean =
+    BlockCache.contains((scroll, meta, x, y, z, bitmask, downsampling))
 
   def gridFileAvailableFor(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, downsampling: Int): Boolean =
     gridFilesNeeded(x, y, z, downsampling).map(gridFile(scroll, meta.uuid, _, _, _)).forall(_.exists())

@@ -35,30 +35,37 @@ object CacheSettings {
   val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, Long.MaxValue, 0.9, 0.75)
 }
 
+trait Cache[T, U] {
+  def apply(t: T): Future[U]
+  def contains(t: T): Boolean
+}
+
 class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   import system.dispatcher
   import CacheSettings.{ DefaultPositiveTtl, DefaultNegativeTtl }
 
-  def computeCache[T](filePattern: T => File, settings: CacheSettings = CacheSettings.Default)(compute: T => Future[File]): T => Future[File] = {
+  def computeCache[T](filePattern: T => File, settings: CacheSettings = CacheSettings.Default)(compute: T => Future[File]): Cache[T, File] = {
     val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttlSeconds.seconds)
     val s = CachingSettings(system).withLfuCacheSettings(lfu)
+    val fCache = fileCache(filePattern, settings.ttlSeconds, settings.negTtlSeconds, settings.isValid)(compute)
     val cache = LfuCache[T, File](s)
 
-    lazy val self: T => Future[File] =
-      t => cache.getOrLoad(t, _ => cached(filePattern(t), settings.ttlSeconds, settings.negTtlSeconds, settings.isValid) { () =>
-        compute(t)
-      })
-        .flatMap { f =>
-          if (!f.exists()) {
-            println(s"Cached file missing, removing from cache, and rerunning for ${t}")
-            cache.remove(t)
-            self(t)
-          } else Future.successful(f)
-        }
-        .map { f =>
-          f.setLastModified(System.currentTimeMillis())
-          f
-        }
+    lazy val self: Cache[T, File] = new Cache[T, File] {
+      def apply(t: T): Future[File] =
+        cache.getOrLoad(t, _ => fCache(t))
+          .flatMap { f =>
+            if (!f.exists()) {
+              println(s"Cached file missing, removing from cache, and rerunning for ${t}")
+              cache.remove(t)
+              self(t)
+            } else Future.successful(f)
+          }
+          .map { f =>
+            f.setLastModified(System.currentTimeMillis())
+            f
+          }
+      def contains(t: T): Boolean = cache.get(t).isDefined || fCache.contains(t)
+    }
     self
   }
   def deepFileList(dir: File): Iterator[File] =
@@ -71,7 +78,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     urlPattern:            T => String,
     filePattern:           T => File,
     settings:              CacheSettings = CacheSettings.Default,
-    maxConcurrentRequests: Int           = 16): T => Future[File] = {
+    maxConcurrentRequests: Int           = 16): Cache[T, File] = {
     val limited = semaphore[T, File](maxConcurrentRequests) { t =>
       cleanupCacheDir(settings)
       download(urlPattern(t), filePattern(t))
@@ -81,6 +88,30 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
   def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
     cached(to, ttlSeconds, negTtlSeconds) { () => download(url, to) }
+
+  def fileCache[T](filePattern: T => File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: T => Future[File]): Cache[T, File] =
+    new Cache[T, File] {
+      def apply(t: T): Future[File] = {
+        val to = fileFor(t)
+        to.getParentFile.mkdirs()
+        val neg = new File(to.getParentFile, s".neg-${to.getName}")
+        if (to.exists() && to.lastModified() + ttlSeconds * 1000 > System.currentTimeMillis() && isValid(to)) Future.successful(to)
+        else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis() && isValid(neg)) Future.failed(new RuntimeException(s"Negatively cached"))
+        else
+          f(t).recoverWith {
+            case t: Throwable =>
+              neg.getParentFile.mkdirs()
+              neg.delete()
+              neg.createNewFile()
+              Future.failed(t)
+          }
+      }
+
+      def contains(t: T): Boolean = fileFor(t).exists()
+
+      def fileFor(t: T): File = filePattern(t)
+    }
+
   def cached(to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: () => Future[File]): Future[File] = {
     to.getParentFile.mkdirs()
     val neg = new File(to.getParentFile, s".neg-${to.getName}")
