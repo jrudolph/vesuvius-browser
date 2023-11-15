@@ -51,7 +51,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     val cache = LfuCache[T, File](s)
 
     lazy val self: Cache[T, File] = new Cache[T, File] {
-      def apply(t: T): Future[File] =
+      def apply(t: T): Future[File] = {
         cache.getOrLoad(t, _ => fCache(t))
           .flatMap { f =>
             if (!f.exists()) {
@@ -64,6 +64,8 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
             f.setLastModified(System.currentTimeMillis())
             f
           }
+      }
+
       def contains(t: T): Boolean = cache.get(t).isDefined || fCache.contains(t)
     }
     self
