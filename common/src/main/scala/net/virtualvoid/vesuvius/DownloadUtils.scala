@@ -38,6 +38,7 @@ object CacheSettings {
 trait Cache[T, U] {
   def apply(t: T): Future[U]
   def contains(t: T): Boolean
+  def isReady(t: T): Boolean
 }
 
 class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
@@ -67,6 +68,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       }
 
       def contains(t: T): Boolean = cache.get(t).isDefined || fCache.contains(t)
+      def isReady(t: T): Boolean = contains(t) && cache.get(t).get.isCompleted
     }
     self
   }
@@ -110,6 +112,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       }
 
       def contains(t: T): Boolean = fileFor(t).exists()
+      def isReady(t: T): Boolean = contains(t)
 
       def fileFor(t: T): File = filePattern(t)
     }

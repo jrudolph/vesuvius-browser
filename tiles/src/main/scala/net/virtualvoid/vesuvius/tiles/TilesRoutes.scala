@@ -80,7 +80,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     BlockCache((scroll, metadata, x, y, z, bitmask, downsampling))
 
   def block64x4IsAvailable(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Boolean =
-    BlockCache.contains((scroll, meta, x, y, z, bitmask, downsampling))
+    BlockCache.isReady((scroll, meta, x, y, z, bitmask, downsampling))
 
   def gridFileAvailableFor(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, downsampling: Int): Boolean =
     gridFilesNeeded(x, y, z, downsampling).map(gridFile(scroll, meta.uuid, _, _, _)).forall(_.exists())
