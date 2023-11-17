@@ -46,6 +46,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
                 if (block64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
                   block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
                 else {
+                  // refresh request for grid files for this block
+                  gridTilesNeeded(scroll, meta, x, y, z, downsampling).foreach(GridTileCache(_))
                   block64x4(scroll, meta, x, y, z, bitmask, downsampling)
                   complete(StatusCodes.EnhanceYourCalm)
                 }
@@ -95,6 +97,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       gz <- grid(z) to gridEnd(z)
     } yield (gx, gy, gz)
   }
+  def gridTilesNeeded(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, downsampling: Int): Seq[(ScrollReference, String, Int, Int, Int)] =
+    gridFilesNeeded(x, y, z, downsampling).map { case (gx, gy, gz) => (scroll, meta.uuid, gx, gy, gz) }
 
   def createBlock64x4FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
     val gridZSpacing = meta.uuid match {
