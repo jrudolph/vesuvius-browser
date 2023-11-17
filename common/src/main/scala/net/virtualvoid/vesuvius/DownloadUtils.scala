@@ -10,7 +10,7 @@ import org.apache.pekko.stream.scaladsl.{ FileIO, Keep, Sink, Source }
 import java.io.File
 import scala.concurrent.{ Future, Promise }
 import scala.concurrent.duration.*
-import scala.util.{ Failure, Success }
+import scala.util.{ Failure, Success, Try }
 
 trait DataServerConfig {
   def dataServerUsername: String
@@ -173,7 +173,10 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       PriorityQueue.queue[(T, Promise[U])]()
         .mapAsyncUnordered(numRequests) {
           case ((t, promise), time) =>
-            f(t, time).onComplete(promise.complete)
+            Try(f(t, time)) match {
+              case Success(fut) => fut.onComplete(promise.complete)
+              case Failure(t)   => promise.failure(t)
+            }
             promise.future.transform(Success(_))
         }
         .toMat(Sink.ignore)(Keep.both)
