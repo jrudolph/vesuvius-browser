@@ -83,11 +83,23 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     filePattern:           T => File,
     settings:              CacheSettings = CacheSettings.Default,
     maxConcurrentRequests: Int           = 16): Cache[T, File] = {
-    val limited = semaphore[T, File](maxConcurrentRequests) { t =>
+    val (limited, refresh) = semaphore[T, File](maxConcurrentRequests) { t =>
       cleanupCacheDir(settings)
       download(urlPattern(t), filePattern(t))
     }
-    computeCache(filePattern, settings)(limited)
+
+    val cache = computeCache(filePattern, settings)(limited)
+
+    new Cache[T, File] {
+      def apply(t: T): Future[File] = {
+        if (!cache.isReady(t))
+          refresh(t)
+
+        cache(t)
+      }
+      def contains(t: T): Boolean = cache.contains(t)
+      def isReady(t: T): Boolean = cache.isReady(t)
+    }
   }
 
   def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
@@ -144,9 +156,9 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       .map { _ => tmpFile.renameTo(to); to }
   }
 
-  def semaphore[T, U](numRequests: Int, queueLength: Int = 1000)(f: T => Future[U]): T => Future[U] = {
+  def semaphore[T, U](numRequests: Int, queueLength: Int = 1000)(f: T => Future[U]): (T => Future[U], T => Unit) = {
     val (queue, res) =
-      Source.queue[(T, Promise[U])](queueLength)
+      PriorityQueue.queue[(T, Promise[U])]()
         .mapAsyncUnordered(numRequests) {
           case (t, promise) =>
             f(t).onComplete(promise.complete)
@@ -162,11 +174,11 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
         t.printStackTrace()
     }
 
-    t => {
+    (t => {
       val promise = Promise[U]()
       queue.offer(t -> promise)
       promise.future
-    }
+    }, t => queue.refresh(_._1 == t))
   }
 
   def cleanupCacheDir(settings: CacheSettings): Unit = {
