@@ -39,6 +39,7 @@ trait Cache[T, U] {
   def apply(t: T): Future[U]
   def contains(t: T): Boolean
   def isReady(t: T): Boolean
+  def remove(t: T): Unit
 }
 
 class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
@@ -69,6 +70,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
       def contains(t: T): Boolean = cache.get(t).isDefined || fCache.contains(t)
       def isReady(t: T): Boolean = cache.get(t).exists(_.isCompleted) || fCache.isReady(t)
+      def remove(t: T): Unit = cache.remove(t)
     }
     self
   }
@@ -85,16 +87,17 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     filePattern:           T => File,
     settings:              CacheSettings = CacheSettings.Default,
     maxConcurrentRequests: Int           = 16): Cache[T, File] = {
-    val (limited, refresh) = semaphore[T, File](maxConcurrentRequests) { (t, time) =>
-      if (System.nanoTime() - time > 1000000000L * 30)
+    lazy val (limited: (T => Future[File]), refresh: (T => Unit)) = semaphore[T, File](maxConcurrentRequests) { (t, time) =>
+      if (System.nanoTime() - time > 1000000000L * 30) {
+        cache.remove(t)
         throw new ExpelledException(s"Request was not refreshed in queue for ${(System.nanoTime() - time) / 1000000000L} seconds, aborting")
-      else {
+      } else {
         cleanupCacheDir(settings)
         download(urlPattern(t), filePattern(t))
       }
     }
 
-    val cache = computeCache(filePattern, settings)(limited)
+    lazy val cache = computeCache(filePattern, settings)(limited)
 
     new Cache[T, File] {
       def apply(t: T): Future[File] = {
@@ -105,6 +108,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       }
       def contains(t: T): Boolean = cache.contains(t)
       def isReady(t: T): Boolean = cache.isReady(t)
+      def remove(t: T): Unit = cache.remove(t)
     }
   }
 
@@ -132,6 +136,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
       def contains(t: T): Boolean = fileFor(t).exists()
       def isReady(t: T): Boolean = contains(t)
+      def remove(t: T): Unit = () // FIXME: should that be a no-op?
 
       def fileFor(t: T): File = filePattern(t)
     }
