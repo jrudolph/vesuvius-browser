@@ -41,4 +41,4 @@ EXPOSE 8089/tcp
 
 WORKDIR /
 
-CMD ["java", "-javaagent:jmx_prometheus_javaagent-0.16.1.jar=9001:config.yaml", "-cp", "/app.jar:/deps.jar", "net.virtualvoid.vesuvius.VesuviusWebMain"]
+CMD ["java", "-javaagent:jmx_prometheus_javaagent-0.16.1.jar=9001:config.yaml", "-XX:MaxRAMPercentage=60", "-cp", "/app.jar:/deps.jar", "net.virtualvoid.vesuvius.VesuviusWebMain"]
