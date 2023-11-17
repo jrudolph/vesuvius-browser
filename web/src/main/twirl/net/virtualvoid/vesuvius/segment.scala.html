@@ -3,8 +3,8 @@
 @(info: ImageInfo)
 
 @for(
-    selectedLayers <- Seq(if (info.ref.scroll == 332) (60 to 105 by 3) else (20 to 50 by 2));
-    extraLayers = if (info.ref.scroll == 332) Seq(2350, 2351) else Seq(2342, 2343);
+    selectedLayers <- Seq(if (Set(332, 1667).contains(info.ref.scroll)) (60 to 105 by 3) else (20 to 50 by 2));
+    extraLayers = if (Set(332, 1667).contains(info.ref.scroll)) Seq(2350, 2351) else Seq(2342, 2343);
     allLayers = selectedLayers ++ extraLayers
 ) {
 
