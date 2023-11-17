@@ -78,14 +78,20 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       case f => Iterator(f)
     }
 
+  class ExpelledException(msg: String) extends RuntimeException(msg)
+
   def downloadCache[T](
     urlPattern:            T => String,
     filePattern:           T => File,
     settings:              CacheSettings = CacheSettings.Default,
     maxConcurrentRequests: Int           = 16): Cache[T, File] = {
-    val (limited, refresh) = semaphore[T, File](maxConcurrentRequests) { t =>
-      cleanupCacheDir(settings)
-      download(urlPattern(t), filePattern(t))
+    val (limited, refresh) = semaphore[T, File](maxConcurrentRequests) { (t, time) =>
+      if (System.nanoTime() - time > 1000000000L * 30)
+        throw new ExpelledException(s"Request was not refreshed in queue for ${(System.nanoTime() - time) / 1000000000L} seconds, aborting")
+      else {
+        cleanupCacheDir(settings)
+        download(urlPattern(t), filePattern(t))
+      }
     }
 
     val cache = computeCache(filePattern, settings)(limited)
@@ -115,6 +121,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
         else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis() && isValid(neg)) Future.failed(new RuntimeException(s"Negatively cached"))
         else
           f(t).recoverWith {
+            case t: ExpelledException => Future.failed(t) // do not cache these negative instances
             case t: Throwable =>
               neg.getParentFile.mkdirs()
               neg.delete()
@@ -156,12 +163,12 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       .map { _ => tmpFile.renameTo(to); to }
   }
 
-  def semaphore[T, U](numRequests: Int, queueLength: Int = 1000)(f: T => Future[U]): (T => Future[U], T => Unit) = {
+  def semaphore[T, U](numRequests: Int, queueLength: Int = 1000)(f: (T, Long) => Future[U]): (T => Future[U], T => Unit) = {
     val (queue, res) =
       PriorityQueue.queue[(T, Promise[U])]()
         .mapAsyncUnordered(numRequests) {
-          case (t, promise) =>
-            f(t).onComplete(promise.complete)
+          case ((t, promise), time) =>
+            f(t, time).onComplete(promise.complete)
             promise.future.transform(Success(_))
         }
         .toMat(Sink.ignore)(Keep.both)

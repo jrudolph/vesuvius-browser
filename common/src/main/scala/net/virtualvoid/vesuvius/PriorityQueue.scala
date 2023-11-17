@@ -6,9 +6,9 @@ import org.apache.pekko.stream.{ Attributes, Outlet, SourceShape }
 
 import scala.collection.mutable
 
-class PriorityQueueWithRefreshStage[T] extends GraphStageWithMaterializedValue[SourceShape[T], PriorityQueue[T]] {
-  val outlet = Outlet[T]("PriorityQueueWithRefresh.out")
-  val shape: SourceShape[T] = SourceShape(outlet)
+class PriorityQueueWithRefreshStage[T] extends GraphStageWithMaterializedValue[SourceShape[(T, Long)], PriorityQueue[T]] {
+  val outlet = Outlet[(T, Long)]("PriorityQueueWithRefresh.out")
+  val shape: SourceShape[(T, Long)] = SourceShape(outlet)
 
   def createLogicAndMaterializedValue(inheritedAttributes: Attributes): (GraphStageLogic, PriorityQueue[T]) = {
     object Logic extends GraphStageLogic(shape) with PriorityQueue[T] with OutHandler {
@@ -20,7 +20,7 @@ class PriorityQueueWithRefreshStage[T] extends GraphStageWithMaterializedValue[S
       val refreshCallback = getAsyncCallback[T => Boolean] { p =>
         queue.mapInPlace {
           case (t, _) if p(t) =>
-            //println(s"Reordering $t to front")
+            println(s"Reordering $t to front")
             t -> System.nanoTime()
           case x => x
         }
@@ -29,12 +29,12 @@ class PriorityQueueWithRefreshStage[T] extends GraphStageWithMaterializedValue[S
       val queue: mutable.PriorityQueue[(T, Long)] = mutable.PriorityQueue.empty[(T, Long)](Ordering.by[(T, Long), Long](_._2))
 
       def processOffer(t: T): Unit =
-        if (isAvailable(outlet)) push(outlet, t)
+        if (isAvailable(outlet)) push(outlet, t -> System.nanoTime())
         else queue.enqueue(t -> System.nanoTime())
 
       def onPull(): Unit =
         if (queue.nonEmpty)
-          push(outlet, queue.dequeue()._1)
+          push(outlet, queue.dequeue())
 
       def offer(t: T): Unit = callback.invoke(t)
       def refresh(p: T => Boolean): Unit = refreshCallback.invoke(p)
@@ -49,6 +49,6 @@ trait PriorityQueue[T] {
   def refresh(t: T => Boolean): Unit
 }
 object PriorityQueue {
-  def queue[T](): Source[T, PriorityQueue[T]] =
+  def queue[T](): Source[(T, Long), PriorityQueue[T]] =
     Source.fromGraph(new PriorityQueueWithRefreshStage[T])
 }
