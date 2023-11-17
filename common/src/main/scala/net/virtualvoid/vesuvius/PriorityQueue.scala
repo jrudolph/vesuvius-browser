@@ -33,8 +33,10 @@ class PriorityQueueWithRefreshStage[T] extends GraphStageWithMaterializedValue[S
         else queue.enqueue(t -> System.nanoTime())
 
       def onPull(): Unit =
-        if (queue.nonEmpty)
+        if (queue.nonEmpty) {
           push(outlet, queue.dequeue())
+          if (queue.size % 10 == 0) println(s"Queue size: ${queue.size}")
+        }
 
       def offer(t: T): Unit = callback.invoke(t)
       def refresh(p: T => Boolean): Unit = refreshCallback.invoke(p)
