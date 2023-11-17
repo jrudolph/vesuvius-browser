@@ -5,11 +5,11 @@ import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.caching.scaladsl.{ CachingSettings, LfuCacheSettings }
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, headers }
-import org.apache.pekko.stream.scaladsl.{ FileIO, Keep, Sink, Source }
+import org.apache.pekko.stream.scaladsl.{ FileIO, Keep, Sink }
 
 import java.io.File
-import scala.concurrent.{ Future, Promise }
 import scala.concurrent.duration.*
+import scala.concurrent.{ Future, Promise, TimeoutException }
 import scala.util.{ Failure, Success, Try }
 
 trait DataServerConfig {
@@ -43,8 +43,8 @@ trait Cache[T, U] {
 }
 
 class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
+  import CacheSettings.{ DefaultNegativeTtl, DefaultPositiveTtl }
   import system.dispatcher
-  import CacheSettings.{ DefaultPositiveTtl, DefaultNegativeTtl }
 
   def computeCache[T](filePattern: T => File, settings: CacheSettings = CacheSettings.Default)(compute: T => Future[File]): Cache[T, File] = {
     val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttlSeconds.seconds)
@@ -80,7 +80,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       case f => Iterator(f)
     }
 
-  class ExpelledException(msg: String) extends RuntimeException(msg)
+  class ExpelledException(msg: String) extends TimeoutException(msg)
 
   def downloadCache[T](
     urlPattern:            T => String,
@@ -88,7 +88,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     settings:              CacheSettings = CacheSettings.Default,
     maxConcurrentRequests: Int           = 16): Cache[T, File] = {
     lazy val (limited: (T => Future[File]), refresh: (T => Unit)) = semaphore[T, File](maxConcurrentRequests) { (t, time) =>
-      if (System.nanoTime() - time > 1000000000L * 30) {
+      if (System.nanoTime() - time > 1000000000L * 60) {
         cache.remove(t)
         throw new ExpelledException(s"Request was not refreshed in queue for ${(System.nanoTime() - time) / 1000000000L} seconds, aborting")
       } else {
