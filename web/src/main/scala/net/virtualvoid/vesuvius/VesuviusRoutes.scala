@@ -102,8 +102,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               pathPrefix("inferred" / Segment) { model =>
                 val input = model match {
                   // FIXME: use constants instead
-                  case "youssef-test" if segment.scroll == 332          => requestedWorkInputs(2)._1.asInstanceOf[InferenceWorkItemInput]
-                  case "youssef-test-reversed" if segment.scroll == 332 => requestedWorkInputs(3)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test" if segment.scroll > 2          => requestedWorkInputs(2)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test-reversed" if segment.scroll > 2 => requestedWorkInputs(3)._1.asInstanceOf[InferenceWorkItemInput]
                   case "youssef-test"                                   => requestedWorkInputs(0)._1.asInstanceOf[InferenceWorkItemInput]
                   case "youssef-test-reversed"                          => requestedWorkInputs(1)._1.asInstanceOf[InferenceWorkItemInput]
                 }
