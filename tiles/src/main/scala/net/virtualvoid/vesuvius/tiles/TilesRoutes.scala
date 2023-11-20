@@ -6,29 +6,15 @@ import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
-import spray.json.*
 
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
 import scala.concurrent.Future
 
-case class VolumeMetadata(
-    name:      String,
-    uuid:      String,
-    width:     Int,
-    height:    Int,
-    slices:    Int,
-    `type`:    String,
-    min:       Double,
-    max:       Double,
-    voxelsize: Double)
-object VolumeMetadata {
-  import DefaultJsonProtocol.*
-  implicit val format: RootJsonFormat[VolumeMetadata] = jsonFormat9(apply)
-}
-
 class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends SprayJsonSupport {
   import system.dispatcher
   val downloadUtils = new DownloadUtils(config)
+  val metadataRepo = new VolumeMetadataRepository(downloadUtils, config.dataDir)
+  import metadataRepo.metadataForVolume
 
   lazy val main: Route =
     tilesRoutes
@@ -59,16 +45,6 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     }
 
   lazy val Scroll = IntNumber.flatMap(ScrollReference.byId)
-
-  val MetadataCache = downloadUtils.downloadCache[(ScrollReference, String)](
-    { case (scroll, volumeId) => scroll.volumeMetadataUrl(volumeId) },
-    { case (scroll, volumeId) => new File(config.dataDir, s"metadata/${scroll.scroll}-${volumeId}.json") }
-  )
-  def metadataForVolume(scroll: ScrollReference, volumeId: String): Future[VolumeMetadata] =
-    MetadataCache((scroll, volumeId))
-      .map { metadata =>
-        scala.io.Source.fromFile(metadata).mkString.parseJson.convertTo[VolumeMetadata]
-      }
 
   val BlockCache = downloadUtils.computeCache[(ScrollReference, VolumeMetadata, Int, Int, Int, Int, Int)](
     { case (scroll, meta, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${meta.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },

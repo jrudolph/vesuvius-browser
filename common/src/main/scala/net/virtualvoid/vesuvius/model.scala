@@ -35,8 +35,8 @@ object ScrollReference {
   val scrolls: Seq[ScrollReference] = Seq(
     ScrollReference(1, FullScrollsBase, "20230205180739"),
     ScrollReference(2, FullScrollsBase, "20230210143520"),
-    ScrollReference(332, PHercBase, "20230210143520"),
-    ScrollReference(1667, PHercBase, "20231027191953")
+    ScrollReference(332, PHercBase, "20231027191953"),
+    ScrollReference(1667, PHercBase, "20231107190228")
   )
 
   def byId(id: Int): Option[ScrollReference] =
