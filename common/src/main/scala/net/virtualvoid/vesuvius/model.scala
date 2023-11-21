@@ -19,22 +19,28 @@ object SegmentReference {
         case "PHercBase"       => PHercBase
       }
     }
-  implicit val scrollReferenceFormat: RootJsonFormat[ScrollReference] = jsonFormat2(ScrollReference.apply)
+  implicit val scrollReferenceFormat: RootJsonFormat[ScrollReference] = jsonFormat3(ScrollReference.apply)
   implicit val segmentReferenceFormat: RootJsonFormat[SegmentReference] = jsonFormat2(SegmentReference.apply)
 }
 
-case class ScrollReference(scroll: Int, base: ScrollServerBase) {
+case class ScrollReference(scroll: Int, base: ScrollServerBase, defaultVolumeId: String) {
   def baseUrl: String = base.baseUrl(scroll)
   def scrollUrl: String = base.scrollUrl(scroll)
+  def volumeMetadataUrl(volumeId: String): String = s"${volumeUrl(volumeId)}meta.json"
+  def volumeUrl(volumeId: String): String = s"${scrollUrl}volumes/$volumeId/"
+  def volumeGridUrl(volumeId: String): String = s"${scrollUrl}volume_grids/$volumeId/"
 }
 
 object ScrollReference {
   val scrolls: Seq[ScrollReference] = Seq(
-    ScrollReference(1, FullScrollsBase),
-    ScrollReference(2, FullScrollsBase),
-    ScrollReference(332, PHercBase),
-    ScrollReference(1667, PHercBase)
+    ScrollReference(1, FullScrollsBase, "20230205180739"),
+    ScrollReference(2, FullScrollsBase, "20230210143520"),
+    ScrollReference(332, PHercBase, "20231027191953"),
+    ScrollReference(1667, PHercBase, "20231107190228")
   )
+
+  def byId(id: Int): Option[ScrollReference] =
+    scrolls.find(_.scroll == id)
 }
 
 sealed trait ScrollServerBase extends Product {

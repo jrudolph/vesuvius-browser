@@ -7,7 +7,7 @@ import java.io.File
 import scala.concurrent.Future
 
 trait PekkoHttpHelpers {
-  import Directives._
+  import Directives.*
 
   implicit class FutureExtension[T](val future: Future[T]) {
     def await: Directive1[T] = onSuccess(future)

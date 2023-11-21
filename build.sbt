@@ -13,7 +13,7 @@ inThisBuild(Def.settings(
 ))
 
 val root = project.in(file("."))
-  .aggregate(common, web, worker)
+  .aggregate(common, web, worker, tiles)
 
 lazy val common = project.in(file("common"))
   .enablePlugins(BuildInfoPlugin)
@@ -39,6 +39,24 @@ lazy val worker = project.in(file("worker"))
   .dependsOn(common)
   .settings(
     libraryDependencies ++= Seq(
+    ),
+    // setup docker build
+    // use separate dependency and app jars
+    assembly / assemblyOption := (assembly / assemblyOption).value.withIncludeScala(false).withIncludeDependency(false),
+    assembly / assemblyJarName := "app.jar", // contract with Dockerfile
+    assemblyPackageDependency / assemblyJarName := "deps.jar", // contract with Dockerfile
+    assemblyMergeStrategy := {
+      // merging pekko protobuf and protobuf from google ortools (not sure why they are different, but doesn't matter here)
+      case PathList(ps@_*) if ps.last endsWith ".proto" => MergeStrategy.first
+      case x => assemblyMergeStrategy.value(x)
+    },
+  )
+
+lazy val tiles = project.in(file("tiles"))
+  .dependsOn(common)
+  .settings(
+    libraryDependencies ++= Seq(
+
     ),
     // setup docker build
     // use separate dependency and app jars
