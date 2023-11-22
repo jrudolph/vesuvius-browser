@@ -205,7 +205,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
       }
       val numLayers = maps.size
-      val (width, _) = {
+      val (width, height) = {
         import sys.process._
         val Pattern = """\s*Image Width: (\d+) Image Length: (\d+)\s*""".r
         val res = s"tiffinfo ${layers(0).getAbsolutePath}".!!
@@ -213,6 +213,9 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
           case Pattern(w, h) => (w.toInt, h.toInt)
         }.get
       }
+
+      if (x * 64 * downsampling >= width || y * 64 * downsampling >= height || z * 64 * downsampling >= numLayers)
+        throw new NoSuchElementException(s"Block $x $y $z q$downsampling is outside of volume bounds")
 
       writeBlock(target, downsampling) { (lx, ly, lz) =>
         val globalX = (x * 64 + lx) * downsampling
