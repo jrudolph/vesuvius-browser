@@ -28,7 +28,7 @@ RUN /sbt "show tiles/assembly"
 FROM eclipse-temurin:17
 
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y libvips-tools && \
+    apt-get install --no-install-recommends -y libvips-tools libtiff-tools && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -O https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.16.1/jmx_prometheus_javaagent-0.16.1.jar

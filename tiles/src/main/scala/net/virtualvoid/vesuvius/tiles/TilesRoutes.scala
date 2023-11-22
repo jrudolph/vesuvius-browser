@@ -1,6 +1,7 @@
 package net.virtualvoid.vesuvius
 package tiles
 
+import net.virtualvoid.vesuvius.SegmentReference
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.model.StatusCodes
@@ -21,27 +22,36 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   lazy val tilesRoutes =
     pathPrefix("tiles") {
-      pathPrefix("scroll" / Scroll / "volume" / Segment) { (scroll, volume) =>
-        metadataForVolume(scroll, volume).await { meta =>
-          concat(
-            pathSingleSlash {
-              complete(meta)
-            },
-            path("download" / "64-4") {
-              parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
-                if (block64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
-                  block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
-                else {
-                  // refresh request for grid files for this block
-                  gridTilesNeeded(scroll, meta, x, y, z, downsampling).foreach(GridTileCache(_))
-                  block64x4(scroll, meta, x, y, z, bitmask, downsampling)
-                  complete(StatusCodes.EnhanceYourCalm)
+      concat(
+        pathPrefix("scroll" / Scroll / "volume" / Segment) { (scroll, volume) =>
+          metadataForVolume(scroll, volume).await { meta =>
+            concat(
+              pathSingleSlash {
+                complete(meta)
+              },
+              path("download" / "64-4") {
+                parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
+                  if (block64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
+                    block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                  else {
+                    // refresh request for grid files for this block
+                    gridTilesNeeded(scroll, meta, x, y, z, downsampling).foreach(GridTileCache(_))
+                    block64x4(scroll, meta, x, y, z, bitmask, downsampling)
+                    complete(StatusCodes.EnhanceYourCalm)
+                  }
                 }
               }
+            )
+          }
+        },
+        pathPrefix("scroll" / Scroll / "segment" / Segment) { (scroll, segment) =>
+          path("download" / "64-4") {
+            parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
+              block64x4Surface(SegmentReference(scroll, segment), x, y, z, bitmask, downsampling).deliver
             }
-          )
+          }
         }
-      }
+      )
     }
 
   lazy val Scroll = IntNumber.flatMap(ScrollReference.byId)
@@ -175,4 +185,62 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     tmp.renameTo(target)
     target
   }
+
+  val SurfaceBlockCache = downloadUtils.computeCache[(SegmentReference, Int, Int, Int, Int, Int)](
+    { case (segment, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${segment.scroll}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
+    CacheSettings.Default.copy(negTtlSeconds = 60)
+  ) {
+      case (segment, x, y, z, bitmask, downsampling) =>
+        val target = new File(config.dataDir, f"blocks/scroll${segment.scroll}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: DRY
+        block64x4SurfaceFromLayers(segment, target, x, y, z, bitmask, downsampling)
+    }
+
+  def block64x4Surface(segment: SegmentReference, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
+    SurfaceBlockCache((segment, x, y, z, bitmask, downsampling))
+
+  def block64x4SurfaceFromLayers(segment: SegmentReference, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
+    layersForSegment(segment).map { layers =>
+      val maps = layers.map { l =>
+        val raf = new java.io.RandomAccessFile(l, "r")
+        raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
+      }
+      val numLayers = maps.size
+      val (width, _) = {
+        import sys.process._
+        val Pattern = """\s*Image Width: (\d+) Image Length: (\d+)\s*""".r
+        val res = s"tiffinfo ${layers(0).getAbsolutePath}".!!
+        res.split("\n").map(_.trim).collectFirst {
+          case Pattern(w, h) => (w.toInt, h.toInt)
+        }.get
+      }
+
+      writeBlock(target, downsampling) { (x, y, z) =>
+        if (z < numLayers) {
+          val data = maps(z)
+          val offset = (y * width + x) * 2
+
+          data.get(offset + 1) & bitmask
+        } else 0
+      }
+    }
+  }
+
+  lazy val LayerCache = downloadUtils.downloadCache[(SegmentReference, Int)](
+    { case (segment, layer) => segment.layerUrl(layer) },
+    { case (segment, layer) => layerFile(segment, layer) },
+    maxConcurrentRequests = config.maxConcurrentGridRequests,
+    settings = CacheSettings.Default.copy(
+      negTtlSeconds = 60,
+      baseDirectory = Some(new File(config.dataDir, "grid")),
+      maxCacheSize = config.gridCacheMaxSize,
+      cacheHighWatermark = config.gridCacheHighWatermark,
+      cacheLowWatermark = config.gridCacheLowWatermark
+    )
+  )
+
+  def layerFile(segment: SegmentReference, layer: Int): File =
+    new File(config.dataDir, f"grid/scroll${segment.scroll}/segment/${segment.segmentId}/$layer%03d.tif")
+
+  def layersForSegment(segment: SegmentReference): Future[Seq[File]] =
+    Future.traverse(0 until 5)(z => LayerCache((segment, z)))
 }
