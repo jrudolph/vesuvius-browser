@@ -1,7 +1,6 @@
 package net.virtualvoid.vesuvius
 package tiles
 
-import net.virtualvoid.vesuvius.SegmentReference
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.model.StatusCodes
@@ -195,8 +194,12 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         block64x4SurfaceFromLayers(segment, target, x, y, z, bitmask, downsampling)
     }
 
-  def block64x4Surface(segment: SegmentReference, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
+  def block64x4Surface(segment: SegmentReference, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[Option[File]] =
     SurfaceBlockCache((segment, x, y, z, bitmask, downsampling))
+      .map(Some(_))
+      .recover {
+        case _: NoSuchElementException => None
+      }
 
   def block64x4SurfaceFromLayers(segment: SegmentReference, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
     layersForSegment(segment).map { layers =>
@@ -206,7 +209,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       }
       val numLayers = maps.size
       val (width, height) = {
-        import sys.process._
+        import sys.process.*
         val Pattern = """\s*Image Width: (\d+) Image Length: (\d+)\s*""".r
         val res = s"tiffinfo ${layers(0).getAbsolutePath}".!!
         res.split("\n").map(_.trim).collectFirst {

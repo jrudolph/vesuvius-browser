@@ -122,7 +122,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
         to.getParentFile.mkdirs()
         val neg = new File(to.getParentFile, s".neg-${to.getName}")
         if (to.exists() && to.lastModified() + ttlSeconds * 1000 > System.currentTimeMillis() && isValid(to)) Future.successful(to)
-        else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis() && isValid(neg)) Future.failed(new RuntimeException(s"Negatively cached"))
+        else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis() && isValid(neg)) Future.failed(new NoSuchElementException(s"Negatively cached"))
         else
           f(t).recoverWith {
             case t: ExpelledException => Future.failed(t) // do not cache these negative instances
