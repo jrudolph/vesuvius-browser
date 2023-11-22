@@ -214,10 +214,14 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         }.get
       }
 
-      writeBlock(target, downsampling) { (x, y, z) =>
-        if (z < numLayers) {
-          val data = maps(z)
-          val offset = (y * width + x) * 2
+      writeBlock(target, downsampling) { (lx, ly, lz) =>
+        val globalX = (x * 64 + lx) * downsampling
+        val globalY = (y * 64 + ly) * downsampling
+        val globalZ = (z * 64 + lz) * downsampling
+
+        if (globalZ >= 0 && globalZ < numLayers) {
+          val data = maps(globalZ)
+          val offset = (globalY * width + globalX) * 2
 
           data.get(offset + 1) & bitmask
         } else 0
