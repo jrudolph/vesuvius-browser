@@ -252,5 +252,5 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     new File(config.dataDir, f"grid/scroll${segment.scroll}/segment/${segment.segmentId}/$layer%03d.tif")
 
   def layersForSegment(segment: SegmentReference): Future[Seq[File]] =
-    Future.traverse(0 until 64)(z => LayerCache((segment, z)))
+    Future.traverse(0 to 64)(z => LayerCache((segment, z)))
 }
