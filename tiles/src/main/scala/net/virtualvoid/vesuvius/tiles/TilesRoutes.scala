@@ -46,7 +46,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         pathPrefix("scroll" / Scroll / "segment" / Segment) { (scroll, segment) =>
           path("download" / "64-4") {
             parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
-              block64x4Surface(SegmentReference(scroll, segment), x, y, z, bitmask, downsampling).deliver
+              block64x4Surface(SegmentReference(scroll, segment), x, y, z, bitmask, downsampling).await.orReject.deliver
             }
           }
         }
