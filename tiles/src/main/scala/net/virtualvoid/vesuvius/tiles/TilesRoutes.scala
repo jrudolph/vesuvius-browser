@@ -237,7 +237,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         val globalY = (y * 64 + ly) * downsampling
         val globalZ = (z * 64 + lz) * downsampling
 
-        if (globalX > 0 && globalX < width && globalY > 0 && globalY < height && globalZ > 0 && globalZ < numLayers) {
+        if (globalX >= 0 && globalX < width && globalY >= 0 && globalY < height && globalZ >= 0 && globalZ < numLayers) {
           val data = maps(globalZ)
           val offset = (globalY * width + globalX) * 2
 
@@ -309,7 +309,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         val globalY = (y * 64 + ly) * downsampling
         //val globalZ = (z * 64 + lz) // we already downsample when selecting layers
 
-        if (globalX > 0 && globalX < width && globalY > 0 && globalY < height && lz > 0 && lz < numLayers) {
+        if (globalX >= 0 && globalX < width && globalY >= 0 && globalY < height && lz >= 0 && lz < numLayers) {
           val data = maps(lz)
           val offset = (globalY * width + globalX) * 2
 
