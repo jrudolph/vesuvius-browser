@@ -88,11 +88,15 @@ object VesuviusWorkerMain extends App {
     runOne()
       .recover {
         case ex =>
+          // we currently get 302s from the server when it has no work, we handle that silently
+        if (!ex.getMessage.contains("Unexpected status code 302 Found")) {
           println(s"Error: $ex")
           ex.printStackTrace()
           println("Backing off for a while")
-          Thread.sleep(10000)
-          ()
+        } else
+          Console.println("No work, sleeping for 10s")
+        Thread.sleep(10000)
+        ()
       }
       .flatMap(_ => worker)
 
