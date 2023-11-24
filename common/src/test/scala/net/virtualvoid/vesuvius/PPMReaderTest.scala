@@ -15,7 +15,7 @@ class PPMReaderTest2(args: Array[String]) {
   //20230504093154
   //20230827161847
   val segment = "20230926164853"
-  val res = PPMFingerprinter.fingerprint(SegmentReference(1, "20230520175435", FullScrollsBase), new File("/tmp/20230520175435.ppm"))
+  val res = PPMFingerprinter.fingerprint(SegmentReference(ScrollReference.byId(1).get, "20230520175435"), new File("/tmp/20230520175435.ppm"))
   println(res)
   ???
 

@@ -55,13 +55,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     for {
       ids <- Future.traverse(ScrollReference.scrolls)(segmentIds)
       infos <- Future.traverse(ids.flatten)(imageInfo)
-    } yield infos.flatten.sortBy(i => (i.scroll, i.segmentId))
+    } yield infos.flatten.sortBy(i => (i.scrollId, i.segmentId))
 
-  lazy val scrollSegmentsMap: Future[Map[(Int, String), SegmentReference]] =
-    scrollSegments.map(_.map(i => (i.scroll, i.segmentId) -> i.ref).toMap)
+  lazy val scrollSegmentsMap: Future[Map[(String, String), SegmentReference]] =
+    scrollSegments.map(_.map(i => (i.scrollId, i.segmentId) -> i.ref).toMap)
 
-  def resolveRef(scroll: Int, segmentId: String): Directive1[SegmentReference] =
-    scrollSegmentsMap.map(_.get((scroll, segmentId))).await.orReject
+  def resolveRef(scrollId: String, segmentId: String): Directive1[SegmentReference] =
+    scrollSegmentsMap.map(_.get((scrollId, segmentId))).await.orReject
 
   lazy val mainRoute =
     concat(
@@ -90,7 +90,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       path("license") {
         page(html.license())
       },
-      pathPrefix("scroll" / IntNumber / "segment" / Segment) { (scroll, segmentId) =>
+      pathPrefix("scroll" / Segment / "segment" / Segment) { (scroll, segmentId) =>
         resolveRef(scroll, segmentId) { segment =>
 
           imageInfo(segment).await.orReject { (info: ImageInfo) =>
@@ -104,8 +104,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               pathPrefix("inferred" / Segment) { model =>
                 val input = model match {
                   // FIXME: use constants instead
-                  case "youssef-test" if segment.scroll > 2          => requestedWorkInputs(2)._1.asInstanceOf[InferenceWorkItemInput]
-                  case "youssef-test-reversed" if segment.scroll > 2 => requestedWorkInputs(3)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test" if Set("0332", "1667").contains(segment.scrollId)          => requestedWorkInputs(2)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test-reversed" if Set("0332", "1667").contains(segment.scrollId) => requestedWorkInputs(3)._1.asInstanceOf[InferenceWorkItemInput]
                   case "youssef-test"                                   => requestedWorkInputs(0)._1.asInstanceOf[InferenceWorkItemInput]
                   case "youssef-test-reversed"                          => requestedWorkInputs(1)._1.asInstanceOf[InferenceWorkItemInput]
                 }
@@ -287,16 +287,16 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def _segmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
     import segment._
-    val targetFile = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.jp2")
+    val targetFile = new File(dataDir, s"raw/scroll$scrollId/$segmentId/layers/$layer.jp2")
     targetFile.getParentFile.mkdirs()
 
     if (targetFile.exists) Future.successful(targetFile)
-    else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32.png"))
-    else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_15_32_reverse.png"))
-    else if (layer == 2350) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_63_32.png"))
-    else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_youssef-test_63_32_reverse.png"))
+    else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32.png"))
+    else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32_reverse.png"))
+    else if (layer == 2350) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32.png"))
+    else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32_reverse.png"))
     else {
-      val webpVersion = new File(dataDir, s"raw/scroll$scroll/$segmentId/layers/$layer.webp")
+      val webpVersion = new File(dataDir, s"raw/scroll$scrollId/$segmentId/layers/$layer.webp")
 
       val tmpFile: Future[File] =
         if (webpVersion.exists())
@@ -333,7 +333,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     DZDirCache.getOrLoad((info, z), _ => extractDZ(info, z))
 
   def extractDZ(info: ImageInfo, z: Int): Future[File] = {
-    val targetDir = new File(dataDir, s"tiles-dz/scroll${info.scroll}/${info.segmentId}/layers/${z}_files")
+    val targetDir = new File(dataDir, s"tiles-dz/scroll${info.scrollId}/${info.segmentId}/layers/${z}_files")
     if (targetDir.exists()) Future.successful(targetDir)
     else segmentLayer(info.ref, z).map { imageFile =>
       targetDir.getParentFile.mkdirs()
@@ -351,7 +351,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def resizedMask(segment: SegmentReference): Future[File] =
     imageInfo(segment).flatMap { info =>
       import segment._
-      resizedX(maskFor(segment), new File(dataDir, s"raw/scroll$scroll/$segmentId/mask_small_autorotated.png"), height = 100, rotate90 = !info.get.isLandscape).map(_.get)
+      resizedX(maskFor(segment), new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask_small_autorotated.png"), height = 100, rotate90 = !info.get.isLandscape).map(_.get)
     }
 
   def resizedInferred(segment: SegmentReference, input: InferenceWorkItemInput): Future[Option[File]] =
@@ -389,21 +389,21 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     import segment._
     cacheDownload(
       s"${segment.baseUrl}${segment.segmentId}_mask.png",
-      new File(dataDir, s"raw/scroll$scroll/$segmentId/mask.png"))
+      new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask.png"))
   }
 
   def areaFor(segment: SegmentReference): Future[Option[Float]] = {
     import segment._
     cacheDownload(
       s"${segment.baseUrl}area_cm2.txt",
-      new File(dataDir, s"raw/scroll$scroll/$segmentId/area_cm2.txt")
+      new File(dataDir, s"raw/scroll$scrollId/$segmentId/area_cm2.txt")
     )
       .map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
       .transform(x => Success(x.toOption))
   }
 
   def segmentIds(scroll: ScrollReference): Future[Seq[SegmentReference]] =
-    segmentIds(scroll.baseUrl, new File(config.dataDir, s"raw/scroll${scroll.scroll}/${scroll.base}-path-listing.html"))
+    segmentIds(scroll.baseUrl, new File(config.dataDir, s"raw/scroll${scroll.scrollId}/${scroll.base}-path-listing.html"))
       .map(_.map(segment => SegmentReference(scroll, segment)))
 
   val LinkR = """.*href="(.*)/".*""".r
@@ -419,11 +419,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     input match {
       case InferenceWorkItemInput(model, startLayer, stride, reverseLayers) =>
         val reversed = if (reverseLayers) "_reverse" else ""
-        new File(dataDir, s"inferred/scroll$scroll/$segmentId/inference_${model}_${startLayer}_${stride}$reversed.png")
+        new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_${model}_${startLayer}_${stride}$reversed.png")
       case PPMFingerprintWorkItemInput =>
-        new File(dataDir, s"ppm/scroll${segment.scroll}/${segment.segmentId}/fingerprint.json")
+        new File(dataDir, s"ppm/scroll${segment.scrollId}/${segment.segmentId}/fingerprint.json")
       case DownsamplePPMWorkItemInput(tpe, downsamplingBits) =>
-        new File(dataDir, s"ppm/scroll${segment.scroll}/${segment.segmentId}/uvmap-${tpe}-${downsamplingBits}.bin")
+        new File(dataDir, s"ppm/scroll${segment.scrollId}/${segment.segmentId}/uvmap-${tpe}-${downsamplingBits}.bin")
     }
   }
 
@@ -432,11 +432,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   type Filter = SegmentReference => Boolean
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
-      InferenceWorkItemInput("youssef-test", 15, 32, false) -> (s => s.scroll == 1 || s.scroll == 2),
-      InferenceWorkItemInput("youssef-test", 15, 32, true) -> (s => s.scroll == 1 || s.scroll == 2),
-      InferenceWorkItemInput("youssef-test", 63, 32, false) -> (s => s.scroll == 332 || s.scroll == 1667),
-      InferenceWorkItemInput("youssef-test", 63, 32, true) -> (s => s.scroll == 332 || s.scroll == 1667),
-      PPMFingerprintWorkItemInput -> (_.scroll == 1),
+      InferenceWorkItemInput("youssef-test", 15, 32, false) -> (s => s.scrollId == "1" || s.scrollId == "2"),
+      InferenceWorkItemInput("youssef-test", 15, 32, true) -> (s => s.scrollId == "1" || s.scrollId == "2"),
+      InferenceWorkItemInput("youssef-test", 63, 32, false) -> (s => s.scrollId == "332" || s.scrollId == "1667"),
+      InferenceWorkItemInput("youssef-test", 63, 32, true) -> (s => s.scrollId == "332" || s.scrollId == "1667"),
+      PPMFingerprintWorkItemInput -> (_.scrollId == "1"),
       DownSampleU16_2Input -> (_ => true),
     )
 

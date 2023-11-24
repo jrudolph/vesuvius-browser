@@ -37,7 +37,7 @@ object PrimeBlockCache extends App {
 
   def ensureTile(scroll: ScrollReference, volume: String, coord: C3, quant: Int): Future[Done] = {
     // /tiles/scroll/{}/volume/{}/download/64-4?x={}&y={}&z={}&bitmask={}&downsampling={}",
-    val url = s"https://vesuvius.virtual-void.net/tiles/scroll/${scroll.scroll}/volume/$volume/download/64-4?x=${coord._1}&y=${coord._2}&z=${coord._3}&bitmask=255&downsampling=$quant"
+    val url = s"https://vesuvius.virtual-void.net/tiles/scroll/${scroll.scrollId}/volume/$volume/download/64-4?x=${coord._1}&y=${coord._2}&z=${coord._3}&bitmask=255&downsampling=$quant"
     val req = HttpRequest(uri = url, headers = downloadUtils.auth :: Nil)
     //println(f"At $scroll $coord $quant")
     Http().singleRequest(req).flatMap { res =>

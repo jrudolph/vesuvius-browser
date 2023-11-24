@@ -53,14 +53,14 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       )
     }
 
-  lazy val Scroll = IntNumber.flatMap(ScrollReference.byId)
+  lazy val Scroll = Segment.flatMap(ScrollReference.byId)
 
   val BlockCache = downloadUtils.computeCache[(ScrollReference, VolumeMetadata, Int, Int, Int, Int, Int)](
-    { case (scroll, meta, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${meta.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
+    { case (scroll, meta, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/${meta.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
     CacheSettings.Default.copy(negTtlSeconds = 60)
   ) {
       case (scroll, metadata, x, y, z, bitmask, downsampling) =>
-        val target = new File(config.dataDir, f"blocks/scroll${scroll.scroll}/${metadata.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: dry
+        val target = new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/${metadata.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: dry
         createBlock64x4FromGrid(scroll, metadata, target, x, y, z, bitmask, downsampling)
     }
   def block64x4(scroll: ScrollReference, metadata: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
@@ -135,7 +135,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     }
   }
   def gridFile(scroll: ScrollReference, uuid: String, gx: Int, gy: Int, gz: Int): File =
-    new File(config.dataDir, f"grid/scroll${scroll.scroll}/$uuid/cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif")
+    new File(config.dataDir, f"grid/scroll${scroll.scrollId}/$uuid/cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif")
 
   lazy val GridTileCache = downloadUtils.downloadCache[(ScrollReference, String, Int, Int, Int)](
     { case (scroll, uuid, gx, gy, gz) => f"${scroll.volumeGridUrl(uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif" },
@@ -186,11 +186,11 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   }
 
   val SurfaceBlockCache = downloadUtils.computeCache[(SegmentReference, Int, Int, Int, Int, Int)](
-    { case (segment, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${segment.scroll}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
+    { case (segment, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${segment.scrollId}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
     CacheSettings.Default.copy(negTtlSeconds = 60)
   ) {
       case (segment, x, y, z, bitmask, downsampling) =>
-        val target = new File(config.dataDir, f"blocks/scroll${segment.scroll}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: DRY
+        val target = new File(config.dataDir, f"blocks/scroll${segment.scrollId}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: DRY
         block64x4SurfaceFromLayers(segment, target, x, y, z, bitmask, downsampling)
     }
 
@@ -249,7 +249,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   )
 
   def layerFile(segment: SegmentReference, layer: Int): File =
-    new File(config.dataDir, f"grid/scroll${segment.scroll}/segment/${segment.segmentId}/$layer%03d.tif")
+    new File(config.dataDir, f"grid/scroll${segment.scrollId}/segment/${segment.segmentId}/$layer%03d.tif")
 
   def layersForSegment(segment: SegmentReference): Future[Seq[File]] =
     Future.traverse(0 to 64)(z => LayerCache((segment, z)))
