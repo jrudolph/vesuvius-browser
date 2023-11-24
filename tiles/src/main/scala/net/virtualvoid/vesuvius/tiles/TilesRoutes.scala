@@ -304,18 +304,20 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       if (x * 64 * downsampling >= width || y * 64 * downsampling >= height)
         throw new NoSuchElementException(s"Block $x $y $z q$downsampling is outside of volume bounds")
 
-      writeBlock(target, downsampling) { (lx, ly, lz) =>
+      val res = writeBlock(target, downsampling) { (lx, ly, lz) =>
         val globalX = (x * 64 + lx) * downsampling
         val globalY = (y * 64 + ly) * downsampling
-        val globalZ = (z * 64 + lz) // we already downsample when selecting layers
+        //val globalZ = (z * 64 + lz) // we already downsample when selecting layers
 
-        if (globalX > 0 && globalX < width && globalY > 0 && globalY < height && globalZ > 0 && globalZ < numLayers) {
-          val data = maps(globalZ)
+        if (globalX > 0 && globalX < width && globalY > 0 && globalY < height && lz > 0 && lz < numLayers) {
+          val data = maps(lz)
           val offset = (globalY * width + globalX) * 2
 
           data.get(offset + 1) & bitmask
         } else 0
       }
+      println(s"Writing block $x $y $z q$downsampling done")
+      res
     }
 
   def volumeLayerFile(scroll: ScrollReference, uuid: String, layer: Int): File =
