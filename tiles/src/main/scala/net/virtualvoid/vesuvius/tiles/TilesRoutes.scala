@@ -301,7 +301,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       val numLayers = maps.size
       import meta.{ width, height }
 
-      if (x * 64 * downsampling >= width || y * 64 * downsampling >= height || z * 64 >= numLayers)
+      if (x * 64 * downsampling >= width || y * 64 * downsampling >= height)
         throw new NoSuchElementException(s"Block $x $y $z q$downsampling is outside of volume bounds")
 
       writeBlock(target, downsampling) { (lx, ly, lz) =>
