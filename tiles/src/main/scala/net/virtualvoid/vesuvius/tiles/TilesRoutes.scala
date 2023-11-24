@@ -23,6 +23,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     pathPrefix("tiles") {
       concat(
         pathPrefix("scroll" / Scroll / "volume" / Segment) { (scroll, volume) =>
+          println(s"Request for $scroll $volume")
           metadataForVolume(scroll, volume).await { meta =>
             concat(
               pathSingleSlash {
@@ -30,13 +31,24 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
               },
               path("download" / "64-4") {
                 parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
-                  if (block64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
-                    block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
-                  else {
-                    // refresh request for grid files for this block
-                    gridTilesNeeded(scroll, meta, x, y, z, downsampling).foreach(GridTileCache(_))
-                    block64x4(scroll, meta, x, y, z, bitmask, downsampling)
-                    complete(StatusCodes.EnhanceYourCalm)
+                  if (scroll.base != FragmentsBase) {
+                    if (block64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
+                      block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                    else {
+                      // refresh request for grid files for this block
+                      gridTilesNeeded(scroll, meta, x, y, z, downsampling).foreach(GridTileCache(_))
+                      block64x4(scroll, meta, x, y, z, bitmask, downsampling)
+                      complete(StatusCodes.EnhanceYourCalm)
+                    }
+                  } else {
+                    if (volumeBlock64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || volumeLayersAvailableFor(scroll, meta.uuid, z, downsampling))
+                      volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                    else {
+                      // refresh request for grid files for this block
+                      volumeLayersNeeded(z, downsampling).foreach(VolumeLayerCache(scroll, meta.uuid, _))
+                      volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling)
+                      complete(StatusCodes.EnhanceYourCalm)
+                    }
                   }
                 }
               }
@@ -253,4 +265,72 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   def layersForSegment(segment: SegmentReference): Future[Seq[File]] =
     Future.traverse(0 to 64)(z => LayerCache((segment, z)))
+
+  def volumeLayersNeeded(z: Int, downsampling: Int): Seq[Int] =
+    z * 64 * downsampling until (z + 1) * 64 * downsampling by downsampling
+
+  def volumeLayersAvailableFor(scroll: ScrollReference, uuid: String, z: Int, downsampling: Int): Boolean =
+    volumeLayersNeeded(z, downsampling).map(volumeLayerFile(scroll, uuid, _)).forall(_.exists())
+  def volumeLayersForFragment(scroll: ScrollReference, uuid: String, z: Int, downsampling: Int): Future[Seq[File]] =
+    Future.traverse(volumeLayersNeeded(z, downsampling))(layer => VolumeLayerCache((scroll, uuid, layer)))
+
+  def volumeBlock64x4IsAvailable(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Boolean =
+    VolumeBlockCache.isReady((scroll, meta, x, y, z, bitmask, downsampling))
+
+  def volumeBlock64x4(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
+    VolumeBlockCache((scroll, meta, x, y, z, bitmask, downsampling))
+
+  val VolumeBlockCache = downloadUtils.computeCache[(ScrollReference, VolumeMetadata, Int, Int, Int, Int, Int)](
+    { case (scroll, meta, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/${meta.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
+    CacheSettings.Default.copy(negTtlSeconds = 60)
+  ) {
+      case (scroll, metadata, x, y, z, bitmask, downsampling) =>
+        val target = new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/${metadata.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: dry
+        createVolumeBlock64x4FromLayers(scroll, metadata, target, x, y, z, bitmask, downsampling)
+    }
+
+  def volumeBlock64x4File(scroll: ScrollReference, uuid: String, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): File =
+    new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/$uuid/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin")
+
+  def createVolumeBlock64x4FromLayers(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
+    volumeLayersForFragment(scroll, meta.uuid, z, downsampling).map { layers =>
+      val maps = layers.map { l =>
+        val raf = new java.io.RandomAccessFile(l, "r")
+        raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
+      }
+      val numLayers = maps.size
+      import meta.{ width, height }
+
+      if (x * 64 * downsampling >= width || y * 64 * downsampling >= height || z * 64 >= numLayers)
+        throw new NoSuchElementException(s"Block $x $y $z q$downsampling is outside of volume bounds")
+
+      writeBlock(target, downsampling) { (lx, ly, lz) =>
+        val globalX = (x * 64 + lx) * downsampling
+        val globalY = (y * 64 + ly) * downsampling
+        val globalZ = (z * 64 + lz) // we already downsample when selecting layers
+
+        if (globalX > 0 && globalX < width && globalY > 0 && globalY < height && globalZ > 0 && globalZ < numLayers) {
+          val data = maps(globalZ)
+          val offset = (globalY * width + globalX) * 2
+
+          data.get(offset + 1) & bitmask
+        } else 0
+      }
+    }
+
+  def volumeLayerFile(scroll: ScrollReference, uuid: String, layer: Int): File =
+    new File(config.dataDir, f"grid/scroll${scroll.scrollId}/$uuid/$layer%04d.tif")
+
+  lazy val VolumeLayerCache = downloadUtils.downloadCache[(ScrollReference, String, Int)](
+    { case (scroll, uuid, layer) => f"${scroll.volumeUrl(uuid)}$layer%04d.tif" },
+    { case (scroll, uuid, layer) => volumeLayerFile(scroll, uuid, layer) },
+    maxConcurrentRequests = config.maxConcurrentGridRequests,
+    settings = CacheSettings.Default.copy(
+      negTtlSeconds = 60,
+      baseDirectory = Some(new File(config.dataDir, "grid")),
+      maxCacheSize = config.gridCacheMaxSize,
+      cacheHighWatermark = config.gridCacheHighWatermark,
+      cacheLowWatermark = config.gridCacheLowWatermark
+    )
+  )
 }

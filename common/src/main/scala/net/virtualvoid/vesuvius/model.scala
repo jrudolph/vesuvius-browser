@@ -36,14 +36,15 @@ object ScrollReference {
     ScrollReference("1", FullScrollsBase, "20230205180739"),
     ScrollReference("2", FullScrollsBase, "20230210143520"),
     ScrollReference("0332", PHercBase, "20231027191953"),
-    ScrollReference("1667", PHercBase, "20231107190228")
+    ScrollReference("1667", PHercBase, "20231107190228"),
+
+    ScrollReference("PHerc1667Cr01Fr03", FragmentsBase, "20231121133215")
   )
 
   def byId(id: Int): Option[ScrollReference] =
     scrolls.find(_.scrollId == id.toString)
 
-  def byId(id: String): Option[ScrollReference] =
-    scrolls.find(_.scrollId == id)
+  def byId(id: String): Option[ScrollReference] = scrolls.find(_.scrollId == id)
 }
 
 sealed trait ScrollServerBase extends Product {
@@ -70,6 +71,12 @@ case object PHercBase extends ScrollServerBase {
   override def layerUrl(segment: SegmentReference, z: Int): String =
     f"${segmentUrl(segment)}layers/$z%03d.tif"
 }
+
+case object FragmentsBase extends ScrollServerBase {
+  def scrollUrl(scroll: String): String =
+    s"http://dl.ash2txt.org/fragments/$scroll.volpkg/"
+}
+
 case class ImageInfo(
     ref:    SegmentReference,
     width:  Int,
