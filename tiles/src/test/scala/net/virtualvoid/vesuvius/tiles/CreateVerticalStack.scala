@@ -76,20 +76,22 @@ object CreateVerticalStack extends App {
   //val center = (3986 / 4, 3082 / 4, 11298 / 4)
   //val center = (4019 / 2, 3244 / 2, 9187 / 2)
   val downsampled = 1
-  val center = (4534 / downsampled, 2238 / downsampled, 5143 / downsampled)
-  val cacheDir = f"/home/johannes/git/self/_2023/vesuvius-gui/data4/scroll1667/20231107190228/64-4/d${downsampled}%02d/"
+  //val center = (4534 / downsampled, 2238 / downsampled, 5143 / downsampled)
+  val center = (2636 / downsampled, 822 / downsampled, 4944 / downsampled)
+  val cacheDir = f"/home/johannes/git/self/_2023/vesuvius-gui/data4/scrollPHerc1667Cr01Fr03/20231121133215/64-4/d${downsampled}%02d/"
   implicit val system: ActorSystem = ActorSystem("vesuvius")
   val volume = Volume.fromBlocks(new File(cacheDir), downsampled)
   println(volume.valueAt(center._1, center._2, center._3))
 
   def p(x: Int, y: Int, z: Int): Int = volume.valueAt(x, y, z)
 
-  val radius = 50
-  val zRadius = 40
-  val Threshold = 110
+  val xRadius = 128
+  val yRadius = 60
+  val zRadius = 128
+  val Threshold = 160
 
-  val xSpan = (center._1 - radius) until (center._1 + radius)
-  val ySpan = (center._2 - radius) until (center._2 + radius)
+  val xSpan = (center._1 - xRadius) until (center._1 + xRadius)
+  val ySpan = (center._2 - yRadius) until (center._2 + yRadius)
   val zSpan = (center._3 - zRadius) until (center._3 + zRadius)
 
   val x0 = xSpan.head
@@ -264,11 +266,11 @@ object CreateVerticalStack extends App {
     uint32le(0) // MAIN content size
 
     withChildrenLength {
-      val groups = voxels.groupBy { case (x, y, z, v) => (x / 256, y / 256) }.toVector
+      val groups = voxels.groupBy { case (x, y, z, v) => (x / 256, y / 256, z / 256) }.toVector
       groups
         //.take(1)
         .foreach {
-          case ((xt, yt), voxels) =>
+          case ((xt, yt, zt), voxels) =>
             tag("SIZE")
             uint32le(12) // SIZE content size
             uint32le(0) // SIZE children size
@@ -282,9 +284,10 @@ object CreateVerticalStack extends App {
             uint32le(size) // XYZI content size
             uint32le(0) // XYZI children size
             uint32le(voxels.size)
-            for ((xi, yi, z, v) <- voxels) {
+            for ((xi, yi, zi, v) <- voxels) {
               val x = xi - xt * 256
               val y = yi - yt * 256
+              val z = zi - zt * 256
               //println(f"XYZI: $x $y $z $v")
               val xyzi = x | y << 8 | z << 16 | v << 24
               uint32le(xyzi)
@@ -293,8 +296,8 @@ object CreateVerticalStack extends App {
 
       val groupNodes =
         groups.zipWithIndex.map {
-          case (((x, y), _), i) =>
-            TransformNode(2 + i * 2, Seq("_t" -> s"${x * 256} ${y * 256} 0"), ShapeNode(3 + i * 2, Vector(i)))
+          case (((x, y, z), _), i) =>
+            TransformNode(2 + i * 2, Seq("_t" -> s"${x * 256} ${y * 256} ${z * 256}"), ShapeNode(3 + i * 2, Vector(i)))
         }
 
       val structure =
@@ -365,16 +368,19 @@ object CreateVerticalStack extends App {
       uint32le(256 * 4) // RGBA content size
       uint32le(0) // RGBA children size
       for (i <- 0 until 256) {
-        val v = i // (i - Threshold) * 255 / Threshold
-        val exp = 0.7f
-        val rgb = Color.HSBtoRGB((56f / 360 * math.pow(v.toFloat / 255, exp)).toFloat, 1f - 0.5f * math.pow(v.toFloat / 255, exp).toFloat, 1)
+        val v =  (i - Threshold) * 255 / Threshold
+        //val exp = 0.7f
+        //val rgb = Color.HSBtoRGB((56f / 360 * math.pow(v.toFloat / 255, exp)).toFloat, 1f - 0.5f * math.pow(v.toFloat / 255, exp).toFloat, 1)
 
         // start 0
         // end 53 / 360
 
-        val r = (rgb >> 16) & 0xff
-        val g = (rgb >> 8) & 0xff
-        val b = (rgb >> 0) & 0xff
+        //val r = (rgb >> 16) & 0xff
+        //val g = (rgb >> 8) & 0xff
+        //val b = (rgb >> 0) & 0xff
+        val r = 0
+        val g = v
+        val b = 0
         uint32le(r << 0 | g << 8 | b << 16 | v << 24)
       }
 
