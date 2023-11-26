@@ -38,7 +38,10 @@ object ScrollReference {
     ScrollReference("0332", PHercBase, "20231027191953"),
     ScrollReference("1667", PHercBase, "20231107190228"),
 
-    ScrollReference("PHerc1667Cr01Fr03", FragmentsBase, "20231121133215")
+    ScrollReference("PHerc1667Cr01Fr03", FragmentsBase, "20231121133215"),
+    ScrollReference("PHerc0051Cr04Fr08", FragmentsBase, "20231121152933"),
+    ScrollReference("Frag1", FragmentsBase, "20230205142449"),
+    ScrollReference("Frag1", FragmentsBase, "20230213100222")
   )
 
   def byId(id: Int): Option[ScrollReference] =
