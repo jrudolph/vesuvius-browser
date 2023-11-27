@@ -76,14 +76,24 @@ object InkDetectionPoints extends App {
   //val size = raster.getSize
   val threshold = 128
 
+  /*val minx = 0
+  val maxx = img.getWidth
+  val miny = 0
+  val maxy = img.getHeight*/
+
+  val minx = 2494
+  val maxx = 3561
+  val miny = 700
+  val maxy = 4700
+
   val xyzs =
     (for {
-      v <- (0 until img.getHeight).iterator
-      u <- (0 until img.getWidth).iterator
+      v <- (miny until maxy).iterator
+      u <- (minx until maxx).iterator
       value = raster.getElem(u + v * img.getWidth)
       if value > threshold
       ppm = UV(u, v)
-      w <- (-7 to 7).iterator
+      w <- (-1 to 5).iterator
     } yield {
       val (x, y, z) = ppm.dxyz
       val (nx, ny, nz) = ppm.dnxyz
@@ -99,14 +109,14 @@ object InkDetectionPoints extends App {
   //val max_z = xyzs.maxBy(_._3)._3
 
   println("Ink detection points")
-  println(s"xyzs: ${xyzs.size}")
+  //println(s"xyzs: ${xyzs.size}")
   //println(f"min: $min_x $min_y $min_z")
   //println(f"max: $max_x $max_y $max_z")
 
   //val tiles = xyzs.groupBy { case (x, y, z) => (x / 64, y / 64, z / 64) }.size
   //println(s"Tiles: $tiles")
 
-  val outFile = new File("20230827161847-3.blocks")
+  val outFile = new File("20230827161847-4.blocks")
   val out = new BufferedOutputStream(new java.io.FileOutputStream(outFile))
   def u16(i: Int): Unit = {
     out.write((i & 0xff).toByte)
@@ -119,7 +129,7 @@ object InkDetectionPoints extends App {
       u16(z)
   }
   out.close()
-  println("written")
+  println(s"written size: ${outFile.length()}")
 
   val tree = Leaf[Unit](V3(0, 0, 0), width = 16384, 1, Seq.empty)
   val tree1 = xyzs.foldLeft(tree: Octree[Unit])((tree, xyz) => tree.insert((V3(xyz._1, xyz._2, xyz._3), ())))

@@ -14,6 +14,8 @@ import scala.concurrent.duration.*
 
 trait VolumeAnnotation {
   def contains(x: Int, y: Int, z: Int): Boolean
+
+  def enumerate: Iterable[(Int, Int, Int)]
 }
 object VolumeAnnotation {
   def fromBlocksFile(file: String): VolumeAnnotation = {
@@ -40,6 +42,9 @@ object VolumeAnnotation {
     new VolumeAnnotation {
       override def contains(x: Int, y: Int, z: Int): Boolean =
         blocks.get((x / div, y / div, z / div)).exists(_.contains((x, y, z)))
+
+      override def enumerate: Iterable[(Int, Int, Int)] =
+        blocks /*.toVector.sortBy(_._1).take(3000)*/ .flatMap(_._2)
     }
   }
 }
@@ -92,7 +97,7 @@ object Volume {
                 val newState = states.get().updated((x, y, z), Loaded(map))
                 states.compareAndSet(oldState, newState)
                 loadTile(x, y, z)
-              }, 30.seconds)
+              }, 120.seconds)
         /*val file = fileFor(x, y, z)
           if (file.exists()) {
 
@@ -126,14 +131,14 @@ object Volume {
 }
 
 object CreateVerticalStack extends App {
-  val annotations = VolumeAnnotation.fromBlocksFile("/home/johannes/git/self/_2023/vesuvius-browser/web/20230827161847-2.blocks")
+  val annotations = VolumeAnnotation.fromBlocksFile("/home/johannes/git/self/_2023/vesuvius-browser/web/20230827161847-4.blocks")
 
   //val center = (4525, 2868, 8955)
   //val center = (3986 / 4, 3082 / 4, 11298 / 4)
   //val center = (4019 / 2, 3244 / 2, 9187 / 2)
-  val downsampled = 1
+  val downsampled = 8
   //val center = (4534 / downsampled, 2238 / downsampled, 5143 / downsampled)
-  val center = (2855 / downsampled, 2653 / downsampled, 10910 / downsampled)
+  val center = (2855, 2653, 10910)
   //val cacheDir = f"/home/johannes/git/self/_2023/vesuvius-gui/data4/scrollPHerc1667Cr01Fr03/20231121133215/64-4/d${downsampled}%02d/"
   val scroll = ScrollReference.byId(1).get
   val vol = scroll.defaultVolumeId
@@ -143,18 +148,38 @@ object CreateVerticalStack extends App {
   val config = DataServerConfig.fromConfig(system.settings.config)
   implicit val utils: DownloadUtils = new DownloadUtils(config)
   val volume = Volume.fromBlocks(new File(cacheDir), s"scroll/${scroll.scroll}/volume/$vol", downsampled)
-  println(volume.valueAt(center._1, center._2, center._3))
+  //println(volume.valueAt(center._1, center._2, center._3))
 
   def p(x: Int, y: Int, z: Int): Int = volume.valueAt(x, y, z)
 
-  val xRadius = 300
+  /*val xRadius = 300
   val yRadius = 100
-  val zRadius = 350
-  val Threshold = 130
+  val zRadius = 350*/
+  val Threshold = 120
 
-  val xSpan = (center._1 - xRadius) until (center._1 + xRadius)
-  val ySpan = (center._2 - yRadius) until (center._2 + yRadius)
-  val zSpan = (center._3 - zRadius) until (center._3 + zRadius)
+  /*val minx = center._1 - xRadius
+  val maxx = center._1 + xRadius
+  val miny = center._2 - yRadius
+  val maxy = center._2 + yRadius
+  val minz = center._3 - zRadius
+  val maxz = center._3 + zRadius*/
+
+  val minX = annotations.enumerate.minBy(_._1)._1
+  val maxX = annotations.enumerate.maxBy(_._1)._1
+  val minY = annotations.enumerate.minBy(_._2)._2
+  val maxY = annotations.enumerate.maxBy(_._2)._2
+  val minZ = annotations.enumerate.minBy(_._3)._3
+  val maxZ = annotations.enumerate.maxBy(_._3)._3
+
+  val centerX = (minX + maxX) / 2
+  val centerY = (minY + maxY) / 2
+  val centerZ = (minZ + maxZ) / 2
+
+  println(f"minX: $minX maxX: $maxX minY: $minY maxY: $maxY minZ: $minZ maxZ: $maxZ")
+
+  val xSpan = minX to maxX
+  val ySpan = minY to maxY
+  val zSpan = minZ to maxZ
 
   val x0 = xSpan.head
   val y0 = ySpan.head
@@ -268,13 +293,19 @@ object CreateVerticalStack extends App {
   case class ShapeNode(nodeId: Int, models: Seq[Int]) extends TransformChild
 
   def genVox(): Unit = {
-    val voxels = for {
+    /*val voxels = for {
       x <- xSpan
       y <- ySpan
       z <- zSpan
       v = p(x, y, z)
       if threshold(v) && annotations.contains(x, y, z)
-    } yield (x - x0, y - y0, z - z0, v)
+    } yield (x - x0, y - y0, z - z0, v)*/
+    val voxels = for {
+      (x, y, z) <- annotations.enumerate
+      v = p(x / downsampled, y / downsampled, z / downsampled)
+      if threshold(v)
+    } // x variable is flipped because scroll coordinate system is flipped
+    yield ((maxX - x) / downsampled, (y - minY) / downsampled, (z - minZ) / downsampled, v)
 
     //voxels.take(100).foreach(println)
 
@@ -332,17 +363,18 @@ object CreateVerticalStack extends App {
       groups
         //.take(1)
         .foreach {
-          case ((xt, yt, zt), voxels) =>
+          case ((xt, yt, zt), voxels0) =>
+            val voxels = voxels0.toVector.distinct
             tag("SIZE")
             uint32le(12) // SIZE content size
             uint32le(0) // SIZE children size
             uint32le(256)
             uint32le(256)
-            uint32le(zSpan.size)
+            uint32le(256)
 
             tag("XYZI")
             val size = 4 + 4 * voxels.size
-            println(f"XYZI size: $size for tile $xt/$yt numVoxels: ${voxels.size}")
+            println(f"XYZI size: $size for tile $xt/$yt/$zt numVoxels: ${voxels.size}")
             uint32le(size) // XYZI content size
             uint32le(0) // XYZI children size
             uint32le(voxels.size)
@@ -353,6 +385,10 @@ object CreateVerticalStack extends App {
               //println(f"XYZI: $x $y $z $v")
               //val v1 = if (annotations.contains(xi + x0, yi + y0, zi + z0)) 255 else v
               val v1 = v
+
+              require(x >= 0 && x < 256, s"$x $y $z $v $xi $yi $zi $xt $yt $zt")
+              require(y >= 0 && y < 256, s"$x $y $z $v $xi $yi $zi $xt $yt $zt")
+              require(z >= 0 && z < 256, s"$x $y $z $v $xi $yi $zi $xt $yt $zt")
 
               val xyzi = x | y << 8 | z << 16 | v1 << 24
               uint32le(xyzi)
