@@ -77,13 +77,20 @@ class UV(val c: Long) extends AnyVal {
   def v: Int = (c & 0xfffff).toInt
 
   def xyz(implicit p: PPMReader): (Int, Int, Int) = (x, y, z)
+  def dxyz(implicit p: PPMReader): (Double, Double, Double) = (dvalue(0), dvalue(1), dvalue(2))
+  def dnxyz(implicit p: PPMReader): (Double, Double, Double) = (dvalue(3), dvalue(4), dvalue(5))
 
   def x(implicit p: PPMReader): Int = value(0)
   def y(implicit p: PPMReader): Int = value(1)
   def z(implicit p: PPMReader): Int = value(2)
 
+  def nx(implicit p: PPMReader): Int = value(3)
+  def ny(implicit p: PPMReader): Int = value(4)
+  def nz(implicit p: PPMReader): Int = value(5)
+
   private def basePos(implicit p: PPMReader): Int = ((v % p.chunkHeight) * p.width + u) * 6
-  private def value(offset: Int)(implicit p: PPMReader): Int = p.bufferFor(v).get(basePos + offset).toInt
+  private def value(offset: Int)(implicit p: PPMReader): Int = dvalue(offset).toInt
+  private def dvalue(offset: Int)(implicit p: PPMReader): Double = p.bufferFor(v).get(basePos + offset)
 
   def isValid(implicit p: PPMReader): Boolean = x > 0 || y > 0 || z > 0
 
