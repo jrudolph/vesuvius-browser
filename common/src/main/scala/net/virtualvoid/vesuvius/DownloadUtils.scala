@@ -1,5 +1,6 @@
 package net.virtualvoid.vesuvius
 
+import com.typesafe.config.Config
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.caching.scaladsl.{ CachingSettings, LfuCacheSettings }
@@ -15,6 +16,14 @@ import scala.util.{ Failure, Success, Try }
 trait DataServerConfig {
   def dataServerUsername: String
   def dataServerPassword: String
+}
+object DataServerConfig {
+  def fromConfig(config: Config): DataServerConfig =
+    Impl(
+      dataServerUsername = config.getString("app.data-username"),
+      dataServerPassword = config.getString("app.data-password")
+    )
+  private case class Impl(dataServerUsername: String, dataServerPassword: String) extends DataServerConfig
 }
 
 case class CacheSettings(

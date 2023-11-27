@@ -1,20 +1,24 @@
 package net.virtualvoid.vesuvius.tiles
 
+import net.virtualvoid.vesuvius.{ DataServerConfig, DownloadUtils, ScrollReference }
 import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.http.scaladsl.Http
 
 import java.awt.Color
 import java.io.*
 import java.nio.channels.FileChannel.MapMode
 import java.util.concurrent.atomic.AtomicReference
 import scala.collection.immutable.HashMap
-import scala.concurrent.Future
+import scala.concurrent.{ Await, Future }
+import scala.concurrent.duration.*
 
 trait Volume {
   def valueAt(x: Int, y: Int, z: Int): Int
 }
 
 object Volume {
-  def fromBlocks(cacheDir: File, downsampled: Int)(implicit system: ActorSystem): Volume = {
+  def fromBlocks(cacheDir: File, path: String, downsampled: Int)(implicit system: ActorSystem, utils: DownloadUtils): Volume = {
+    import system.dispatcher
     val states = new AtomicReference(HashMap.empty[(Int, Int, Int), BlockState])
 
     def fileFor(x: Int, y: Int, z: Int): File =
@@ -22,6 +26,11 @@ object Volume {
 
     def tileFor(x: Int, y: Int, z: Int): (Int, Int, Int) =
       (x / 64, y / 64, z / 64)
+
+    val tilesCache = utils.downloadCache[(Int, Int, Int)](
+      { case (x, y, z) => f"https://vesuvius.virtual-void.net/tiles/$path/download/64-4?x=$x&y=$y&z=$z&bitmask=255&downsampling=$downsampled" },
+      { case (x, y, z) => fileFor(x, y, z) }
+    )
 
     def loadTile(x: Int, y: Int, z: Int): (Int, Int, Int) => Int =
       states.get().get((x, y, z)) match {
@@ -39,16 +48,29 @@ object Volume {
             val off = block * 64 + blockZ * 16 + blockY * 4 + blockX
             map.get(off) & 0xff
         case None =>
-          val file = fileFor(x, y, z)
-          println(s"Loading $file")
-          require(file.exists(), s"Missing block file $file")
-          val raf = new RandomAccessFile(file, "r")
-          val channel = raf.getChannel
-          val map = channel.map(MapMode.READ_ONLY, 0, channel.size())
-          val oldState = states.get()
-          val newState = states.get().updated((x, y, z), Loaded(map))
-          states.compareAndSet(oldState, newState)
-          loadTile(x, y, z)
+          Await.result(
+            tilesCache((x, y, z))
+              .map { file =>
+                println(s"Loading $file")
+                require(file.exists(), s"Missing block file $file")
+                val raf = new RandomAccessFile(file, "r")
+                val channel = raf.getChannel
+                val map = channel.map(MapMode.READ_ONLY, 0, channel.size())
+                val oldState = states.get()
+                val newState = states.get().updated((x, y, z), Loaded(map))
+                states.compareAndSet(oldState, newState)
+                loadTile(x, y, z)
+              }, 30.seconds)
+        /*val file = fileFor(x, y, z)
+          if (file.exists()) {
+
+          } else {
+            // https://vesuvius.virtual-void.net/tiles/{}download/64-4?x={}&y={}&z={}&bitmask={}&downsampling={}",
+            val tilesUrl = f"https://vesuvius.virtual-void.net/tiles/$path/download/64-4?x=$x&y=$y&z=$z&bitmask=255&downsampling=$downsampled"
+            println(s"Downloading $tilesUrl")
+
+
+          }*/
       }
 
     new Volume {
@@ -77,18 +99,24 @@ object CreateVerticalStack extends App {
   //val center = (4019 / 2, 3244 / 2, 9187 / 2)
   val downsampled = 1
   //val center = (4534 / downsampled, 2238 / downsampled, 5143 / downsampled)
-  val center = (2636 / downsampled, 822 / downsampled, 4944 / downsampled)
-  val cacheDir = f"/home/johannes/git/self/_2023/vesuvius-gui/data4/scrollPHerc1667Cr01Fr03/20231121133215/64-4/d${downsampled}%02d/"
+  val center = (2712 / downsampled, 2620 / downsampled, 10836 / downsampled)
+  //val cacheDir = f"/home/johannes/git/self/_2023/vesuvius-gui/data4/scrollPHerc1667Cr01Fr03/20231121133215/64-4/d${downsampled}%02d/"
+  val scroll = ScrollReference.byId(1).get
+  val vol = scroll.defaultVolumeId
+
+  val cacheDir = f"/home/johannes/git/self/_2023/vesuvius-gui/data4/scroll${scroll.scroll}/$vol/64-4/d${downsampled}%02d/"
   implicit val system: ActorSystem = ActorSystem("vesuvius")
-  val volume = Volume.fromBlocks(new File(cacheDir), downsampled)
+  val config = DataServerConfig.fromConfig(system.settings.config)
+  implicit val utils: DownloadUtils = new DownloadUtils(config)
+  val volume = Volume.fromBlocks(new File(cacheDir), s"scroll/${scroll.scroll}/volume/$vol", downsampled)
   println(volume.valueAt(center._1, center._2, center._3))
 
   def p(x: Int, y: Int, z: Int): Int = volume.valueAt(x, y, z)
 
-  val xRadius = 128
+  val xRadius = 60
   val yRadius = 60
-  val zRadius = 128
-  val Threshold = 160
+  val zRadius = 200
+  val Threshold = 130
 
   val xSpan = (center._1 - xRadius) until (center._1 + xRadius)
   val ySpan = (center._2 - yRadius) until (center._2 + yRadius)
@@ -368,7 +396,7 @@ object CreateVerticalStack extends App {
       uint32le(256 * 4) // RGBA content size
       uint32le(0) // RGBA children size
       for (i <- 0 until 256) {
-        val v =  (i - Threshold) * 255 / Threshold
+        val v = i //(i - Threshold) * 255 / Threshold
         //val exp = 0.7f
         //val rgb = Color.HSBtoRGB((56f / 360 * math.pow(v.toFloat / 255, exp)).toFloat, 1f - 0.5f * math.pow(v.toFloat / 255, exp).toFloat, 1)
 
@@ -378,9 +406,9 @@ object CreateVerticalStack extends App {
         //val r = (rgb >> 16) & 0xff
         //val g = (rgb >> 8) & 0xff
         //val b = (rgb >> 0) & 0xff
-        val r = 0
+        val r = v
         val g = v
-        val b = 0
+        val b = v
         uint32le(r << 0 | g << 8 | b << 16 | v << 24)
       }
 
