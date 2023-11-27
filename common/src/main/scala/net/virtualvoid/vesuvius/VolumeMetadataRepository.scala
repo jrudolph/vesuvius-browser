@@ -26,7 +26,7 @@ class VolumeMetadataRepository(downloadUtils: DownloadUtils, dataDir: File)(impl
 
   private val MetadataCache = downloadUtils.downloadCache[(ScrollReference, String)](
     { case (scroll, volumeId) => scroll.volumeMetadataUrl(volumeId) },
-    { case (scroll, volumeId) => new File(dataDir, s"metadata/${scroll.scroll}-${volumeId}.json") }
+    { case (scroll, volumeId) => new File(dataDir, s"metadata/${scroll.scrollId}-${volumeId}.json") }
   )
 
   def metadataForVolume(scroll: ScrollReference, volumeId: String): Future[VolumeMetadata] =

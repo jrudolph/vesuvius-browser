@@ -18,8 +18,8 @@
 @for((item: WorkItem, state) <- itemStates) {
 <tr>
     <td>@item.id</td>
-    <td>@item.segment.scroll</td>
-    <td><a href="/scroll/@item.segment.scroll/segment/@item.segment.segmentId/">@item.segment.segmentId</a></td>
+    <td>@item.segment.scrollId</td>
+    <td><a href="/scroll/@item.segment.scrollId/segment/@item.segment.segmentId/">@item.segment.segmentId</a></td>
     <td>@{item.`type`}</td>
     @if(state == WorkItemManager.Queued) {
     <td colspan="2">Queued</td>

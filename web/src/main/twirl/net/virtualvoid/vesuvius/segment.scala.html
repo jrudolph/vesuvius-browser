@@ -3,12 +3,12 @@
 @(info: ImageInfo)
 
 @for(
-    selectedLayers <- Seq(if (Set(332, 1667).contains(info.ref.scroll)) (60 to 105 by 3) else (20 to 50 by 2));
-    extraLayers = if (Set(332, 1667).contains(info.ref.scroll)) Seq(2350, 2351) else Seq(2342, 2343);
+    selectedLayers <- Seq(if (Set("332", "1667").contains(info.ref.scrollId)) (60 to 105 by 3) else (20 to 50 by 2));
+    extraLayers = if (Set("332", "1667").contains(info.ref.scrollId)) Seq(2350, 2351) else Seq(2342, 2343);
     allLayers = selectedLayers ++ extraLayers
 ) {
 
-<h2>Scroll @info.scroll / @info.segmentId</h2>
+<h2>Scroll @info.scrollId / @info.segmentId</h2>
 
 <div>Full data: <a href="@{info.ref.baseUrl}">@{info.ref.baseUrl}</a></div>
 <div>Selected layers: @{selectedLayers.mkString(", ")}</div>
