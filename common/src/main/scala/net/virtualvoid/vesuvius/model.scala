@@ -6,6 +6,8 @@ case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
   def baseUrl: String = base.segmentUrl(this)
 
   def layerUrl(z: Int): String = base.layerUrl(this, z)
+
+  def maskUrl: String = base.maskFor(this)
 }
 object SegmentReference {
   import spray.json._
@@ -40,8 +42,10 @@ object ScrollReference {
 
     ScrollReference("PHerc1667Cr01Fr03", FragmentsBase, "20231121133215"),
     ScrollReference("PHerc0051Cr04Fr08", FragmentsBase, "20231121152933"),
-    ScrollReference("Frag1", FragmentsBase, "20230205142449"),
-    ScrollReference("Frag1", FragmentsBase, "20230213100222")
+    ScrollReference("Frag1", OldFragmentsBase, "20230205142449"), // 2nd volume: 20230213100222
+    ScrollReference("Frag2", OldFragmentsBase, "20230216174557"), // 2nd volume: 20230226143835
+    ScrollReference("Frag3", OldFragmentsBase, "20230212182547"), // 2nd volume: 20230215142309
+    ScrollReference("Frag4", OldFragmentsBase, "20230215185642") // 2nd volume: 20230222173037
   )
 
   def byId(id: Int): Option[ScrollReference] =
@@ -56,6 +60,9 @@ sealed trait ScrollServerBase extends Product {
   def baseUrl(scrollId: String): String = s"${scrollUrl(scrollId)}paths/"
   def segmentUrl(segment: SegmentReference): String =
     s"${baseUrl(segment.scrollId)}${segment.segmentId}/"
+
+  def maskFor(segment: SegmentReference): String =
+    s"${segmentUrl(segment)}/${segment.segmentId}_mask.json"
 
   def layerUrl(segment: SegmentReference, z: Int): String =
     f"${segmentUrl(segment)}layers/$z%02d.tif"
@@ -78,6 +85,22 @@ case object PHercBase extends ScrollServerBase {
 case object FragmentsBase extends ScrollServerBase {
   def scrollUrl(scroll: String): String =
     s"http://dl.ash2txt.org/fragments/$scroll.volpkg/"
+}
+
+case object OldFragmentsBase extends ScrollServerBase {
+  def scrollUrl(scroll: String): String =
+    s"http://dl.ash2txt.org/fragments/$scroll.volpkg/"
+
+  override def baseUrl(scrollId: String): String =
+    s"${scrollUrl(scrollId)}working/"
+
+  override def layerUrl(segment: SegmentReference, z: Int): String =
+    if (segment.scrollId == "Frag4") f"${segmentUrl(segment)}PHercParis1Fr39_54keV_surface_volume/$z%02d.tif"
+    else f"${segmentUrl(segment)}surface_volume/$z%02d.tif"
+
+  override def maskFor(segment: SegmentReference): String =
+    if (segment.scrollId == "Frag4") f"${segmentUrl(segment)}PHercParis1Fr39_54keV_mask.png"
+    else s"${segmentUrl(segment)}mask.png"
 }
 
 case class ImageInfo(

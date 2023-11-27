@@ -267,7 +267,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         import sys.process._
         val cmd = s"vipsheader -a $f"
         val output = cmd.!!
-        val kvs = output.split('\n').map(_.split(": ").map(_.trim)).map(a => a(0) -> a(1)).toMap
+        val kvs =
+          output.split('\n')
+            .map(_.split(": ").map(_.trim))
+            .filter(_.size == 2)
+            .map(a => a(0) -> a(1)).toMap
         val width = kvs("width").toInt
         val height = kvs("height").toInt
         (width, height)
@@ -388,7 +392,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def maskFor(segment: SegmentReference): Future[File] = {
     import segment._
     cacheDownload(
-      s"${segment.baseUrl}${segment.segmentId}_mask.png",
+      segment.maskUrl,
       new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask.png"))
   }
 
