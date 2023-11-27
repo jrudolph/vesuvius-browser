@@ -8,9 +8,41 @@ import java.awt.Color
 import java.io.*
 import java.nio.channels.FileChannel.MapMode
 import java.util.concurrent.atomic.AtomicReference
-import scala.collection.immutable.HashMap
+import scala.collection.immutable.{ HashMap, HashSet, TreeSet }
 import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration.*
+
+trait VolumeAnnotation {
+  def contains(x: Int, y: Int, z: Int): Boolean
+}
+object VolumeAnnotation {
+  def fromBlocksFile(file: String): VolumeAnnotation = {
+    val f = new File(file)
+    val fis = new BufferedInputStream(FileInputStream(f))
+    def u16(): Int =
+      fis.read() | fis.read() << 8
+
+    val numBlocks = (f.length() / 6).toInt
+    println(s"Reading $numBlocks voxels from $file")
+    val div = 16
+    val blocks0 = Vector.fill(numBlocks)((u16(), u16(), u16()))
+    println("Putting into set")
+    val blocks =
+      blocks0.groupBy {
+        case (x, y, z) => (x / div, y / div, z / div)
+      }
+        /*.view
+      .mapValues(_.to(HashSet))*/
+        .toMap
+    //val blocks = blocks0.to(TreeSet)
+    println("Done")
+
+    new VolumeAnnotation {
+      override def contains(x: Int, y: Int, z: Int): Boolean =
+        blocks.get((x / div, y / div, z / div)).exists(_.contains((x, y, z)))
+    }
+  }
+}
 
 trait Volume {
   def valueAt(x: Int, y: Int, z: Int): Int
@@ -94,12 +126,14 @@ object Volume {
 }
 
 object CreateVerticalStack extends App {
+  val annotations = VolumeAnnotation.fromBlocksFile("/home/johannes/git/self/_2023/vesuvius-browser/web/20230827161847-2.blocks")
+
   //val center = (4525, 2868, 8955)
   //val center = (3986 / 4, 3082 / 4, 11298 / 4)
   //val center = (4019 / 2, 3244 / 2, 9187 / 2)
   val downsampled = 1
   //val center = (4534 / downsampled, 2238 / downsampled, 5143 / downsampled)
-  val center = (2712 / downsampled, 2620 / downsampled, 10836 / downsampled)
+  val center = (2855 / downsampled, 2653 / downsampled, 10910 / downsampled)
   //val cacheDir = f"/home/johannes/git/self/_2023/vesuvius-gui/data4/scrollPHerc1667Cr01Fr03/20231121133215/64-4/d${downsampled}%02d/"
   val scroll = ScrollReference.byId(1).get
   val vol = scroll.defaultVolumeId
@@ -113,9 +147,9 @@ object CreateVerticalStack extends App {
 
   def p(x: Int, y: Int, z: Int): Int = volume.valueAt(x, y, z)
 
-  val xRadius = 60
-  val yRadius = 60
-  val zRadius = 200
+  val xRadius = 300
+  val yRadius = 100
+  val zRadius = 350
   val Threshold = 130
 
   val xSpan = (center._1 - xRadius) until (center._1 + xRadius)
@@ -239,7 +273,7 @@ object CreateVerticalStack extends App {
       y <- ySpan
       z <- zSpan
       v = p(x, y, z)
-      if threshold(v)
+      if threshold(v) && annotations.contains(x, y, z)
     } yield (x - x0, y - y0, z - z0, v)
 
     //voxels.take(100).foreach(println)
@@ -317,7 +351,10 @@ object CreateVerticalStack extends App {
               val y = yi - yt * 256
               val z = zi - zt * 256
               //println(f"XYZI: $x $y $z $v")
-              val xyzi = x | y << 8 | z << 16 | v << 24
+              //val v1 = if (annotations.contains(xi + x0, yi + y0, zi + z0)) 255 else v
+              val v1 = v
+
+              val xyzi = x | y << 8 | z << 16 | v1 << 24
               uint32le(xyzi)
             }
         }
@@ -396,19 +433,25 @@ object CreateVerticalStack extends App {
       uint32le(256 * 4) // RGBA content size
       uint32le(0) // RGBA children size
       for (i <- 0 until 256) {
-        val v = i //(i - Threshold) * 255 / Threshold
-        //val exp = 0.7f
-        //val rgb = Color.HSBtoRGB((56f / 360 * math.pow(v.toFloat / 255, exp)).toFloat, 1f - 0.5f * math.pow(v.toFloat / 255, exp).toFloat, 1)
+        val v = i
+        //val v = (i - Threshold) * 255 / Threshold
+        val exp = 0.7f
+        val rgb = Color.HSBtoRGB((56f / 360 * math.pow(v.toFloat / 255, exp)).toFloat, 1f - 0.5f * math.pow(v.toFloat / 255, exp).toFloat, 1)
 
         // start 0
         // end 53 / 360
 
-        //val r = (rgb >> 16) & 0xff
-        //val g = (rgb >> 8) & 0xff
-        //val b = (rgb >> 0) & 0xff
-        val r = v
+        val (r, g, b) =
+          if (v == 255)
+            (0, 255, 0)
+          else
+            (rgb >> 16 & 0xff, rgb >> 8 & 0xff, rgb & 0xff)
+        /*val r = (rgb >> 16) & 0xff
+        val g = (rgb >> 8) & 0xff
+        val b = (rgb >> 0) & 0xff*/
+        /*val r = v
         val g = v
-        val b = v
+        val b = v*/
         uint32le(r << 0 | g << 8 | b << 16 | v << 24)
       }
 
