@@ -6,6 +6,7 @@ import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.caching.scaladsl.{ CachingSettings, LfuCacheSettings }
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, headers }
+import org.apache.pekko.pattern.after
 import org.apache.pekko.stream.scaladsl.{ FileIO, Keep, Sink }
 
 import java.io.File
@@ -171,8 +172,14 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
     Http().singleRequest(HttpRequest(HttpMethods.GET, uri = url, headers = auth :: Nil))
       .flatMap { res =>
-        require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
-        res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
+        res.status match {
+          case StatusCodes.OK =>
+            res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
+          case StatusCodes.EnhanceYourCalm =>
+            println(s"Got status ${res.status} for $url, retrying in 10 seconds")
+            after(10.seconds, system.scheduler)(download(url, to))
+          case _ => throw new IllegalArgumentException(s"Got status ${res.status} for $url")
+        }
       }
       .map { _ => tmpFile.renameTo(to); to }
   }
