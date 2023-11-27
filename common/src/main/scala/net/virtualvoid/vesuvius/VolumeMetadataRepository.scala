@@ -15,7 +15,11 @@ case class VolumeMetadata(
     `type`:    String,
     min:       Double,
     max:       Double,
-    voxelsize: Double)
+    voxelsize: Double) {
+  def formatLayer(layer: Int): String =
+    if (slices >= 10000) f"$layer%05d" else f"$layer%04d"
+
+}
 object VolumeMetadata {
   import DefaultJsonProtocol.*
   implicit val format: RootJsonFormat[VolumeMetadata] = jsonFormat9(apply)
