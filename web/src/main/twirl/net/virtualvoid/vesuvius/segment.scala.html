@@ -1,10 +1,9 @@
 @import net.virtualvoid.vesuvius._
 
-@(info: ImageInfo)
+@(info: ImageInfo, selectedLayers: Seq[Int], extraLayers: Seq[Int])
 
 @for(
-    selectedLayers <- Seq(if (Set("332", "1667").contains(info.ref.scrollId)) (60 to 105 by 3) else (20 to 50 by 2));
-    extraLayers = if (Set("332", "1667").contains(info.ref.scrollId)) Seq(2350, 2351) else Seq(2342, 2343);
+    tmp <- Seq(0);
     allLayers = selectedLayers ++ extraLayers
 ) {
 

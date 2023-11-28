@@ -5,10 +5,10 @@ import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.marshalling.ToResponseMarshallable
-import org.apache.pekko.http.scaladsl.model.ws.{Message, TextMessage}
-import org.apache.pekko.http.scaladsl.model.{HttpMethods, HttpRequest, StatusCodes, Uri, headers}
-import org.apache.pekko.http.scaladsl.server.{Directive1, Directives, Route}
-import org.apache.pekko.stream.scaladsl.{FileIO, Flow, Sink, Source}
+import org.apache.pekko.http.scaladsl.model.ws.{ Message, TextMessage }
+import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, Uri, headers }
+import org.apache.pekko.http.scaladsl.server.{ Directive1, Directives, Route }
+import org.apache.pekko.stream.scaladsl.{ FileIO, Flow, Sink, Source }
 import play.twirl.api.Html
 import spray.json.*
 
@@ -92,11 +92,19 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       },
       pathPrefix("scroll" / Segment / "segment" / Segment) { (scroll, segmentId) =>
         resolveRef(scroll, segmentId) { segment =>
+          val isHighResScroll = Set("332", "1667").contains(segment.scrollId)
 
           imageInfo(segment).await.orReject { (info: ImageInfo) =>
             concat(
               pathSingleSlash {
-                page(html.segment(info))
+                userManagement.loggedIn { user =>
+                  val selectedLayers =
+                    if (user.exists(_.admin))
+                      if (isHighResScroll) (0 to 150) else (0 to 64)
+                    else if (isHighResScroll) (60 to 105 by 3) else (20 to 50 by 2)
+                  val extraLayers = if (isHighResScroll) Seq(2350, 2351) else Seq(2342, 2343)
+                  page(html.segment(info, selectedLayers, extraLayers))
+                }
               },
               path("mask") {
                 resizedMask(segment).deliver
@@ -104,10 +112,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               pathPrefix("inferred" / Segment) { model =>
                 val input = model match {
                   // FIXME: use constants instead
-                  case "youssef-test" if Set("0332", "1667").contains(segment.scrollId)          => requestedWorkInputs(2)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test" if Set("0332", "1667").contains(segment.scrollId) => requestedWorkInputs(2)._1.asInstanceOf[InferenceWorkItemInput]
                   case "youssef-test-reversed" if Set("0332", "1667").contains(segment.scrollId) => requestedWorkInputs(3)._1.asInstanceOf[InferenceWorkItemInput]
-                  case "youssef-test"                                   => requestedWorkInputs(0)._1.asInstanceOf[InferenceWorkItemInput]
-                  case "youssef-test-reversed"                          => requestedWorkInputs(1)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test" => requestedWorkInputs(0)._1.asInstanceOf[InferenceWorkItemInput]
+                  case "youssef-test-reversed" => requestedWorkInputs(1)._1.asInstanceOf[InferenceWorkItemInput]
                 }
                 concat(
                   pathEnd {
