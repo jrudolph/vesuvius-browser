@@ -159,7 +159,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
   def download(url: String, to: File): Future[File] = {
     println(s"Downloading $url")
-    val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
+    val tmpFile = new File(to.getParentFile, s".tmp.${to.getName}")
     Http().singleRequest(HttpRequest(HttpMethods.GET, uri = url, headers = auth :: Nil))
       .flatMap { res =>
         require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
