@@ -315,18 +315,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         }
 
       tmpFile
-        .flatMap { tmpFile =>
-          val tmpFile2 = File.createTempFile(".tmp.convert", ".jp2", targetFile.getParentFile)
-          import sys.process._
-          val cmd = s"""vips copy $tmpFile "$tmpFile2[lossless]""""
-
-          vipsCommandRunner(cmd).map { _ =>
-            targetFile.getParentFile.mkdirs()
-            require(tmpFile2.renameTo(targetFile))
-            tmpFile.delete()
-            targetFile
-          }
-        }
     }
   }
 
