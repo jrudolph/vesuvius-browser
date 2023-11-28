@@ -72,6 +72,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           }
         }
       },
+      path("401") {
+        mapResponse(_.withStatus(StatusCodes.Unauthorized)) {
+          complete(ToResponseMarshallable(html.error401())(twirlHtmlMarshaller))
+        }
+      },
       path("login") {
         concat(
           post {
