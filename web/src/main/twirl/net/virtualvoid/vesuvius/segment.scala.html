@@ -164,7 +164,9 @@ function idxOfLayer(layer) {
   return layers.indexOf(layer);
 }
 
-var keyMapping = { '1': idxOfLayer('@{extraLayers(0)}'), '2': idxOfLayer('@{extraLayers(1)}') };
+var keyMapping = {
+    @for((layer, i) <- extraLayers.zipWithIndex) { '@{i + 1}': idxOfLayer('@{layer}'), }
+};
 
 viewer.addHandler('canvas-key', function(event) {
     var idx = keyMapping[event.originalEvent.key];

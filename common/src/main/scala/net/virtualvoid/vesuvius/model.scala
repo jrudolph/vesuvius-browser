@@ -8,6 +8,7 @@ case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
   def layerUrl(z: Int): String = base.layerUrl(this, z)
 
   def maskUrl: String = base.maskFor(this)
+  def inklabelUrl: String = base.inklabelFor(this)
 }
 object SegmentReference {
   import spray.json._
@@ -64,6 +65,9 @@ sealed trait ScrollServerBase extends Product {
   def maskFor(segment: SegmentReference): String =
     s"${segmentUrl(segment)}/${segment.segmentId}_mask.json"
 
+  def inklabelFor(segment: SegmentReference): String =
+    s"${segmentUrl(segment)}/${segment.segmentId}_mask.json"
+
   def layerUrl(segment: SegmentReference, z: Int): String =
     f"${segmentUrl(segment)}layers/$z%02d.tif"
 }
@@ -101,6 +105,10 @@ case object OldFragmentsBase extends ScrollServerBase {
   override def maskFor(segment: SegmentReference): String =
     if (segment.scrollId == "Frag4") f"${segmentUrl(segment)}PHercParis1Fr39_54keV_mask.png"
     else s"${segmentUrl(segment)}mask.png"
+
+  override def inklabelFor(segment: SegmentReference): String =
+    if (segment.scrollId == "Frag4") f"${segmentUrl(segment)}PHercParis1Fr39_54keV_inklabels.png"
+    else s"${segmentUrl(segment)}inklabels.png"
 }
 
 case class ImageInfo(

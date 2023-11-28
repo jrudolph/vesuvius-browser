@@ -107,8 +107,20 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                         (60 to 105 by 3)
                     else
                       (20 to 50 by 2)
+
                   val extraLayers = if (isHighResScroll) Seq(2350, 2351) else Seq(2342, 2343)
-                  page(html.segment(info, selectedLayers, extraLayers))
+                  val allExtraLayers = extraLayers :+ 3000
+
+                  // check if inferred layers actually exist
+                  val allLayerSegments = Future.traverse(allExtraLayers)(l => segmentLayer(segment, l).transform {
+                    case Success(f) if f.exists => Success(Some(l))
+                    case _                      => Success(None)
+                  })
+
+                  allLayerSegments.await { extras =>
+                    val filteredLayers = extras.flatten
+                    page(html.segment(info, selectedLayers, filteredLayers))
+                  }
                 }
               },
               path("mask") {
@@ -307,6 +319,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32_reverse.png"))
     else if (layer == 2350) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32.png"))
     else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32_reverse.png"))
+    else if (layer == 3000) inklabelFor(segment).map(_.get)
     else {
       val webpVersion = new File(dataDir, s"raw/scroll$scrollId/$segmentId/layers/$layer.webp")
 
@@ -400,6 +413,16 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     cacheDownload(
       segment.maskUrl,
       new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask.png"))
+  }
+
+  def inklabelFor(segment: SegmentReference): Future[Option[File]] = {
+    import segment._
+    cacheDownload(
+      segment.inklabelUrl,
+      new File(dataDir, s"inklabels/scroll$scrollId/$segmentId/inklabel.png")
+    )
+      .map(f => if (f.exists()) Some(f) else None)
+      .transform(x => Success(x.toOption.flatten))
   }
 
   def areaFor(segment: SegmentReference): Future[Option[Float]] = {
