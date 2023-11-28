@@ -101,7 +101,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   val selectedLayers =
                     if (user.exists(_.admin))
                       if (isHighResScroll) (0 to 150) else (0 to 64)
-                    else if (isHighResScroll) (60 to 105 by 3) else (20 to 50 by 2)
+                    else if (isHighResScroll)
+                      if (segment.segmentId == "20231111135340") 0 to 150
+                      else
+                        (60 to 105 by 3)
+                    else
+                      (20 to 50 by 2)
                   val extraLayers = if (isHighResScroll) Seq(2350, 2351) else Seq(2342, 2343)
                   page(html.segment(info, selectedLayers, extraLayers))
                 }
