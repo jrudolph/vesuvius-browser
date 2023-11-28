@@ -2,15 +2,15 @@ package net.virtualvoid.vesuvius
 
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
-import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, HttpHeader, HttpMethods, HttpRequest, HttpResponse, RequestEntity, StatusCodes, headers}
+import org.apache.pekko.http.scaladsl.model.{ ContentTypes, HttpEntity, HttpHeader, HttpMethods, HttpRequest, HttpResponse, RequestEntity, StatusCodes, headers }
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
 import org.apache.pekko.http.scaladsl.marshalling.Marshal
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
-import org.apache.pekko.stream.scaladsl.{FileIO, Sink, Source}
+import org.apache.pekko.stream.scaladsl.{ FileIO, Sink, Source }
 
-import scala.concurrent.{ExecutionContext, Future}
-import java.io.{BufferedOutputStream, File, FileOutputStream}
-import Predef.{println as _, *}
+import scala.concurrent.{ ExecutionContext, Future }
+import java.io.{ BufferedOutputStream, File, FileOutputStream }
+import Predef.{ println => _, _ }
 
 object VesuviusWorkerMain extends App {
   Console.println(s"Booting up Vesuvius worker version ${BuildInfo.version} built at ${BuildInfo.builtAtString}")
@@ -24,9 +24,9 @@ object VesuviusWorkerMain extends App {
   def runWorkItem(item: WorkItem): Future[(File, WorkItemResult)] = {
     implicit val ctx = contextFor(item)
     item.input match {
-      case i: InferenceWorkItemInput      => Tasks.infer(item, i)
-      case p@PPMFingerprintWorkItemInput => Tasks.ppmFingerprint(item)
-      case d: DownsamplePPMWorkItemInput => Tasks.downsamplePpm(item, d)
+      case i: InferenceWorkItemInput       => Tasks.infer(item, i)
+      case p @ PPMFingerprintWorkItemInput => Tasks.ppmFingerprint(item)
+      case d: DownsamplePPMWorkItemInput   => Tasks.downsamplePpm(item, d)
     }
   }
 
@@ -89,14 +89,14 @@ object VesuviusWorkerMain extends App {
       .recover {
         case ex =>
           // we currently get 302s from the server when it has no work, we handle that silently
-        if (!ex.getMessage.contains("Unexpected status code 302 Found")) {
-          println(s"Error: $ex")
-          ex.printStackTrace()
-          println("Backing off for a while")
-        } else
-          Console.println("No work, sleeping for 10s")
-        Thread.sleep(10000)
-        ()
+          if (!ex.getMessage.contains("Unexpected status code 302 Found")) {
+            println(s"Error: $ex")
+            ex.printStackTrace()
+            println("Backing off for a while")
+          } else
+            Console.println("No work, sleeping for 10s")
+          Thread.sleep(10000)
+          ()
       }
       .flatMap(_ => worker)
 
