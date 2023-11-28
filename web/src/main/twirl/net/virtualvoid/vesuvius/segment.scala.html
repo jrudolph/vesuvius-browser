@@ -236,7 +236,7 @@ viewer.addHandler('open', function() {
 
             requestXYZ(webPoint, data => {
                 cachedPosition = data;
-                positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + `x: ${data.x}, y: ${data.y}, z: ${data.z}`;
+                positionEl.innerHTML = `u: ${u} v: ${v} layer:${layers[index]}` + "<br>" + `x: ${data.x}, y: ${data.y}, z: ${data.z}`;
             });
 
             var color;
@@ -245,7 +245,7 @@ viewer.addHandler('open', function() {
             } else {
                 color = "color: #eee;";
             }
-            positionEl.innerHTML = `u: ${u} v: ${v}` + "<br>" + `<span style="${color}">x: ${cachedPosition.x}, y: ${cachedPosition.y}, z: ${cachedPosition.z}</span>`;
+            positionEl.innerHTML = `u: ${u} v: ${v} layer:${layers[index]}` + "<br>" + `<span style="${color}">x: ${cachedPosition.x}, y: ${cachedPosition.y}, z: ${cachedPosition.z}</span>`;
         } else {
             positionEl.innerHTML = '';
         }
