@@ -171,7 +171,9 @@ var keyMapping = {
 viewer.addHandler('canvas-key', function(event) {
     var idx = keyMapping[event.originalEvent.key];
     if (idx) {
-        viewer.world.getItemAt(idx).setOpacity(0.75);
+        var opacity = 0.75;
+        if (layers[idx] == "3000") opacity = 0.3;
+        viewer.world.getItemAt(idx).setOpacity(opacity);
     }
 });
 viewer.innerTracker.keyUpHandler = function(event) {
