@@ -292,12 +292,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     } yield ImageInfo(segment, width, height, area)
   }.transform(x => Success(x.toOption))
 
-  val SegmentLayerCache = LfuCache[(SegmentReference, Int), File]
-
-  def segmentLayer(segment: SegmentReference, layer: Int): Future[File] =
-    SegmentLayerCache.getOrLoad((segment, layer), _ => _segmentLayer(segment, layer))
-
-  def _segmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
+  def segmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
     import segment._
     val targetFile = new File(dataDir, s"raw/scroll$scrollId/$segmentId/layers/$layer.jp2")
     targetFile.getParentFile.mkdirs()
@@ -320,17 +315,18 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         }
 
       tmpFile
-        .map { tmpFile =>
+        .flatMap { tmpFile =>
           val tmpFile2 = File.createTempFile(".tmp.convert", ".jp2", targetFile.getParentFile)
           import sys.process._
           val cmd = s"""vips copy $tmpFile "$tmpFile2[lossless]""""
-          println(s"Convert big image to jp2: $cmd")
-          cmd.!!
-          targetFile.getParentFile.mkdirs()
-          require(tmpFile2.renameTo(targetFile))
-          tmpFile.delete()
-          targetFile
-        }(cpuBound)
+
+          vipsCommandRunner(cmd).map { _ =>
+            targetFile.getParentFile.mkdirs()
+            require(tmpFile2.renameTo(targetFile))
+            tmpFile.delete()
+            targetFile
+          }
+        }
     }
   }
 
@@ -347,16 +343,25 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def extractDZ(info: ImageInfo, z: Int): Future[File] = {
     val targetDir = new File(dataDir, s"tiles-dz/scroll${info.scrollId}/${info.segmentId}/layers/${z}_files")
     if (targetDir.exists()) Future.successful(targetDir)
-    else segmentLayer(info.ref, z).map { imageFile =>
+    else segmentLayer(info.ref, z).flatMap { imageFile =>
       targetDir.getParentFile.mkdirs()
-      import sys.process._
       val tmpFile = File.createTempFile(s".tmp.$z", "", targetDir.getParentFile)
       val cmd = s"""vips dzsave $imageFile $tmpFile --suffix .jpg --tile-size 512 --overlap 0"""
-      println(s"Extracting DZ: $cmd")
+
+      vipsCommandRunner(cmd).map { _ =>
+        val tmpDir = new File(tmpFile.getParentFile, tmpFile.getName + "_files")
+        require(tmpDir.renameTo(targetDir))
+        imageFile.delete()
+        targetDir
+      }
+    }
+  }
+
+  lazy val (vipsCommandRunner, _) = downloadUtils.semaphore[String, String](3) { (cmd, _) =>
+    Future {
+      import sys.process._
+      println(s"Running $cmd")
       cmd.!!
-      val tmpDir = new File(tmpFile.getParentFile, tmpFile.getName + "_files")
-      require(tmpDir.renameTo(targetDir))
-      targetDir
     }(cpuBound)
   }
 
