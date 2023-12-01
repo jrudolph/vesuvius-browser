@@ -7,7 +7,7 @@ import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, headers }
 import org.apache.pekko.stream.scaladsl.{ FileIO, Keep, Sink }
 
-import java.io.File
+import java.io.{ File, PrintStream }
 import scala.concurrent.duration.*
 import scala.concurrent.{ Future, Promise, TimeoutException }
 import scala.util.{ Failure, Success, Try }
@@ -130,6 +130,9 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
               neg.getParentFile.mkdirs()
               neg.delete()
               neg.createNewFile()
+              val fos = new java.io.FileOutputStream(neg)
+              t.printStackTrace(new PrintStream(fos))
+              fos.close()
               Future.failed(t)
           }
       }
