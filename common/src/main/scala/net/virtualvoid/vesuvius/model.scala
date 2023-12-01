@@ -63,10 +63,10 @@ sealed trait ScrollServerBase extends Product {
     s"${baseUrl(segment.scrollId)}${segment.segmentId}/"
 
   def maskFor(segment: SegmentReference): String =
-    s"${segmentUrl(segment)}/${segment.segmentId}_mask.json"
+    s"${segmentUrl(segment)}/${segment.segmentId}_mask.png"
 
   def inklabelFor(segment: SegmentReference): String =
-    s"${segmentUrl(segment)}/${segment.segmentId}_mask.json"
+    s"${segmentUrl(segment)}/${segment.segmentId}_inklabels.png"
 
   def layerUrl(segment: SegmentReference, z: Int): String =
     f"${segmentUrl(segment)}layers/$z%02d.tif"
