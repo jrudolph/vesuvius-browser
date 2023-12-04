@@ -1,0 +1,306 @@
+@import net.virtualvoid.vesuvius._
+
+@(info: ImageInfo, allLayers: Seq[Int], extraLayers: Seq[Int])
+
+<div id="openseadragon1" style="width: 100%; height: 80%;"></div>
+<script src="/openseadragon/openseadragon.min.js"></script>
+<script src="/js/jquery-3.7.1.min.js.js"></script>
+<script type="text/javascript">
+
+    var origHash = window.location.hash.substring(1);
+    var layers = [@for(l <- allLayers) { "@l", }];
+var viewer = OpenSeadragon({
+    id: "openseadragon1",
+    prefixUrl: "/openseadragon/images/",
+    tileSources: [@for(l <- allLayers) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
+    initialPage: 6,
+    showNavigator: true,
+    showRotationControl: true,
+    zoomPerClick: 1.0,
+    //sequenceMode: true,
+    preserveViewport: true,
+    preload: true,
+    debugMode: false,
+});
+
+index = 7;
+
+function sibling(index, shownIndex) {
+    if (index >= viewer.world.getItemCount()) index = viewer.world.getItemCount() - 1;
+    if (index < 0) index = 0;
+
+    if (index == shownIndex) return;
+    var tiledImage = viewer.world.getItemAt(index);
+    tiledImage.setOpacity(0);
+    tiledImage.setPreload(true);
+}
+
+function disable_sibling(index) {
+    if (index >= viewer.world.getItemCount()) index = viewer.world.getItemCount() - 1;
+    if (index < 0) index = 0;
+
+    var tiledImage = viewer.world.getItemAt(index);
+    tiledImage.setPreload(false);
+}
+
+function show(nextIndex) {
+  disable_sibling(index - 1);
+  disable_sibling(index + 1);
+
+  var oldTiledImage = viewer.world.getItemAt(index);
+  var oldIndex = index;
+  index = nextIndex;
+  if (index >= viewer.world.getItemCount()) index = viewer.world.getItemCount() - 1;
+  if (index < 0) index = 0;
+  //console.log(oldIndex, index);
+  var newTiledImage = viewer.world.getItemAt(index);
+  oldTiledImage.setOpacity(0);
+  oldTiledImage.setPreload(false);
+  newTiledImage.setOpacity(1);
+  sibling(index - 1, index);
+  sibling(index + 1, index);
+
+  function showButton(button, show) {
+    if (show) button.enable();
+    else button.disable();
+  }
+
+  showButton(viewer.previousButton, index - 1 >= 0);
+  showButton(viewer.nextButton, index + 1 < viewer.world.getItemCount());
+  updateHash();
+}
+
+viewer.bindSequenceControls();
+viewer.previousButton.removeAllHandlers('release');
+viewer.previousButton.addHandler('release', function() {
+  show(index - 1);
+});
+viewer.nextButton.removeAllHandlers('release');
+viewer.nextButton.addHandler('release', function() {
+  show(index + 1);
+});
+
+function updateHash() {
+    var tile = viewer.world.getItemAt(index);
+    var imp = tile.viewportToImageCoordinates(viewer.viewport.getCenter(true));
+    var u = imp.x.toFixed(0);
+    var v = imp.y.toFixed(0);
+    var rot = viewer.viewport.getRotation();
+    var flip = viewer.viewport.getFlip();
+    var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true)).toFixed(3);
+    var newHash = "#u=" + u + "&v=" + v + "&zoom=" + zoom + "&rot=" + rot + "&flip=" + flip + "&layer=" + layers[index];
+    history.replaceState(undefined, undefined, newHash);
+}
+
+viewer.addHandler('pan', updateHash);
+viewer.addHandler('zoom', updateHash);
+viewer.addHandler('rotate', updateHash);
+
+viewer.addHandler('open', function() {
+    //console.log("open", origHash);
+
+    var hash = origHash;
+    viewer.canvas.focus();
+
+    var params = {}
+    hash.split('&').map(hk => {
+      let temp = hk.split('=');
+        params[temp[0]] = temp[1]
+    });
+
+    var tile = viewer.world.getItemAt(index);
+    if (params.x || params.u) {
+        // parse params.x to int
+        var u = 0;
+        if (params.u) u = parseFloat(params.u);
+        else if (params.x) u = parseFloat(params.x); // legacy support for `x`
+        var v = 0;
+        if (params.v) v = parseFloat(params.v);
+        else if (params.y) v = parseFloat(params.y); // legacy support for `y`
+
+        var imp = new OpenSeadragon.Point(u, v);
+        viewer.viewport.panTo(tile.imageToViewportCoordinates(imp), true);
+    }
+    if (params.zoom) {
+        viewer.viewport.zoomTo(tile.imageToViewportZoom(parseFloat(params.zoom)), true);
+    }
+    if (params.rot) {
+        viewer.viewport.setRotation(parseFloat(params.rot), true);
+    }
+    if (params.flip) {
+        viewer.viewport.setFlip(params.flip == "true", true);
+    }
+    if (params.layer) {
+        var layer = params.layer;
+        // find index of element in layers
+        var i = layers.indexOf(layer);
+        show(i);
+    } else
+        show(7);
+});
+
+function idxOfLayer(layer) {
+  return layers.indexOf(layer);
+}
+
+var keyMapping = {
+    @for((layer, i) <- extraLayers.zipWithIndex) { '@{i + 1}': idxOfLayer('@{layer}'), }
+};
+
+viewer.addHandler('canvas-key', function(event) {
+    var idx = keyMapping[event.originalEvent.key];
+    if (idx) {
+        var opacity = 0.75;
+        if (layers[idx] == "3000") opacity = 0.3;
+        viewer.world.getItemAt(idx).setOpacity(opacity);
+    }
+});
+viewer.innerTracker.keyUpHandler = function(event) {
+    var idx = keyMapping[event.originalEvent.key];
+    if (idx) {
+        viewer.world.getItemAt(idx).setOpacity(0);
+    }
+};
+
+viewer.goToPreviousPage = function() {
+  show(index - 1);
+};
+viewer.goToNextPage = function() {
+  show(index + 1);
+};
+
+viewer.addHandler('full-screen', function(ev) {
+  viewer.canvas.focus();
+});
+
+viewer.pixelsPerArrowPress = 250;
+
+var ppmSocket;
+
+var positionEl = document.querySelectorAll('.info .position')[0];
+
+var traceWS = false;
+
+viewer.addHandler('open', function() {
+    var lastRequest = {u:0, v:0};
+    var lastResponse = {x:0, y:0, z:0};
+    var nextRequest = {u:0, v:0};
+    var callback = null;
+    function requestXYZ(webPoint, f) {
+        var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+        var tiledImage = viewer.world.getItemAt(index);
+        var imagePoint = tiledImage.viewportToImageCoordinates(viewportPoint);
+        var u = imagePoint.x.toFixed();
+        var v = imagePoint.y.toFixed();
+
+        if (lastRequest.u == u && lastRequest.v == v) {
+            f(lastResponse);
+        } else if (ppmSocket && ppmSocket.readyState == 1) {
+            nextRequest = {u:u, v:v};
+
+            callback = f;
+            ppmSocket.send(`${u},${v}`);
+        }
+    }
+
+    var cachedPosition = { x: 0, y: 0, z: 0 };
+    function updatePosition(position) {
+        if (position) {
+            var webPoint = position;
+            var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+            var tiledImage = viewer.world.getItemAt(index);
+            var imagePoint = tiledImage.viewportToImageCoordinates(viewportPoint);
+            var u = imagePoint.x.toFixed();
+            var v = imagePoint.y.toFixed();
+
+            requestXYZ(webPoint, data => {
+                cachedPosition = data;
+                positionEl.innerHTML = `u: ${u} v: ${v} layer:${layers[index]}` + "<br>" + `x: ${data.x}, y: ${data.y}, z: ${data.z}`;
+            });
+
+            var color;
+            if (lastRequest.u == u && lastRequest.v == v) {
+                color = "";
+            } else {
+                color = "color: #eee;";
+            }
+            positionEl.innerHTML = `u: ${u} v: ${v} layer:${layers[index]}` + "<br>" + `<span style="${color}">x: ${cachedPosition.x}, y: ${cachedPosition.y}, z: ${cachedPosition.z}</span>`;
+        } else {
+            positionEl.innerHTML = '';
+        }
+    }
+
+    var tracker = new OpenSeadragon.MouseTracker({
+        element: viewer.container,
+        moveHandler: function(event) {
+            updatePosition(event.position);
+        },
+    });
+    var clickPosition = null;
+    var lastClickPosition = null;
+    viewer.addHandler('canvas-click', function(event) {
+        if (event.shift) {
+            // The canvas-click event gives us a position in web coordinates.
+            var webPoint = event.position;
+            var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+            var tiledImage = viewer.world.getItemAt(index);
+            var imagePoint = tiledImage.viewportToImageCoordinates(viewportPoint);
+            var u = imagePoint.x.toFixed();
+            var v = imagePoint.y.toFixed();
+            clickPosition = { u: u, v: v };
+            //console.log("click", u, v);
+
+            requestXYZ(webPoint, data => {
+                window.open(`http://37.19.207.113:5174/?x=${data.x}&y=${data.y}&zoom=6&layer=${(data.z / 50).toFixed() * 50}&segment=@{info.ref.segmentId}`);
+            });
+        }
+    });
+    function handleMessage(event) {
+        if (event.data == "ping") return;
+        //console.log(event.data, clickPosition, lastClickPosition);
+        //var data = JSON.parse(event.data);
+        var els = event.data.split(',')
+        var u = parseInt(els[0]);
+        var v = parseInt(els[1]);
+        var x = parseInt(els[2]);
+        var y = parseInt(els[3]);
+        var z = parseInt(els[4]);
+        if (nextRequest.u == u && nextRequest.v == v) {
+            lastResponse = {x:x, y:y, z:z};
+            lastRequest = nextRequest;
+            if (callback) {
+                callback(lastResponse);
+                callback = null;
+            }
+        }
+    }
+    var timerId;
+    var num = 0;
+    function connectSocket() {
+        num += 1;
+        var thisnum = num;
+        if (traceWS) console.log("trying to create socket", thisnum);
+        var socket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + window.location.pathname + "ppm");
+        socket.onopen = function() {
+            if (traceWS) console.log("socket open", thisnum);
+            if (timerId) clearInterval(timerId);
+
+            socket.onclose = function() {
+                if (traceWS) console.log("socket closed", thisnum);
+                if (timerId) clearInterval(timerId);
+                timerId = setInterval(() => { connectSocket(); }, 3000);
+            };
+            socket.onerror = function() {
+                if (traceWS) console.log("socket error", thisnum);
+                socket.close();
+            };
+            socket.onmessage = handleMessage;
+            ppmSocket = socket;
+        };
+    }
+    connectSocket();
+
+    tracker.setTracking(true);
+});
+
+</script>
