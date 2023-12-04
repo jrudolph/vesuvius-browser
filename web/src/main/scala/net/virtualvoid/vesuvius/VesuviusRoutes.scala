@@ -489,7 +489,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val MaskedLayerCache = computeCache[(SegmentReference, Int)] {
     case (segment, layer) =>
       val layerDef = layerDefFor(layer)
-      new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/layers/${layerDef.layerId}_masked.webp")
+      new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/layers/${layerDef.layerId}_masked.png")
   } {
     case (segment, layer) =>
       calculateMaskedLayerFor(segment, layer)
@@ -500,7 +500,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     for {
       layerFile <- layerDef.layerBase(segment)
       mask <- alphaMaskFor(segment)
-      target = new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/layers/${layerDef.layerId}_masked.webp")
+      target = new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/layers/${layerDef.layerId}_masked.png")
       masked <- vipsCommandRunner(s"""vips bandjoin "${layerFile.getAbsolutePath} ${mask.getAbsolutePath}" ${target.getAbsolutePath}""")
         .map(_ => target)
     } yield masked
