@@ -2,15 +2,15 @@ package net.virtualvoid.vesuvius
 
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
-import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, HttpHeader, HttpMethods, HttpRequest, HttpResponse, RequestEntity, StatusCodes, headers}
-import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import org.apache.pekko.http.scaladsl.model.{ ContentTypes, HttpEntity, HttpHeader, HttpMethods, HttpRequest, HttpResponse, RequestEntity, StatusCodes, headers }
+import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
 import org.apache.pekko.http.scaladsl.marshalling.Marshal
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
-import org.apache.pekko.stream.scaladsl.{FileIO, Sink, Source}
+import org.apache.pekko.stream.scaladsl.{ FileIO, Sink, Source }
 
-import scala.concurrent.{ExecutionContext, Future}
-import java.io.{File, FileOutputStream}
-import Predef.{println as _, *}
+import scala.concurrent.{ ExecutionContext, Future }
+import java.io.{ BufferedOutputStream, File, FileOutputStream }
+import Predef.{ println => _, _ }
 
 object VesuviusWorkerMain extends App {
   Console.println(s"Booting up Vesuvius worker version ${BuildInfo.version} built at ${BuildInfo.builtAtString}")
@@ -24,8 +24,9 @@ object VesuviusWorkerMain extends App {
   def runWorkItem(item: WorkItem): Future[(File, WorkItemResult)] = {
     implicit val ctx = contextFor(item)
     item.input match {
-      case i: InferenceWorkItemInput      => Tasks.infer(item, i)
-      case p@PPMFingerprintWorkItemInput => Tasks.ppmFingerprint(item)
+      case i: InferenceWorkItemInput       => Tasks.infer(item, i)
+      case p @ PPMFingerprintWorkItemInput => Tasks.ppmFingerprint(item)
+      case d: DownsamplePPMWorkItemInput   => Tasks.downsamplePpm(item, d)
     }
   }
 
@@ -87,9 +88,13 @@ object VesuviusWorkerMain extends App {
     runOne()
       .recover {
         case ex =>
-          println(s"Error: $ex")
-          ex.printStackTrace()
-          println("Backing off for a while")
+          // we currently get 302s from the server when it has no work, we handle that silently
+          if (!ex.getMessage.contains("Unexpected status code 302 Found")) {
+            println(s"Error: $ex")
+            ex.printStackTrace()
+            println("Backing off for a while")
+          } else
+            Console.println("No work, sleeping for 10s")
           Thread.sleep(10000)
           ()
       }
@@ -127,7 +132,7 @@ object Tasks {
           .mapAsync(config.concurrentDownloads) { layer =>
             val targetId = if (reverse) from + num - 1 - (layer - from) else layer
             download(
-              f"${segment.baseUrl}layers/$layer%02d.tif",
+              segment.layerUrl(layer),
               new File(to, f"layers/$targetId%02d.tif")
             )
           }
@@ -182,6 +187,46 @@ object Tasks {
         val fingerprint = PPMFingerprinter.fingerprint(item.segment, res)
         val json = write(fingerprint, resultTarget)
         (json, WorkCompleted(item, "Fingerprinting complete"))
+      }
+  }
+
+  def downsamplePpm(item: WorkItem, input: DownsamplePPMWorkItemInput)(implicit ctx: WorkContext): Future[(File, WorkItemResult)] = {
+    import ctx._
+    val workDir = new File(config.dataDir, item.id)
+    val segmentDir = new File(workDir, item.segment.segmentId)
+    segmentDir.mkdirs()
+
+    val resultTarget = new File(segmentDir, s"${item.segment.segmentId}.ppm.bin")
+    val target = new File(segmentDir, s"${item.segment.segmentId}.ppm")
+    val srcUrl = f"${item.segment.baseUrl}${item.segment.segmentId}.ppm"
+    download(srcUrl, target)
+      .map { ppmFile =>
+        implicit val ppm = PPMReader(ppmFile)
+        val dtpeSize = input.positionType match {
+          case "u16" => 2
+        }
+
+        val size = dtpeSize * 3 * (ppm.width >> input.downsamplingBits) * (ppm.height >> input.downsamplingBits)
+        println(s"Downsampling ${ppm.width}x${ppm.height} to ${ppm.width >> input.downsamplingBits}x${ppm.height >> input.downsamplingBits} (${size}B)")
+
+        val fos = new BufferedOutputStream(new FileOutputStream(resultTarget))
+        def u16le(v: Int): Unit = {
+          fos.write(v & 0xff)
+          fos.write((v >> 8) & 0xff)
+        }
+        for {
+          v <- 0 until (ppm.height >> input.downsamplingBits)
+          u <- 0 until (ppm.width >> input.downsamplingBits)
+        } {
+          val uv = UV(u << input.downsamplingBits, v << input.downsamplingBits)
+          u16le(uv.x)
+          u16le(uv.y)
+          u16le(uv.z)
+        }
+        fos.close()
+        require(resultTarget.length() == size, s"Result file has wrong size: ${resultTarget.length()} != $size")
+
+        (resultTarget, WorkCompleted(item, "Fingerprinting complete"))
       }
   }
 

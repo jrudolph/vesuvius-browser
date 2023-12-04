@@ -3,3 +3,13 @@
 worker-data
 Dockerfile
 .gitignore
+/media
+*.vox
+*.mp4
+/*.tif
+/*.png
+/docs
+/*.svg
+/.idea
+/.bsp
+/*.ckpt

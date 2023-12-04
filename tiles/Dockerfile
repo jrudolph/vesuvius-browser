@@ -18,27 +18,27 @@ RUN /sbt exit
 COPY build.sbt /tmp/project/
 COPY project/* /tmp/project/project/
 
-RUN /sbt -J-Xmx2g -J-verbose:gc update "show web/assemblyPackageDependency"
+RUN /sbt -J-Xmx2g -J-verbose:gc update "show tiles/assemblyPackageDependency"
 
 COPY .git /tmp/project/.git
 RUN git reset --hard HEAD
 
-RUN /sbt "show web/assembly"
+RUN /sbt "show tiles/assembly"
 
 FROM eclipse-temurin:17
 
 RUN apt-get update && \
-    apt-get install --no-install-recommends -y libvips-tools && \
+    apt-get install --no-install-recommends -y libvips-tools libtiff-tools && \
     rm -rf /var/lib/apt/lists/*
 
 RUN curl -O https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.16.1/jmx_prometheus_javaagent-0.16.1.jar
 
-COPY --from=builder /tmp/project/web/target/scala-3.3.1/deps.jar /deps.jar
-COPY --from=builder /tmp/project/web/target/scala-3.3.1/app.jar /app.jar
+COPY --from=builder /tmp/project/tiles/target/scala-3.3.1/deps.jar /deps.jar
+COPY --from=builder /tmp/project/tiles/target/scala-3.3.1/app.jar /app.jar
 COPY jmx-config.yaml config.yaml
 
-EXPOSE 8089/tcp
+EXPOSE 8095/tcp
 
 WORKDIR /
 
-CMD ["java", "-javaagent:jmx_prometheus_javaagent-0.16.1.jar=9001:config.yaml", "-XX:MaxRAMPercentage=60", "-cp", "/app.jar:/deps.jar", "net.virtualvoid.vesuvius.VesuviusWebMain"]
+CMD ["java", "-javaagent:jmx_prometheus_javaagent-0.16.1.jar=9001:config.yaml", "-cp", "/app.jar:/deps.jar", "net.virtualvoid.vesuvius.tiles.TilesMain"]

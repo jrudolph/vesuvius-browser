@@ -11,9 +11,7 @@ object TwirlSupport extends TwirlSupport
 trait TwirlSupport {
 
   /** Serialize Twirl `Html` to `text/html`. */
-  val twirlHtmlMarshaller = twirlMarshaller[Html](`text/html`)
-  implicit def twirlHtmlMarshallerWrapInPage(implicit user: Option[LoggedInUser]): ToEntityMarshaller[Html] =
-    Marshaller.StringMarshaller.wrap(`text/html`)(c => html.page(c, user).toString)
+  implicit val twirlHtmlMarshaller: ToEntityMarshaller[Html] = twirlMarshaller[Html](`text/html`)
 
   /** Serialize Twirl `Txt` to `text/plain`. */
   implicit val twirlTxtMarshaller: ToEntityMarshaller[Txt] = twirlMarshaller[Txt](`text/plain`)

@@ -18,9 +18,15 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
       .flatMap(x => x.listFiles())
       .filter(_.getName.endsWith(".json"))
       .map(readFingerprint)
+      .filter(fp => segmentInfos.contains(fp.segment))
 
   def readFingerprint(file: File): PPMFingerprint =
-    Source.fromFile(file).mkString.parseJson.convertTo[PPMFingerprint]
+    try Source.fromFile(file).mkString.parseJson.convertTo[PPMFingerprint]
+    catch {
+      case e: Exception =>
+        println(s"Error reading $file: $e")
+        throw e
+    }
 
   //fingerprints.foreach(println)
 
@@ -157,7 +163,7 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
     println(info)
 
     val img = new BufferedImage(info.width, info.height, BufferedImage.TYPE_INT_ARGB)
-    val img2 = ImageIO.read(new File(s"../data/raw/scroll$scroll/$segmentId/mask.png"))
+    val img2 = ImageIO.read(new File(s"../data/raw/scroll$scrollId/$segmentId/mask.png"))
 
     val g = img.createGraphics()
     g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON)
@@ -351,13 +357,14 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
 
             //println(f"Segment $segment: e1: $e1 t1: $t1 du: $du%5.2f dv: $dv%5.2f flip: $flip rotate0: ${rotate0 * 360 / 2 / math.Pi}%5.2f rotateFlipdvdu: ${rotateFlipdvdu * 360 / 2 / math.Pi}%5.2f rotatedvdu: ${rotatedvdu * 360 / 2 / math.Pi}%5.2f zDir: ${rotationFor(segment) * 360 / 2 / math.Pi}%5.2f rotate: ${rotate / 2 / math.Pi * 360}%5.2f tx: $tx%5.2f nu: $nu%5.2f nv: $nv%5.2f v: ${e1.v}")
 
-            val targetLayer = if (flip) "2343" else "2342"
+            //val targetLayer = if (flip) "2343" else "2342"
+            val targetLayer = 2999
 
             import segment._
             Some(
               ImagePart(
                 segment,
-                s"/scroll/$scroll/segment/$segmentId/$targetLayer",
+                s"/scroll/$scrollId/segment/$segmentId/$targetLayer",
                 u1, //u1, //-tx + nu,
                 v1,
                 protate / 2 / math.Pi * 360, //rotate / 2 / math.Pi * 360,
@@ -371,6 +378,7 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
   fingerprints
     .filter(!_.radar.exists(x => x.entries.nonEmpty && x.z == mainZ))
     .sortBy(_.segment.segmentId)
+    .filter(fp => segmentInfos.contains(fp.segment))
     .foreach { fp =>
       val info = segmentInfos(fp.segment)
       println(s"Segment ${fp.segment} has no radar at z=$mainZ bounds: ${fp.zSpan} width: ${info.width} height: ${info.height} area: ${info.width * info.height / 1_000_000} MP")

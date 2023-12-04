@@ -11,16 +11,16 @@
         <th><a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model (reversed layers)</a></th>
         <th>Mask</th>
     </tr>
-    @for(info <- infos.sortBy(x => (x.segmentId, x.scroll)).reverse) {
+    @for(info <- infos.sortBy(x => (if (x.ref.base.productPrefix.contains("Fragment")) 0 else 1, x.segmentId, x.scrollId)).reverse) {
         <tr>
-            <td>Scroll @info.scroll</td>
-            <td><a href="/scroll/@info.scroll/segment/@info.segmentId/@{if (!info.isLandscape) "#rot=90" else ""}">@info.segmentId</a></td>
+            <td>Scroll @info.scrollId</td>
+            <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/@{if (!info.isLandscape) "#rot=90" else ""}">@info.segmentId</a></td>
             <td>@{info.area.map(_.formatted("%5.2f")).getOrElse("")}</td>
             <td>@info.width</td>
             <td>@info.height</td>
-            <td><a href="/scroll/@info.scroll/segment/@info.segmentId/#layer=2342@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scroll/segment/@info.segmentId/inferred/youssef-test" height="100"/></a></td>
-            <td><a href="/scroll/@info.scroll/segment/@info.segmentId/#layer=2343@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scroll/segment/@info.segmentId/inferred/youssef-test-reversed" height="100"/></a></td>
-            <td><img src="/scroll/@info.scroll/segment/@info.segmentId/mask" height="50"/></td>
+            <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2342@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test" height="100"/></a></td>
+            <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2343@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test-reversed" height="100"/></a></td>
+            <td><img src="/scroll/@info.scrollId/segment/@info.segmentId/mask" height="50"/></td>
         </tr>
     }
 </table>

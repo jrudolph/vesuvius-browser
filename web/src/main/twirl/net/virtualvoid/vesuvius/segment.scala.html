@@ -1,187 +1,50 @@
 @import net.virtualvoid.vesuvius._
 
-@(info: ImageInfo)
+@(info: ImageInfo, selectedLayers: Seq[Int], extraLayers: Seq[Int])
 
-<h2>Scroll @info.scroll / @info.segmentId</h2>
+@for(
+    tmp <- Seq(0);
+    allLayers = selectedLayers ++ extraLayers
+) {
+
+<h2>Scroll @info.scrollId / @info.segmentId</h2>
 
 <div>Full data: <a href="@{info.ref.baseUrl}">@{info.ref.baseUrl}</a></div>
-<div>Selected layers: @{(20 to 50 by 2).mkString(", ")}</div>
-<div><a href="#keyboard_shortcuts">Keyboard shortcuts</a></div>
+<div>Selected layers: @{selectedLayers.mkString(", ")}</div>
+<div>
+    <span><a href="#model_output">Model Output</a></span> |
+    <span><a href="#keyboard_shortcuts">Keyboard shortcuts</a></span> |
+    <span><a href="plain">Plain browser</a></span>
+</div>
 <div>Note: If page stays blank for a while, layer still needs to be prepared in the background. Stay tuned, or reload after a while.</div>
 <p/>
-<b>Hold "1" or "2" key to overlay output from <a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a> or navigate to right-most layer to show just inferred data.</b>
+<b>Hold "1" or "2" key to overlay output from <a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a> or navigate to right-most layer to show just inferred data.<br/>
+Use Shift-Click to open a tab with Yao Hsiao's <a href="https://github.com/tomhsiao1260/segment-viewer">Segment Viewer</a> at the position.
+</b>
+
+<div class="info" style="float: left; width: 200px;">
+    <div class="position"></div>
+</div>
+
 <div id="openseadragon1" style="width: 100%; height: 80%;"></div>
-<script src="/openseadragon/openseadragon.min.js"></script>
-<script src="/js/jquery-3.7.1.min.js.js"></script>
-<script type="text/javascript">
+@imageBrowser("openseadragon1", info, allLayers, extraLayers)
 
-    var origHash = window.location.hash.substring(1);
-    var layers = [@for(l <- ((20 to 50 by 2) :+ 2342 :+ 2343 :+ 2999)) { "@l", }];
-var viewer = OpenSeadragon({
-    id: "openseadragon1",
-    prefixUrl: "/openseadragon/images/",
-    tileSources: [@for(l <- ((20 to 50 by 2) :+ 2342 :+ 2343 :+ 2999)) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
-    initialPage: 6,
-    showNavigator: true,
-    showRotationControl: true,
-    //sequenceMode: true,
-    preserveViewport: true,
-    preload: true,
-    debugMode: false,
-});
-
-index = 7;
-
-function sibling(index, shownIndex) {
-    if (index >= viewer.world.getItemCount()) index = viewer.world.getItemCount() - 1;
-    if (index < 0) index = 0;
-
-    if (index == shownIndex) return;
-    var tiledImage = viewer.world.getItemAt(index);
-    tiledImage.setOpacity(0);
-    tiledImage.setPreload(true);
-}
-
-function disable_sibling(index) {
-    if (index >= viewer.world.getItemCount()) index = viewer.world.getItemCount() - 1;
-    if (index < 0) index = 0;
-
-    var tiledImage = viewer.world.getItemAt(index);
-    tiledImage.setPreload(false);
-}
-
-function show(nextIndex) {
-  disable_sibling(index - 1);
-  disable_sibling(index + 1);
-
-  var oldTiledImage = viewer.world.getItemAt(index);
-  var oldIndex = index;
-  index = nextIndex;
-  if (index >= viewer.world.getItemCount()) index = viewer.world.getItemCount() - 1;
-  if (index < 0) index = 0;
-  //console.log(oldIndex, index);
-  var newTiledImage = viewer.world.getItemAt(index);
-  oldTiledImage.setOpacity(0);
-  oldTiledImage.setPreload(false);
-  newTiledImage.setOpacity(1);
-  sibling(index - 1, index);
-  sibling(index + 1, index);
-
-  function showButton(button, show) {
-    if (show) button.enable();
-    else button.disable();
-  }
-
-  showButton(viewer.previousButton, index - 1 >= 0);
-  showButton(viewer.nextButton, index + 1 < viewer.world.getItemCount());
-  updateHash();
-}
-
-viewer.bindSequenceControls();
-viewer.previousButton.removeAllHandlers('release');
-viewer.previousButton.addHandler('release', function() {
-  show(index - 1);
-});
-viewer.nextButton.removeAllHandlers('release');
-viewer.nextButton.addHandler('release', function() {
-  show(index + 1);
-});
-
-function updateHash() {
-    var tile = viewer.world.getItemAt(index);
-    var imp = tile.viewportToImageCoordinates(viewer.viewport.getCenter(true));
-    var u = imp.x.toFixed(0);
-    var v = imp.y.toFixed(0);
-    var rot = viewer.viewport.getRotation();
-    var flip = viewer.viewport.getFlip();
-    var zoom = tile.viewportToImageZoom(viewer.viewport.getZoom(true)).toFixed(3);
-    var newHash = "#u=" + u + "&v=" + v + "&zoom=" + zoom + "&rot=" + rot + "&flip=" + flip + "&layer=" + layers[index];
-    history.replaceState(undefined, undefined, newHash);
-}
-
-viewer.addHandler('pan', updateHash);
-viewer.addHandler('zoom', updateHash);
-viewer.addHandler('rotate', updateHash);
-
-viewer.addHandler('open', function() {
-    //console.log("open", origHash);
-
-    var hash = origHash;
-    viewer.canvas.focus();
-
-    var params = {}
-    hash.split('&').map(hk => {
-      let temp = hk.split('=');
-        params[temp[0]] = temp[1]
-    });
-
-    var tile = viewer.world.getItemAt(index);
-    if (params.x || params.u) {
-        // parse params.x to int
-        var u = 0;
-        if (params.u) u = parseFloat(params.u);
-        else if (params.x) u = parseFloat(params.x); // legacy support for `x`
-        var v = 0;
-        if (params.v) v = parseFloat(params.v);
-        else if (params.y) v = parseFloat(params.y); // legacy support for `y`
-
-        var imp = new OpenSeadragon.Point(u, v);
-        viewer.viewport.panTo(tile.imageToViewportCoordinates(imp), true);
+<a id="model_output"></a>
+<h4>Model Output</h4>
+<table>
+    <tr>
+        <th>Model</th>
+    </tr>
+    @for((id, modelName) <- Seq("youssef-test" -> "Youssef Layer 15 Up Stride 32", "youssef-test-reversed" -> "Youssef Layer 44 Down Stride 32 (reverse layering)")) {
+    <tr>
+        <td><a href="inferred/@id/full" download>@modelName</a></td>
+        <td><a href="inferred/@id/full?show"><img src="inferred/@id"/></a></td>
+    </tr>
     }
-    if (params.zoom) {
-        viewer.viewport.zoomTo(tile.imageToViewportZoom(parseFloat(params.zoom)), true);
-    }
-    if (params.rot) {
-        viewer.viewport.setRotation(parseFloat(params.rot), true);
-    }
-    if (params.flip) {
-        viewer.viewport.setFlip(params.flip == "true", true);
-    }
-    if (params.layer) {
-        var layer = params.layer;
-        // find index of element in layers
-        var i = layers.indexOf(layer);
-        show(i);
-    } else
-        show(7);
-});
-
-function idxOfLayer(layer) {
-  return layers.indexOf(layer);
-}
-
-var keyMapping = { '1': idxOfLayer('2342'), '2': idxOfLayer('2343'), '3': idxOfLayer('2999') };
-
-viewer.addHandler('canvas-key', function(event) {
-    var idx = keyMapping[event.originalEvent.key];
-    if (idx) {
-        viewer.world.getItemAt(idx).setOpacity(0.75);
-    }
-});
-viewer.innerTracker.keyUpHandler = function(event) {
-    var idx = keyMapping[event.originalEvent.key];
-    if (idx) {
-        viewer.world.getItemAt(idx).setOpacity(0);
-    }
-};
-
-viewer.goToPreviousPage = function() {
-  show(index - 1);
-};
-viewer.goToNextPage = function() {
-  show(index + 1);
-};
-
-viewer.addHandler('full-screen', function(ev) {
-  viewer.canvas.focus();
-});
-
-viewer.pixelsPerArrowPress = 250;
-
-
-</script>
+</table>
 
 <a id="keyboard_shortcuts"></a>
+<h4>Keyboard Shortcuts</h4>
 <p>
     You can use the following keys to navigate:
 </p>
@@ -201,3 +64,4 @@ viewer.pixelsPerArrowPress = 250;
     <li><strong>[ j ]</strong> - change to <strong>previous</strong> layer</li>
     <li><strong>[ k ]</strong> - change to <strong>next</strong> layer</li>
 </ul>
+}
