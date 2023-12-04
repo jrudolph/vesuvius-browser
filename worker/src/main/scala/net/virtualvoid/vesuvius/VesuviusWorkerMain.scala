@@ -100,13 +100,6 @@ object VesuviusWorkerMain extends App {
       }
       .flatMap(_ => worker)
 
-  if (config.inferenceScriptDir.exists()) {
-    println("Fetching latest version of model")
-    import sys.process._
-    s"""git -C ${config.inferenceScriptDir} fetch""".!(ProcessLogger(println))
-    s"""git -C ${config.inferenceScriptDir} checkout origin/worker""".!(ProcessLogger(println))
-  }
-
   worker.onComplete { res =>
     println(s"Worker stopped: $res")
   }
@@ -151,6 +144,14 @@ object Tasks {
       segmentDir.mkdirs()
 
       val inferenceScriptDir = config.inferenceScriptDir
+
+      if (config.inferenceScriptDir.exists()) {
+        println("Fetching latest version of model")
+        import sys.process._
+        s"""git -C ${config.inferenceScriptDir} fetch""".!(ProcessLogger(println))
+        s"""git -C ${config.inferenceScriptDir} checkout origin/worker""".!(ProcessLogger(println))
+      }
+
       val inferenceScript = new File(inferenceScriptDir, "inference.py")
       val model = new File(inferenceScriptDir, "model.ckpt")
       require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
