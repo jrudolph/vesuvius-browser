@@ -18,8 +18,11 @@ object SegmentReference {
     new RootJsonFormat[ScrollServerBase] {
       def write(obj: ScrollServerBase): JsValue = JsString(obj.productPrefix)
       def read(json: JsValue): ScrollServerBase = json.convertTo[String] match {
-        case "FullScrollsBase" => FullScrollsBase
-        case "PHercBase"       => PHercBase
+        case "FullScrollsBase"               => FullScrollsBase
+        case "PHercBase"                     => PHercBase
+        case "FragmentsBase"                 => FragmentsBase
+        case "OldFragmentsBase"              => OldFragmentsBase
+        case "PHerc1667Cr01Fr03FragmentBase" => PHerc1667Cr01Fr03FragmentBase
       }
     }
   implicit val scrollReferenceFormat: RootJsonFormat[ScrollReference] = jsonFormat3(ScrollReference.apply)
