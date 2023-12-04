@@ -45,6 +45,30 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val downloadUtils = new DownloadUtils(config)
   import downloadUtils._
 
+  case class LayerDefinition(
+      layerId:   Int,
+      extension: String,
+      layerBase: SegmentReference => Future[File]
+  )
+  /*
+  else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32.png"))
+  else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32_reverse.png"))
+  else if (layer == 2350) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32.png"))
+  else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32_reverse.png"))
+   */
+  val Youssef15Layer = LayerDefinition(2342, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32.png")))
+  val Youssef15ReverseLayer = LayerDefinition(2343, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32_reverse.png")))
+  val Youssef63Layer = LayerDefinition(2350, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32.png")))
+  val Youssef63ReverseLayer = LayerDefinition(2351, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32_reverse.png")))
+  val InkLabelLayer = LayerDefinition(3000, "jpg", inklabelFor(_).map(_.get))
+  val AlphaMaskLayer = LayerDefinition(9999, "png", alphaMaskFor)
+
+  val layers =
+    Seq(Youssef15Layer, Youssef15ReverseLayer, Youssef63Layer, Youssef63ReverseLayer, InkLabelLayer, AlphaMaskLayer)
+      .map(l => l.layerId -> l).toMap
+  def layerDefFor(z: Int): LayerDefinition =
+    layers.getOrElse(z, LayerDefinition(z, "jpg", downloadedSegmentLayer(_, z)))
+
   lazy val main =
     encodeResponse { mainRoute }
 
@@ -190,9 +214,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                 } else reject
               },
               pathPrefix(IntNumber) { z =>
+                val layerDef = layerDefFor(z)
                 concat(
                   path("dzi") {
-                    val dziImage = DZIImage(if (z == 9999) "png" else "jpg", 0, 512, info.width, info.height) // FIXME: imagesize
+                    val dziImage = DZIImage(layerDef.extension, 0, 512, info.width, info.height) // FIXME: imagesize
                     complete(JsObject("Image" -> dziImage.toJson))
                   },
                   path("dzi_files" / IntNumber / Segment) { (layer, name) =>
@@ -319,44 +344,30 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     } yield ImageInfo(segment, width, height, area)
   }.transform(x => Success(x.toOption))
 
-  def segmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
+  def segmentLayer(segment: SegmentReference, layer: Int): Future[File] =
+    layerDefFor(layer).layerBase(segment)
+
+  def downloadedSegmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
     import segment._
-    val targetFile = new File(dataDir, s"raw/scroll$scrollId/$segmentId/layers/$layer.jp2")
-    targetFile.getParentFile.mkdirs()
-
-    if (targetFile.exists) Future.successful(targetFile)
-    else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32.png"))
-    else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32_reverse.png"))
-    else if (layer == 2350) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32.png"))
-    else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32_reverse.png"))
-    else if (layer == 3000) inklabelFor(segment).map(_.get)
-    else if (layer == 9999) alphaMaskFor(segment)
-    else {
-      val webpVersion = new File(dataDir, s"raw/scroll$scrollId/$segmentId/layers/$layer.webp")
-
-      val tmpFile: Future[File] =
-        if (webpVersion.exists())
-          Future.successful(webpVersion)
-        else {
-          val url = segment.layerUrl(layer)
-          val tmpFile = File.createTempFile(".tmp.download", ".tif", targetFile.getParentFile)
-          download(url, tmpFile)
-        }
-
-      tmpFile
-    }
+    val dir = new File(dataDir, s"raw/scroll$scrollId/$segmentId/layers/")
+    dir.mkdirs()
+    val url = segment.layerUrl(layer)
+    val tmpFile = File.createTempFile(".tmp.download", ".tif", dir)
+    download(url, tmpFile)
   }
 
   def resizer(info: ImageInfo, layer: Int, tileX: Int, tileY: Int, z: Int): Future[File] =
     dzdir(info, z).map { dir =>
-      val ext = if (z == 9999) "png" else "jpg"
-      new File(dir, s"$layer/${tileX}_$tileY.$ext")
+      val layerDef = layerDefFor(z)
+      new File(dir, s"$layer/${tileX}_$tileY.${layerDef.extension}")
     }
 
   val DZDirCache = LfuCache[(ImageInfo, Int), File]
 
-  def dzdir(info: ImageInfo, z: Int): Future[File] =
-    DZDirCache.getOrLoad((info, z), _ => extractDZ(info, z, if (z == 9999) ".png" else ".jpg"))
+  def dzdir(info: ImageInfo, z: Int): Future[File] = {
+    val layerDef = layerDefFor(z)
+    DZDirCache.getOrLoad((info, z), _ => extractDZ(info, z, layerDef.extension))
+  }
 
   def extractDZ(info: ImageInfo, z: Int, suffix: String = ".jpg"): Future[File] = {
     val targetDir = new File(dataDir, s"tiles-dz/scroll${info.scrollId}/${info.segmentId}/layers/${z}_files")
@@ -364,7 +375,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     else segmentLayer(info.ref, z).flatMap { imageFile =>
       targetDir.getParentFile.mkdirs()
       val tmpFile = File.createTempFile(s".tmp.$z", "", targetDir.getParentFile)
-      val cmd = s"""vips dzsave $imageFile $tmpFile --suffix $suffix --tile-size 512 --overlap 0"""
+      val cmd = s"""vips dzsave $imageFile $tmpFile --suffix .$suffix --tile-size 512 --overlap 0"""
 
       vipsCommandRunner(cmd).map { _ =>
         val tmpDir = new File(tmpFile.getParentFile, tmpFile.getName + "_files")
