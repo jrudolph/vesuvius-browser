@@ -128,7 +128,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                       page(html.segment(info, selectedLayers, filteredLayers))
                     },
                     path("plain") {
-                      page(html.segmentPlain(info, selectedLayers, filteredLayers))
+                      page(html.segmentPlain(info, selectedLayers, filteredLayers), showDecorations = false)
                     }
                   )
                 }
