@@ -161,12 +161,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                 resizedMask(segment).deliver
               },
               pathPrefix("inferred" / Segment) { model =>
-                val input = model match {
-                  // FIXME: use constants instead
-                  case "youssef-test" if Set("0332", "1667").contains(segment.scrollId) => requestedWorkInputs(2)._1.asInstanceOf[InferenceWorkItemInput]
-                  case "youssef-test-reversed" if Set("0332", "1667").contains(segment.scrollId) => requestedWorkInputs(3)._1.asInstanceOf[InferenceWorkItemInput]
-                  case "youssef-test" => requestedWorkInputs(0)._1.asInstanceOf[InferenceWorkItemInput]
-                  case "youssef-test-reversed" => requestedWorkInputs(1)._1.asInstanceOf[InferenceWorkItemInput]
+                val input: InferenceWorkItemInput = model match {
+                  case "youssef-test" if Set("0332", "1667").contains(segment.scrollId) => Youssef_63_32Input
+                  case "youssef-test-reversed" if Set("0332", "1667").contains(segment.scrollId) => Youssef_63_32_ReverseInput
+                  case "youssef-test" => Youssef_15_32Input
+                  case "youssef-test-reversed" => Youssef_15_32_ReverseInput
                 }
                 concat(
                   pathEnd {
@@ -498,14 +497,18 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   }
 
   val DownSampleU16_2Input = DownsamplePPMWorkItemInput("u16", 2)
+  val Youssef_15_32Input = InferenceWorkItemInput("youssef-test", 15, 32, false)
+  val Youssef_15_32_ReverseInput = InferenceWorkItemInput("youssef-test", 15, 32, true)
+  val Youssef_63_32Input = InferenceWorkItemInput("youssef-test", 63, 32, false)
+  val Youssef_63_32_ReverseInput = InferenceWorkItemInput("youssef-test", 63, 32, true)
 
   type Filter = SegmentReference => Boolean
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
-      InferenceWorkItemInput("youssef-test", 15, 32, false) -> (s => s.scrollId == "1" || s.scrollId == "2"),
-      InferenceWorkItemInput("youssef-test", 15, 32, true) -> (s => s.scrollId == "1" || s.scrollId == "2"),
-      InferenceWorkItemInput("youssef-test", 63, 32, false) -> (s => s.scrollId == "332" || s.scrollId == "1667"),
-      InferenceWorkItemInput("youssef-test", 63, 32, true) -> (s => s.scrollId == "332" || s.scrollId == "1667"),
+      Youssef_15_32Input -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
+      Youssef_15_32_ReverseInput -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
+      //Youssef_63_32Input -> (s => s.scrollId == "332" || s.scrollId == "1667"),
+      //Youssef_63_32_ReverseInput -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       PPMFingerprintWorkItemInput -> (_.scrollId == "1"),
       DownSampleU16_2Input -> (_ => true),
     )
