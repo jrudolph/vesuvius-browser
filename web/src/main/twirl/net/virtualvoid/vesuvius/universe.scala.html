@@ -12,7 +12,7 @@
 var viewer = OpenSeadragon({
     id: "openseadragon1",
     prefixUrl: "/openseadragon/images/",
-    tileSources: [@for(p <- parts) { { tileSource: "@p.location/dzi", x: @p.x, y: @p.y, degrees: @p.rotation, flipped: @p.flip, opacity: 1, width: @p.width },
+    tileSources: [@for(p <- parts) { { tileSource: "@p.localBaseUrl@p.layer/dzi", x: @p.x, y: @p.y, degrees: @p.rotation, flipped: @p.flip, opacity: 1, width: @p.width },
     }],
     showNavigator: true,
     showRotationControl: true,
@@ -21,7 +21,7 @@ var viewer = OpenSeadragon({
     //preload: true,
     debugMode: false,
     minZoomImageRatio: 0,
-    //compositeOperation: 'screen'
+    compositeOperation: 'screen'
 });
 
 var thetaToX = [@for((theta, x) <- thetaToX) { { theta: @theta, x: @x }, }];

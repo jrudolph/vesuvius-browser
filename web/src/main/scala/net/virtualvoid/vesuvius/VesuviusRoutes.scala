@@ -16,7 +16,16 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Success
 
-case class ImagePart(segment: SegmentReference, location: String, x: Double, y: Double, rotation: Double, width: Int, height: Int, flip: Boolean)
+case class ImagePart(
+    segment: SegmentReference,
+    layer:   Int,
+    x:       Double, y: Double,
+    rotation: Double,
+    width:    Int, height: Int,
+    flip: Boolean
+) {
+  def localBaseUrl: String = s"/scroll/${segment.scrollId}/segment/${segment.segmentId}/"
+}
 
 case class DZISize(Width: Int, Height: Int)
 case class DZIImage(
@@ -52,14 +61,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       extension: String,
       layerBase: SegmentReference => Future[File]
   )
-  /*
-  else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32.png"))
-  else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32_reverse.png"))
-  else if (layer == 2350) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32.png"))
-  else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32_reverse.png"))
-   */
+
   val Youssef15Layer = LayerDefinition(2342, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32.png")))
+  val Youssef15LayerMasked = LayerDefinition(2347, "webp", MaskedLayerCache(_, 2342))
   val Youssef15ReverseLayer = LayerDefinition(2343, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32_reverse.png")))
+  val Youssef15ReverseLayerMasked = LayerDefinition(2348, "webp", MaskedLayerCache(_, 2343))
   val Youssef63Layer = LayerDefinition(2350, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32.png")))
   val Youssef63ReverseLayer = LayerDefinition(2351, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32_reverse.png")))
   val PPMDebugLayer = LayerDefinition(2999, "webp", arrangeDebug)
@@ -67,7 +73,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val AlphaMaskLayer = LayerDefinition(9999, "png", alphaMaskFor)
 
   val layers =
-    Seq(Youssef15Layer, Youssef15ReverseLayer, Youssef63Layer, Youssef63ReverseLayer, PPMDebugLayer, InkLabelLayer, AlphaMaskLayer)
+    Seq(Youssef15Layer, Youssef15LayerMasked, Youssef15ReverseLayer, Youssef15ReverseLayerMasked, Youssef63Layer, Youssef63ReverseLayer, PPMDebugLayer, InkLabelLayer, AlphaMaskLayer)
       .map(l => l.layerId -> l).toMap
   def layerDefFor(z: Int): LayerDefinition =
     layers.getOrElse(z, LayerDefinition(z, "jpg", downloadedSegmentLayer(_, z)))
@@ -479,6 +485,26 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def alphaMaskFor(segment: SegmentReference): Future[File] =
     AlphaMaskCache(segment)
+
+  val MaskedLayerCache = computeCache[(SegmentReference, Int)] {
+    case (segment, layer) =>
+      val layerDef = layerDefFor(layer)
+      new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/layers/${layerDef.layerId}_masked.webp")
+  } {
+    case (segment, layer) =>
+      calculateMaskedLayerFor(segment, layer)
+  }
+
+  def calculateMaskedLayerFor(segment: SegmentReference, layer: Int): Future[File] = {
+    val layerDef = layerDefFor(layer)
+    for {
+      layerFile <- layerDef.layerBase(segment)
+      mask <- alphaMaskFor(segment)
+      target = new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/layers/${layerDef.layerId}_masked.webp")
+      masked <- vipsCommandRunner(s"""vips bandjoin "${layerFile.getAbsolutePath} ${mask.getAbsolutePath}" ${target.getAbsolutePath}""")
+        .map(_ => target)
+    } yield masked
+  }
 
   def inklabelFor(segment: SegmentReference): Future[Option[File]] = {
     import segment._

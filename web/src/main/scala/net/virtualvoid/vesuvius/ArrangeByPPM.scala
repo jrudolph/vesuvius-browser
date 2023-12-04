@@ -40,7 +40,7 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
         .map(_.z)
     }
 
-  val mainZ = 7000
+  val mainZ = 10000
 
   val radarMainZ =
     fingerprints
@@ -357,14 +357,15 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
 
             //println(f"Segment $segment: e1: $e1 t1: $t1 du: $du%5.2f dv: $dv%5.2f flip: $flip rotate0: ${rotate0 * 360 / 2 / math.Pi}%5.2f rotateFlipdvdu: ${rotateFlipdvdu * 360 / 2 / math.Pi}%5.2f rotatedvdu: ${rotatedvdu * 360 / 2 / math.Pi}%5.2f zDir: ${rotationFor(segment) * 360 / 2 / math.Pi}%5.2f rotate: ${rotate / 2 / math.Pi * 360}%5.2f tx: $tx%5.2f nu: $nu%5.2f nv: $nv%5.2f v: ${e1.v}")
 
-            //val targetLayer = if (flip) "2343" else "2342"
-            val targetLayer = 2999
+            val targetLayer = if (flip) 2348 else 2347
+            //val targetLayer = 9999
+            //val targetLayer = 2999
 
             import segment._
             Some(
               ImagePart(
                 segment,
-                s"/scroll/$scrollId/segment/$segmentId/$targetLayer",
+                targetLayer,//s"/scroll/$scrollId/segment/$segmentId/$targetLayer",
                 u1, //u1, //-tx + nu,
                 v1,
                 protate / 2 / math.Pi * 360, //rotate / 2 / math.Pi * 360,
