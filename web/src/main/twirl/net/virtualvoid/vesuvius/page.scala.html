@@ -1,6 +1,6 @@
 @import net.virtualvoid.vesuvius._
 
-@(content: Html, user: Option[LoggedInUser])
+@(content: Html, user: Option[LoggedInUser], showDecorations: Boolean)
 
 <html>
 <head>
@@ -11,6 +11,7 @@
 </head>
 <body>
 
+@if(showDecorations) {
 <nav>
     <span><a href="/"><b>Vesuvius Challenge Segment Browser</b></a></span> | <span><a href="/license">License</a></span> | <span><a href="/blog/">Blog / Work Log</a></span>
     @if(user.isDefined) {
@@ -19,6 +20,7 @@
     } else {
     }
 </nav>
+}
 
 <div class="container">
     <div class="section">
@@ -26,6 +28,7 @@
     </div>
 </div>
 
+@if(showDecorations) {
 <p/>
 <footer>
     <i>
@@ -36,5 +39,6 @@
         <div>Version @{BuildInfo.version} built at @{BuildInfo.builtAtString}</div>
     </i>
 </footer>
+}
 </body>
 </html>

@@ -1,8 +1,7 @@
 @import net.virtualvoid.vesuvius._
 
-@(info: ImageInfo, allLayers: Seq[Int], extraLayers: Seq[Int])
+@(containerId: String, info: ImageInfo, allLayers: Seq[Int], extraLayers: Seq[Int])
 
-<div id="openseadragon1" style="width: 100%; height: 80%;"></div>
 <script src="/openseadragon/openseadragon.min.js"></script>
 <script src="/js/jquery-3.7.1.min.js.js"></script>
 <script type="text/javascript">
@@ -10,7 +9,7 @@
     var origHash = window.location.hash.substring(1);
     var layers = [@for(l <- allLayers) { "@l", }];
 var viewer = OpenSeadragon({
-    id: "openseadragon1",
+    id: "@containerId",
     prefixUrl: "/openseadragon/images/",
     tileSources: [@for(l <- allLayers) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
     initialPage: 6,
@@ -230,77 +229,81 @@ viewer.addHandler('open', function() {
         }
     }
 
-    var tracker = new OpenSeadragon.MouseTracker({
-        element: viewer.container,
-        moveHandler: function(event) {
-            updatePosition(event.position);
-        },
-    });
-    var clickPosition = null;
-    var lastClickPosition = null;
-    viewer.addHandler('canvas-click', function(event) {
-        if (event.shift) {
-            // The canvas-click event gives us a position in web coordinates.
-            var webPoint = event.position;
-            var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
-            var tiledImage = viewer.world.getItemAt(index);
-            var imagePoint = tiledImage.viewportToImageCoordinates(viewportPoint);
-            var u = imagePoint.x.toFixed();
-            var v = imagePoint.y.toFixed();
-            clickPosition = { u: u, v: v };
-            //console.log("click", u, v);
+    var tracker;
 
-            requestXYZ(webPoint, data => {
-                window.open(`http://37.19.207.113:5174/?x=${data.x}&y=${data.y}&zoom=6&layer=${(data.z / 50).toFixed() * 50}&segment=@{info.ref.segmentId}`);
-            });
-        }
-    });
-    function handleMessage(event) {
-        if (event.data == "ping") return;
-        //console.log(event.data, clickPosition, lastClickPosition);
-        //var data = JSON.parse(event.data);
-        var els = event.data.split(',')
-        var u = parseInt(els[0]);
-        var v = parseInt(els[1]);
-        var x = parseInt(els[2]);
-        var y = parseInt(els[3]);
-        var z = parseInt(els[4]);
-        if (nextRequest.u == u && nextRequest.v == v) {
-            lastResponse = {x:x, y:y, z:z};
-            lastRequest = nextRequest;
-            if (callback) {
-                callback(lastResponse);
-                callback = null;
+    if (positionEl) {
+        tracker = new OpenSeadragon.MouseTracker({
+            element: viewer.container,
+            moveHandler: function(event) {
+                updatePosition(event.position);
+            },
+        });
+        var clickPosition = null;
+        var lastClickPosition = null;
+        viewer.addHandler('canvas-click', function(event) {
+            if (event.shift) {
+                // The canvas-click event gives us a position in web coordinates.
+                var webPoint = event.position;
+                var viewportPoint = viewer.viewport.pointFromPixel(webPoint);
+                var tiledImage = viewer.world.getItemAt(index);
+                var imagePoint = tiledImage.viewportToImageCoordinates(viewportPoint);
+                var u = imagePoint.x.toFixed();
+                var v = imagePoint.y.toFixed();
+                clickPosition = { u: u, v: v };
+                //console.log("click", u, v);
+
+                requestXYZ(webPoint, data => {
+                    window.open(`http://37.19.207.113:5174/?x=${data.x}&y=${data.y}&zoom=6&layer=${(data.z / 50).toFixed() * 50}&segment=@{info.ref.segmentId}`);
+                });
+            }
+        });
+        function handleMessage(event) {
+            if (event.data == "ping") return;
+            //console.log(event.data, clickPosition, lastClickPosition);
+            //var data = JSON.parse(event.data);
+            var els = event.data.split(',')
+            var u = parseInt(els[0]);
+            var v = parseInt(els[1]);
+            var x = parseInt(els[2]);
+            var y = parseInt(els[3]);
+            var z = parseInt(els[4]);
+            if (nextRequest.u == u && nextRequest.v == v) {
+                lastResponse = {x:x, y:y, z:z};
+                lastRequest = nextRequest;
+                if (callback) {
+                    callback(lastResponse);
+                    callback = null;
+                }
             }
         }
-    }
-    var timerId;
-    var num = 0;
-    function connectSocket() {
-        num += 1;
-        var thisnum = num;
-        if (traceWS) console.log("trying to create socket", thisnum);
-        var socket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + window.location.pathname + "ppm");
-        socket.onopen = function() {
-            if (traceWS) console.log("socket open", thisnum);
-            if (timerId) clearInterval(timerId);
-
-            socket.onclose = function() {
-                if (traceWS) console.log("socket closed", thisnum);
+        var timerId;
+        var num = 0;
+        function connectSocket() {
+            num += 1;
+            var thisnum = num;
+            if (traceWS) console.log("trying to create socket", thisnum);
+            var socket = new WebSocket(((window.location.protocol === "https:") ? "wss://" : "ws://") + window.location.host + window.location.pathname + "ppm");
+            socket.onopen = function() {
+                if (traceWS) console.log("socket open", thisnum);
                 if (timerId) clearInterval(timerId);
-                timerId = setInterval(() => { connectSocket(); }, 3000);
-            };
-            socket.onerror = function() {
-                if (traceWS) console.log("socket error", thisnum);
-                socket.close();
-            };
-            socket.onmessage = handleMessage;
-            ppmSocket = socket;
-        };
-    }
-    connectSocket();
 
-    tracker.setTracking(true);
+                socket.onclose = function() {
+                    if (traceWS) console.log("socket closed", thisnum);
+                    if (timerId) clearInterval(timerId);
+                    timerId = setInterval(() => { connectSocket(); }, 3000);
+                };
+                socket.onerror = function() {
+                    if (traceWS) console.log("socket error", thisnum);
+                    socket.close();
+                };
+                socket.onmessage = handleMessage;
+                ppmSocket = socket;
+            };
+        }
+        connectSocket();
+
+        tracker.setTracking(true);
+   }
 });
 
 </script>

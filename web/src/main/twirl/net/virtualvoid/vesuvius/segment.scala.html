@@ -11,8 +11,11 @@
 
 <div>Full data: <a href="@{info.ref.baseUrl}">@{info.ref.baseUrl}</a></div>
 <div>Selected layers: @{selectedLayers.mkString(", ")}</div>
-<div><a href="#model_output">Model Output</a></div>
-<div><a href="#keyboard_shortcuts">Keyboard shortcuts</a></div>
+<div>
+    <span><a href="#model_output">Model Output</a></span> |
+    <span><a href="#keyboard_shortcuts">Keyboard shortcuts</a></span> |
+    <span><a href="plain">Plain browser</a></span>
+</div>
 <div>Note: If page stays blank for a while, layer still needs to be prepared in the background. Stay tuned, or reload after a while.</div>
 <p/>
 <b>Hold "1" or "2" key to overlay output from <a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a> or navigate to right-most layer to show just inferred data.<br/>
@@ -23,7 +26,8 @@ Use Shift-Click to open a tab with Yao Hsiao's <a href="https://github.com/tomhs
     <div class="position"></div>
 </div>
 
-@imageBrowser(info, allLayers, extraLayers)
+<div id="openseadragon1" style="width: 100%; height: 80%;"></div>
+@imageBrowser("openseadragon1", info, allLayers, extraLayers)
 
 <a id="model_output"></a>
 <h4>Model Output</h4>

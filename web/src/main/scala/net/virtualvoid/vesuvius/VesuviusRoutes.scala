@@ -2,11 +2,10 @@ package net.virtualvoid.vesuvius
 
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.caching.LfuCache
-import org.apache.pekko.http.scaladsl.Http
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import org.apache.pekko.http.scaladsl.marshalling.ToResponseMarshallable
+import org.apache.pekko.http.scaladsl.marshalling.{ Marshaller, ToResponseMarshallable }
 import org.apache.pekko.http.scaladsl.model.ws.{ Message, TextMessage }
-import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, Uri, headers }
+import org.apache.pekko.http.scaladsl.model.{ StatusCodes, headers }
 import org.apache.pekko.http.scaladsl.server.{ Directive1, Directives, Route }
 import org.apache.pekko.stream.scaladsl.{ FileIO, Flow, Sink, Source }
 import play.twirl.api.Html
@@ -101,31 +100,37 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
           imageInfo(segment).await.orReject { (info: ImageInfo) =>
             concat(
-              pathSingleSlash {
-                userManagement.loggedIn { user =>
-                  val selectedLayers =
-                    if (user.exists(_.admin))
-                      if (isHighResScroll) (0 to 150) else (0 to 64)
-                    else if (isHighResScroll)
-                      if (segment.segmentId == "20231111135340") 0 to 150
-                      else
-                        (60 to 105 by 3)
+              userManagement.loggedIn { user =>
+                val selectedLayers =
+                  if (user.exists(_.admin))
+                    if (isHighResScroll) (0 to 150) else (0 to 64)
+                  else if (isHighResScroll)
+                    if (segment.segmentId == "20231111135340") 0 to 150
                     else
-                      (20 to 50 by 2)
+                      (60 to 105 by 3)
+                  else
+                    (20 to 50 by 2)
 
-                  val extraLayers = if (isHighResScroll) Seq(2350, 2351) else Seq(2342, 2343)
-                  val allExtraLayers = extraLayers :+ 3000
+                val extraLayers = if (isHighResScroll) Seq(2350, 2351) else Seq(2342, 2343)
+                val allExtraLayers = extraLayers :+ 3000
 
-                  // check if inferred layers actually exist
-                  val allLayerSegments = Future.traverse(allExtraLayers)(l => segmentLayer(segment, l).transform {
-                    case Success(f) if f.exists => Success(Some(l))
-                    case _                      => Success(None)
-                  })
+                // check if inferred layers actually exist
+                val allLayerSegments = Future.traverse(allExtraLayers)(l => segmentLayer(segment, l).transform {
+                  case Success(f) if f.exists => Success(Some(l))
+                  case _                      => Success(None)
+                })
 
-                  allLayerSegments.await { extras =>
-                    val filteredLayers = extras.flatten
-                    page(html.segment(info, selectedLayers, filteredLayers))
-                  }
+                allLayerSegments.await { extras =>
+                  val filteredLayers = extras.flatten
+
+                  concat(
+                    pathSingleSlash {
+                      page(html.segment(info, selectedLayers, filteredLayers))
+                    },
+                    path("plain") {
+                      page(html.segmentPlain(info, selectedLayers, filteredLayers))
+                    }
+                  )
                 }
               },
               path("mask") {
@@ -280,9 +285,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       }
     }
 
-  def page(html: Html): Route =
+  def page(body: Html, showDecorations: Boolean = true): Route =
     userManagement.loggedIn { implicit user =>
-      complete(html)
+      complete(html.page(body, user, showDecorations))
     }
 
   val InfoCache = LfuCache[SegmentReference, Option[ImageInfo]]
