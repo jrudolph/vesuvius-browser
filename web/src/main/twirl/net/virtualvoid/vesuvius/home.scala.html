@@ -2,7 +2,9 @@
 
 @(infos: Seq[ImageInfo])
 
-<h2>Segments</h2>
+@for((scroll, infos) <- infos.groupBy(_.ref.scrollRef).toVector.sortBy(x => (if (x._1.base.productPrefix.contains("Fragment")) 1 else 0, scala.util.Try(x._1.scrollId.toInt).getOrElse(Int.MaxValue), x._1.scrollId))) {
+
+<h3>Scroll @scroll.scrollId</h3>
 
 <table>
     <tr>
@@ -11,16 +13,18 @@
         <th><a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model (reversed layers)</a></th>
         <th>Mask</th>
     </tr>
-    @for(info <- infos.sortBy(x => (if (x.ref.base.productPrefix.contains("Fragment")) 0 else 1, x.segmentId, x.scrollId)).reverse) {
-        <tr>
-            <td>Scroll @info.scrollId</td>
-            <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/@{if (!info.isLandscape) "#rot=90" else ""}">@info.segmentId</a></td>
-            <td>@{info.area.map(_.formatted("%5.2f")).getOrElse("")}</td>
-            <td>@info.width</td>
-            <td>@info.height</td>
-            <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2342@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test" height="100"/></a></td>
-            <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2343@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test-reversed" height="100"/></a></td>
-            <td><img src="/scroll/@info.scrollId/segment/@info.segmentId/mask" height="50"/></td>
-        </tr>
-    }
+
+@for(info <- infos.sortBy(_.segmentId).reverse) {
+    <tr>
+        <td>Scroll @info.scrollId</td>
+        <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/@{if (!info.isLandscape) "#rot=90" else ""}">@info.segmentId</a></td>
+        <td>@{info.area.map(_.formatted("%5.2f")).getOrElse("")}</td>
+        <td>@info.width</td>
+        <td>@info.height</td>
+        <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2342@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test" height="100"/></a></td>
+        <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2343@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test-reversed" height="100"/></a></td>
+        <td><img src="/scroll/@info.scrollId/segment/@info.segmentId/mask" height="50"/></td>
+    </tr>
+}
 </table>
+}
