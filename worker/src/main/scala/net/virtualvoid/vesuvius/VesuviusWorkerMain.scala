@@ -104,7 +104,7 @@ object VesuviusWorkerMain extends App {
     println("Fetching latest version of model")
     import sys.process._
     s"""git -C ${config.inferenceScriptDir} fetch""".!(ProcessLogger(println))
-    s"""git -C ${config.inferenceScriptDir} checkout worker""".!(ProcessLogger(println))
+    s"""git -C ${config.inferenceScriptDir} checkout origin/worker""".!(ProcessLogger(println))
   }
 
   worker.onComplete { res =>
