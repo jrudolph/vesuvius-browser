@@ -11,7 +11,9 @@
 var viewer = OpenSeadragon({
     id: "@containerId",
     prefixUrl: "/openseadragon/images/",
-    tileSources: [@for(l <- allLayers) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
+    tileSources: [@for(l <- allLayers) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, } {
+        tileSource: "9999/dzi", opacity: 1, preload: 0, layer: "9999", compositeOperation: "destination-in"
+    }],
     initialPage: 6,
     showNavigator: true,
     showRotationControl: true,
