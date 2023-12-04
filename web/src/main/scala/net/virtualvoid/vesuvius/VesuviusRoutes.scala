@@ -414,7 +414,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       vipsCommandRunner(cmd).map { _ =>
         val tmpDir = new File(tmpFile.getParentFile, tmpFile.getName + "_files")
         require(tmpDir.renameTo(targetDir))
-        imageFile.delete()
+        if (z < 200) imageFile.delete()
         tmpFile.delete()
         targetDir
       }
