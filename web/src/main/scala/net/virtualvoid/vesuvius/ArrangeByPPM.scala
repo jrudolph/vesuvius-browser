@@ -278,7 +278,7 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
       val du = e2.u - e1.u
       val dv = e2.v - e1.v
 
-      val flip = dv < 0
+      val flip = dv < -100
 
       val rotatedvdu = math.atan2(dv, du)
 
@@ -297,7 +297,7 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
       .groupBy(_._1._1).toVector
       .sortBy(_._2.map(_._2).min)
       //.filter(_._1.segmentId.contains("151000"))
-      //.filter(x => x._1.segmentId.contains("2745") || x._1.segmentId.contains("0314") || x._1.segmentId.contains("1847"))
+      //.filter(x => x._1.segmentId.contains("3336") || x._1.segmentId.contains("1847"))
       .flatMap {
         case (segment: SegmentReference, entries: Seq[((SegmentReference, RadarEntry), Int)]) =>
           val es = entries.map(x => x._1._2 -> x._2).sortBy(_._2)
@@ -311,6 +311,7 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
 
             val (rotate: Double, flip: Boolean) =
               if (es.size < 2) {
+                println(s"Segment $segment has only ${es.size} entries")
                 rotateFlip(segment)
                 /*println(s"Segment $segment has only ${es.size} entries")
                 val flip = false
@@ -329,7 +330,9 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
                 val du = e2.u - e1.u
                 val dv = e2.v - e1.v
 
-                val flip = dv < 0
+                println(f"Segment $segment: e1: $e1 t1: $t1 du: $du%5.2f dv: $dv%5.2f zDir: ${rotationFor(segment) * 360 / 2 / math.Pi}%5.2f")
+
+                val flip = dv < -100
 
                 val rotatedvdu = math.atan2(dv, du)
 
@@ -357,9 +360,9 @@ class ArrangeByPPM(segmentInfos: Map[SegmentReference, ImageInfo]) {
 
             //println(f"Segment $segment: e1: $e1 t1: $t1 du: $du%5.2f dv: $dv%5.2f flip: $flip rotate0: ${rotate0 * 360 / 2 / math.Pi}%5.2f rotateFlipdvdu: ${rotateFlipdvdu * 360 / 2 / math.Pi}%5.2f rotatedvdu: ${rotatedvdu * 360 / 2 / math.Pi}%5.2f zDir: ${rotationFor(segment) * 360 / 2 / math.Pi}%5.2f rotate: ${rotate / 2 / math.Pi * 360}%5.2f tx: $tx%5.2f nu: $nu%5.2f nv: $nv%5.2f v: ${e1.v}")
 
-            val targetLayer = if (flip) 2348 else 2347
+            //val targetLayer = if (flip) 2348 else 2347
+            val targetLayer = 2999
             //val targetLayer = 9999
-            //val targetLayer = 2999
 
             import segment._
             Some(
