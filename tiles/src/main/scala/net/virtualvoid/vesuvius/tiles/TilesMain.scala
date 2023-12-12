@@ -1,12 +1,9 @@
 package net.virtualvoid.vesuvius
 package tiles
 
-import net.virtualvoid.vesuvius.BuildInfo
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.Http
 
-import java.io.File
-import scala.concurrent.Future
 import scala.util.{ Failure, Success }
 
 object TilesMain extends App {
