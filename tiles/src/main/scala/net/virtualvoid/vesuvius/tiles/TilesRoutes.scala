@@ -296,7 +296,11 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     volumeLayersForFragment(scroll, meta, z, downsampling).map { layers =>
       val maps = layers.map { l =>
         val raf = new java.io.RandomAccessFile(l, "r")
-        raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
+        val offset = meta.uuid match {
+          case "20231117161658" => 368
+          case _ => 8
+        }
+        raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, offset, raf.length() - offset)
       }
       val numLayers = maps.size
       import meta.{ width, height }
