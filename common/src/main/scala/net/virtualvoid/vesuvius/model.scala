@@ -9,6 +9,8 @@ case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
 
   def maskUrl: String = base.maskFor(this)
   def inklabelUrl: String = base.inklabelFor(this)
+
+  def isHighResSegment: Boolean = base.isHighResSegment(this)
 }
 object SegmentReference {
   import spray.json._
@@ -73,12 +75,16 @@ sealed trait ScrollServerBase extends Product {
 
   def layerUrl(segment: SegmentReference, z: Int): String =
     f"${segmentUrl(segment)}layers/$z%02d.tif"
+
+  def isHighResSegment(segment: SegmentReference): Boolean
 }
 
 case object FullScrollsBase extends ScrollServerBase {
 
   def scrollUrl(scroll: String): String =
     s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/"
+
+  def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 
 case object PHercBase extends ScrollServerBase {
@@ -86,12 +92,20 @@ case object PHercBase extends ScrollServerBase {
     f"http://dl.ash2txt.org/full-scrolls/PHerc$scroll.volpkg/"
 
   override def layerUrl(segment: SegmentReference, z: Int): String =
-    f"${segmentUrl(segment)}layers/$z%03d.tif"
+    if (isHighResSegment(segment))
+      f"${segmentUrl(segment)}layers/$z%03d.tif"
+    else
+      f"${segmentUrl(segment)}layers/$z%02d.tif"
+
+  def isHighResSegment(segment: SegmentReference): Boolean =
+    !(segment.scrollId == "1667" && segment.segmentId >= "20231210132040")
 }
 
 case object FragmentsBase extends ScrollServerBase {
   def scrollUrl(scroll: String): String =
     s"http://dl.ash2txt.org/fragments/$scroll.volpkg/"
+
+  def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 
 trait FragmentLikeBase extends ScrollServerBase {
@@ -112,6 +126,8 @@ trait FragmentLikeBase extends ScrollServerBase {
   override def inklabelFor(segment: SegmentReference): String =
     if (segment.scrollId == "Frag4") f"${segmentUrl(segment)}PHercParis1Fr39_54keV_inklabels.png"
     else s"${segmentUrl(segment)}inklabels.png"
+
+  def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 case object OldFragmentsBase extends FragmentLikeBase
 case object PHerc1667Cr01Fr03FragmentBase extends FragmentLikeBase {

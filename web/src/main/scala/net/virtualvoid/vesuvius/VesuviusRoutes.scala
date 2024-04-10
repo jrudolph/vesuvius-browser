@@ -120,7 +120,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       },
       pathPrefix("scroll" / Segment / "segment" / Segment) { (scroll, segmentId) =>
         resolveRef(scroll, segmentId) { segment =>
-          val isHighResScroll = Set("332", "1667").contains(segment.scrollId)
+          val isHighResScroll = segment.isHighResSegment
 
           imageInfo(segment).await.orReject { (info: ImageInfo) =>
             concat(
