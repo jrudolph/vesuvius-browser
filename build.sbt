@@ -1,7 +1,7 @@
-val scalaV = "3.3.1"
-val pekkoV = "1.0.1"
-val pekkoHttpV = "1.0.0"
-val scalaTestV = "3.2.16"
+val scalaV = "3.4.1"
+val pekkoV = "1.0.2"
+val pekkoHttpV = "1.0.1"
+val scalaTestV = "3.2.18"
 
 inThisBuild(Def.settings(
   scalaVersion := scalaV,
