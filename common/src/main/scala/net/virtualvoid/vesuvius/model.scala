@@ -82,14 +82,14 @@ sealed trait ScrollServerBase extends Product {
 case object FullScrollsBase extends ScrollServerBase {
 
   def scrollUrl(scroll: String): String =
-    s"http://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/"
+    s"https://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/"
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 
 case object PHercBase extends ScrollServerBase {
   def scrollUrl(scroll: String): String =
-    f"http://dl.ash2txt.org/full-scrolls/PHerc$scroll.volpkg/"
+    f"https://dl.ash2txt.org/full-scrolls/PHerc$scroll.volpkg/"
 
   override def layerUrl(segment: SegmentReference, z: Int): String =
     if (isHighResSegment(segment))
@@ -103,14 +103,14 @@ case object PHercBase extends ScrollServerBase {
 
 case object FragmentsBase extends ScrollServerBase {
   def scrollUrl(scroll: String): String =
-    s"http://dl.ash2txt.org/fragments/$scroll.volpkg/"
+    s"https://dl.ash2txt.org/fragments/$scroll.volpkg/"
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 
 trait FragmentLikeBase extends ScrollServerBase {
   def scrollUrl(scroll: String): String =
-    s"http://dl.ash2txt.org/fragments/$scroll.volpkg/"
+    s"https://dl.ash2txt.org/fragments/$scroll.volpkg/"
 
   override def baseUrl(scrollId: String): String =
     s"${scrollUrl(scrollId)}working/"
