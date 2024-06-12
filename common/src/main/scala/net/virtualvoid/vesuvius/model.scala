@@ -2,6 +2,9 @@ package net.virtualvoid.vesuvius
 
 case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
   def scrollId: String = scrollRef.scrollId
+
+  def newScrollId: NewScrollId = scrollRef.newScrollId
+
   def base: ScrollServerBase = scrollRef.base
   def baseUrl: String = base.segmentUrl(this)
 
@@ -20,20 +23,20 @@ object SegmentReference {
     new RootJsonFormat[ScrollServerBase] {
       def write(obj: ScrollServerBase): JsValue = JsString(obj.productPrefix)
       def read(json: JsValue): ScrollServerBase = json.convertTo[String] match {
-        case "FullScrollsBase"               => FullScrollsBase
-        case "PHercBase"                     => PHercBase
-        case "FragmentsBase"                 => FragmentsBase
-        case "OldFragmentsBase"              => OldFragmentsBase
-        case "PHerc1667Cr01Fr03FragmentBase" => PHerc1667Cr01Fr03FragmentBase
+        case "FullScrollsBase" => FullScrollsBase
+        case "FragmentsBase"   => FragmentsBase
       }
     }
-  implicit val scrollReferenceFormat: RootJsonFormat[ScrollReference] = jsonFormat3(ScrollReference.apply)
+  implicit val newScrollIdFormat: RootJsonFormat[NewScrollId] = jsonFormat2(NewScrollId.apply)
+  implicit val scrollReferenceFormat: RootJsonFormat[ScrollReference] = jsonFormat4(ScrollReference.apply)
   implicit val segmentReferenceFormat: RootJsonFormat[SegmentReference] = jsonFormat2(SegmentReference.apply)
 }
 
-case class ScrollReference(scrollId: String, base: ScrollServerBase, defaultVolumeId: String) {
-  def baseUrl: String = base.baseUrl(scrollId)
-  def scrollUrl: String = base.scrollUrl(scrollId)
+case class NewScrollId(number: Int, name: String)
+
+case class ScrollReference(scrollId: String, newScrollId: NewScrollId, base: ScrollServerBase, defaultVolumeId: String) {
+  def baseUrl: String = base.baseUrl(newScrollId)
+  def scrollUrl: String = base.scrollUrl(newScrollId)
   def volumeMetadataUrl(volumeId: String): String = s"${volumeUrl(volumeId)}meta.json"
   def volumeUrl(volumeId: String): String = s"${scrollUrl}volumes/$volumeId/"
   def volumeGridUrl(volumeId: String): String = s"${scrollUrl}volume_grids/$volumeId/"
@@ -41,18 +44,21 @@ case class ScrollReference(scrollId: String, base: ScrollServerBase, defaultVolu
 
 object ScrollReference {
   val scrolls: Seq[ScrollReference] = Seq(
-    ScrollReference("1", FullScrollsBase, "20230205180739"),
-    ScrollReference("2", FullScrollsBase, "20230210143520"),
-    ScrollReference("0332", PHercBase, "20231027191953"),
-    ScrollReference("1667", PHercBase, "20231107190228"),
+    ScrollReference("1", 1, "PHercParis4", FullScrollsBase, "20230205180739"),
+    ScrollReference("2", 2, "PHercParis3", FullScrollsBase, "20230210143520"),
+    ScrollReference("0332", 3, "PHerc332", FullScrollsBase, "20231027191953"),
+    ScrollReference("1667", 4, "PHerc1667", FullScrollsBase, "20231107190228"),
 
-    ScrollReference("PHerc1667Cr01Fr03", PHerc1667Cr01Fr03FragmentBase, "20231121133215"),
-    ScrollReference("PHerc0051Cr04Fr08", FragmentsBase, "20231121152933"),
-    ScrollReference("Frag1", OldFragmentsBase, "20230205142449"), // 2nd volume: 20230213100222
-    ScrollReference("Frag2", OldFragmentsBase, "20230216174557"), // 2nd volume: 20230226143835
-    ScrollReference("Frag3", OldFragmentsBase, "20230212182547"), // 2nd volume: 20230215142309
-    ScrollReference("Frag4", OldFragmentsBase, "20230215185642") // 2nd volume: 20230222173037
+    ScrollReference("PHerc1667Cr01Fr03", 5, "PHerc1667Cr1Fr3", FragmentsBase, "20231121133215"),
+    ScrollReference("PHerc0051Cr04Fr08", 6, "PHerc51Cr4Fr8", FragmentsBase, "20231121152933"),
+    ScrollReference("Frag1", 1, "PHercParis2Fr47", FragmentsBase, "20230205142449"), // 2nd volume: 20230213100222
+    ScrollReference("Frag2", 2, "PHercParis2Fr143", FragmentsBase, "20230216174557"), // 2nd volume: 20230226143835
+    ScrollReference("Frag3", 3, "PHercParis1Fr34", FragmentsBase, "20230212182547"), // 2nd volume: 20230215142309
+    ScrollReference("Frag4", 4, "PHercParis1Fr39", FragmentsBase, "20230215185642") // 2nd volume: 20230222173037
   )
+
+  private def apply(oldScrollId: String, scrollNumber: Int, scrollName: String, base: ScrollServerBase, defaultVolumeId: String): ScrollReference =
+    ScrollReference(oldScrollId, NewScrollId(scrollNumber, scrollName), base, defaultVolumeId)
 
   def byId(id: Int): Option[ScrollReference] =
     scrolls.find(_.scrollId == id.toString)
@@ -61,11 +67,11 @@ object ScrollReference {
 }
 
 sealed trait ScrollServerBase extends Product {
-  def scrollUrl(scrollId: String): String
+  def scrollUrl(newScrollId: NewScrollId): String
 
-  def baseUrl(scrollId: String): String = s"${scrollUrl(scrollId)}paths/"
+  def baseUrl(newScrollId: NewScrollId): String = s"${scrollUrl(newScrollId)}paths/"
   def segmentUrl(segment: SegmentReference): String =
-    s"${baseUrl(segment.scrollId)}${segment.segmentId}/"
+    s"${baseUrl(segment.newScrollId)}${segment.segmentId}/"
 
   def maskFor(segment: SegmentReference): String =
     s"${segmentUrl(segment)}/${segment.segmentId}_mask.png"
@@ -81,15 +87,8 @@ sealed trait ScrollServerBase extends Product {
 
 case object FullScrollsBase extends ScrollServerBase {
 
-  def scrollUrl(scroll: String): String =
-    s"https://dl.ash2txt.org/full-scrolls/Scroll$scroll.volpkg/"
-
-  def isHighResSegment(segment: SegmentReference): Boolean = false
-}
-
-case object PHercBase extends ScrollServerBase {
-  def scrollUrl(scroll: String): String =
-    f"https://dl.ash2txt.org/full-scrolls/PHerc$scroll.volpkg/"
+  def scrollUrl(newScrollId: NewScrollId): String =
+    s"https://dl.ash2txt.org/full-scrolls/Scroll${newScrollId.number}/${newScrollId.name}.volpkg/"
 
   override def layerUrl(segment: SegmentReference, z: Int): String =
     if (isHighResSegment(segment))
@@ -98,17 +97,18 @@ case object PHercBase extends ScrollServerBase {
       f"${segmentUrl(segment)}layers/$z%02d.tif"
 
   def isHighResSegment(segment: SegmentReference): Boolean =
-    !(segment.scrollId == "1667" && segment.segmentId >= "20231210132040")
+    (segment.scrollId == "1667" && segment.segmentId < "20231210132040") ||
+      segment.scrollId == "0332"
 }
 
 case object FragmentsBase extends ScrollServerBase {
-  def scrollUrl(scroll: String): String =
-    s"https://dl.ash2txt.org/fragments/$scroll.volpkg/"
+  def scrollUrl(newScrollId: NewScrollId): String =
+    s"https://dl.ash2txt.org/fragments/Frag${newScrollId.number}/${newScrollId.name}.volpkg/"
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 
-trait FragmentLikeBase extends ScrollServerBase {
+/*trait FragmentLikeBase extends ScrollServerBase {
   def scrollUrl(scroll: String): String =
     s"https://dl.ash2txt.org/fragments/$scroll.volpkg/"
 
@@ -133,7 +133,7 @@ case object OldFragmentsBase extends FragmentLikeBase
 case object PHerc1667Cr01Fr03FragmentBase extends FragmentLikeBase {
   override def segmentUrl(segment: SegmentReference): String =
     s"${super.segmentUrl(segment)}registered/"
-}
+}*/
 
 case class ImageInfo(
     ref:    SegmentReference,
