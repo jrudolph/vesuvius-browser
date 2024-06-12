@@ -23,7 +23,6 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     pathPrefix("tiles") {
       concat(
         pathPrefix("scroll" / Scroll / "volume" / Segment) { (scroll, volume) =>
-          println(s"Request for $scroll $volume")
           metadataForVolume(scroll, volume).await { meta =>
             concat(
               pathSingleSlash {
