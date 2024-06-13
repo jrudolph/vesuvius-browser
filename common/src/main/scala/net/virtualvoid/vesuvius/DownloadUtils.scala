@@ -40,6 +40,21 @@ trait Cache[T, U] {
   def contains(t: T): Boolean
   def isReady(t: T): Boolean
   def remove(t: T): Unit
+
+  def map[V](f: (T, U) => V)(implicit system: ActorSystem): Cache[T, V] = new Cache[T, V] {
+    val settings = CacheSettings.Default
+    val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttlSeconds.seconds)
+    val s = CachingSettings(system).withLfuCacheSettings(lfu)
+    val cache = LfuCache[T, V](s)
+
+    def apply(t: T): Future[V] = cache.getOrLoad(t, t => Cache.this(t).map(u => f(t, u))(system.dispatcher))
+    def contains(t: T): Boolean = cache.get(t).isDefined || Cache.this.contains(t)
+    def isReady(t: T): Boolean = cache.get(t).exists(_.isCompleted) || Cache.this.isReady(t)
+    def remove(t: T): Unit = {
+      cache.remove(t)
+      Cache.this.remove(t)
+    }
+  }
 }
 
 class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {

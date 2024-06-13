@@ -8,6 +8,7 @@ import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
 
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
+import java.nio.MappedByteBuffer
 import scala.concurrent.Future
 
 class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends SprayJsonSupport {
@@ -273,7 +274,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   def volumeLayersAvailableFor(scroll: ScrollReference, meta: VolumeMetadata, z: Int, downsampling: Int): Boolean =
     volumeLayersNeeded(z, downsampling).forall(VolumeLayerCache.isReady(scroll, meta, _))
-  def volumeLayersForFragment(scroll: ScrollReference, meta: VolumeMetadata, z: Int, downsampling: Int): Future[Seq[File]] =
+  def volumeLayersForFragment(scroll: ScrollReference, meta: VolumeMetadata, z: Int, downsampling: Int): Future[Seq[MappedByteBuffer]] =
     Future.traverse(volumeLayersNeeded(z, downsampling))(layer => VolumeLayerCache((scroll, meta, layer)))
 
   def volumeBlock64x4IsAvailable(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Boolean =
@@ -295,15 +296,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/$uuid/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin")
 
   def createVolumeBlock64x4FromLayers(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
-    volumeLayersForFragment(scroll, meta, z, downsampling).flatMap { layers =>
-      val maps = layers.map { l =>
-        val raf = new java.io.RandomAccessFile(l, "r")
-        val offset = meta.uuid match {
-          case "20231117161658" => 368
-          case _                => 8
-        }
-        raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, offset, raf.length() - offset)
-      }
+    volumeLayersForFragment(scroll, meta, z, downsampling).flatMap { maps =>
       val numLayers = maps.size
       import meta.{ width, height }
 
@@ -340,5 +333,15 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       cacheHighWatermark = config.gridCacheHighWatermark,
       cacheLowWatermark = config.gridCacheLowWatermark
     )
-  )
+  ).map { (info, file) =>
+      info match {
+        case (scroll, meta, layer) =>
+          val raf = new java.io.RandomAccessFile(file, "r")
+          val offset = meta.uuid match {
+            case "20231117161658" => 368
+            case _                => 8
+          }
+          raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, offset, raf.length() - offset)
+      }
+    }
 }
