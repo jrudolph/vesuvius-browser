@@ -169,7 +169,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   def writeBlock(target: File, downsampling: Int)(data: (Int, Int, Int) => Int): Future[File] = Future {
     target.getParentFile.mkdirs()
     val tmp = File.createTempFile(".tmp.block", ".bin", target.getParentFile)
-    val fos = new BufferedOutputStream(new FileOutputStream(tmp))
+    val fos = new BufferedOutputStream(new FileOutputStream(tmp), 300000) // buffer full file before writing to avoid too many syncs
 
     var i = 0
     while (i < 64 * 64 * 64) {
@@ -272,7 +272,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     z * 64 * downsampling until (z + 1) * 64 * downsampling by downsampling
 
   def volumeLayersAvailableFor(scroll: ScrollReference, meta: VolumeMetadata, z: Int, downsampling: Int): Boolean =
-    volumeLayersNeeded(z, downsampling).map(volumeLayerFile(scroll, meta, _)).forall(_.exists())
+    volumeLayersNeeded(z, downsampling).forall(VolumeLayerCache.isReady(scroll, meta, _))
   def volumeLayersForFragment(scroll: ScrollReference, meta: VolumeMetadata, z: Int, downsampling: Int): Future[Seq[File]] =
     Future.traverse(volumeLayersNeeded(z, downsampling))(layer => VolumeLayerCache((scroll, meta, layer)))
 
@@ -324,7 +324,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       }
       println(s"Writing block $x $y $z q$downsampling done")
       res
-    }
+    }(blockingDispatcher)
 
   def volumeLayerFile(scroll: ScrollReference, meta: VolumeMetadata, layer: Int): File =
     new File(config.dataDir, f"grid/scroll${scroll.scrollId}/${meta.uuid}/${meta.formatLayer(layer)}.tif")

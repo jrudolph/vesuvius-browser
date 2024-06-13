@@ -32,7 +32,7 @@ object CacheSettings {
   val DefaultPositiveTtl = 3600 * 24 * 365
   val DefaultNegativeTtl = 7200
 
-  val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, 1000, 0.9, 0.75)
+  val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, Long.MaxValue, 0.9, 0.75)
 }
 
 trait Cache[T, U] {
@@ -74,7 +74,10 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       }
 
       def contains(t: T): Boolean = cache.get(t).isDefined || fCache.contains(t)
-      def isReady(t: T): Boolean = cache.get(t).exists(_.isCompleted) || fCache.isReady(t)
+      def isReady(t: T): Boolean = cache.get(t) match {
+        case Some(x) => x.isCompleted
+        case None    => fCache.isReady(t)
+      }
       def remove(t: T): Unit = cache.remove(t)
     }
     self
