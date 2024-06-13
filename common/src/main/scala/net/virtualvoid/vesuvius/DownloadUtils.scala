@@ -32,7 +32,7 @@ object CacheSettings {
   val DefaultPositiveTtl = 3600 * 24 * 365
   val DefaultNegativeTtl = 7200
 
-  val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, Long.MaxValue, 0.9, 0.75)
+  val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, 1000, 0.9, 0.75)
 }
 
 trait Cache[T, U] {
@@ -55,21 +55,22 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
     lazy val self: Cache[T, File] = new Cache[T, File] {
       def apply(t: T): Future[File] = {
-        val res =
-          cache.getOrLoad(t, _ => fCache(t))
-            .flatMap { f =>
-              if (!f.exists()) {
-                println(s"Cached file missing, removing from cache, and rerunning for ${t}")
-                cache.remove(t)
-                self(t)
-              } else Future.successful(f)
-            }
-
-        res.foreach { f =>
-          f.setLastModified(System.currentTimeMillis())
-          f
-        }(blockingDispatcher)
-        res
+        cache.getOrLoad(t, { _ =>
+          val res = fCache(t)
+          // FIXME: shouldn't access registration go to the fileCache?
+          res.foreach { f =>
+            f.setLastModified(System.currentTimeMillis())
+            f
+          }(blockingDispatcher)
+          res
+        })
+          .flatMap { f =>
+            if (!f.exists()) {
+              println(s"Cached file missing, removing from cache, and rerunning for ${t}")
+              cache.remove(t)
+              self(t)
+            } else Future.successful(f)
+          }
       }
 
       def contains(t: T): Boolean = cache.get(t).isDefined || fCache.contains(t)
