@@ -45,6 +45,7 @@ trait Cache[T, U] {
 class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   import CacheSettings.{ DefaultNegativeTtl, DefaultPositiveTtl }
   import system.dispatcher
+  val blockingDispatcher = system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher")
 
   def computeCache[T](filePattern: T => File, settings: CacheSettings = CacheSettings.Default)(compute: T => Future[File]): Cache[T, File] = {
     val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttlSeconds.seconds)
@@ -54,18 +55,21 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
     lazy val self: Cache[T, File] = new Cache[T, File] {
       def apply(t: T): Future[File] = {
-        cache.getOrLoad(t, _ => fCache(t))
-          .flatMap { f =>
-            if (!f.exists()) {
-              println(s"Cached file missing, removing from cache, and rerunning for ${t}")
-              cache.remove(t)
-              self(t)
-            } else Future.successful(f)
-          }
-          .map { f =>
-            f.setLastModified(System.currentTimeMillis())
-            f
-          }
+        val res =
+          cache.getOrLoad(t, _ => fCache(t))
+            .flatMap { f =>
+              if (!f.exists()) {
+                println(s"Cached file missing, removing from cache, and rerunning for ${t}")
+                cache.remove(t)
+                self(t)
+              } else Future.successful(f)
+            }
+
+        res.foreach { f =>
+          f.setLastModified(System.currentTimeMillis())
+          f
+        }(blockingDispatcher)
+        res
       }
 
       def contains(t: T): Boolean = cache.get(t).isDefined || fCache.contains(t)
