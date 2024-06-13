@@ -39,7 +39,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
                     else {
                       // refresh request for grid files for this block
                       gridTilesNeeded(scroll, meta, x, y, z, downsampling).foreach(GridTileCache(_))
-                      block64x4(scroll, meta, x, y, z, bitmask, downsampling)
+                      //block64x4(scroll, meta, x, y, z, bitmask, downsampling)
                       complete(StatusCodes.EnhanceYourCalm)
                     }
                   } else {
@@ -48,7 +48,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
                     else {
                       // refresh request for grid files for this block
                       volumeLayersNeeded(z, downsampling).foreach(VolumeLayerCache(scroll, meta, _))
-                      volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling)
+                      //volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling)
                       complete(StatusCodes.EnhanceYourCalm)
                     }
                   }
