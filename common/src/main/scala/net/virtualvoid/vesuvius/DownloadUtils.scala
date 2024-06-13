@@ -70,7 +70,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
               cache.remove(t)
               self(t)
             } else Future.successful(f)
-          }
+          }(blockingDispatcher)
       }
 
       def contains(t: T): Boolean = cache.get(t).isDefined || fCache.contains(t)
