@@ -12,6 +12,9 @@ import scala.concurrent.Future
 
 class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends SprayJsonSupport {
   import system.dispatcher
+
+  val blockingDispatcher = system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher")
+
   val downloadUtils = new DownloadUtils(config)
   val metadataRepo = new VolumeMetadataRepository(downloadUtils, config.dataDir)
   import metadataRepo.metadataForVolume
@@ -116,7 +119,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
             }
       }.map(_.toMap)
 
-    files.map { gridMap =>
+    files.flatMap { gridMap =>
       println(s"Writing block $x $y $z q$downsampling")
       val res =
         writeBlock(target, downsampling) { (lx, ly, lz) =>
@@ -163,7 +166,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
     GridTileCache((scroll, meta.uuid, gx, gy, gz))
 
-  def writeBlock(target: File, downsampling: Int)(data: (Int, Int, Int) => Int): File = {
+  def writeBlock(target: File, downsampling: Int)(data: (Int, Int, Int) => Int): Future[File] = Future {
     target.getParentFile.mkdirs()
     val tmp = File.createTempFile(".tmp.block", ".bin", target.getParentFile)
     val fos = new BufferedOutputStream(new FileOutputStream(tmp))
@@ -194,7 +197,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     fos.close()
     tmp.renameTo(target)
     target
-  }
+  }(blockingDispatcher)
 
   val SurfaceBlockCache = downloadUtils.computeCache[(SegmentReference, Int, Int, Int, Int, Int)](
     { case (segment, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${segment.scrollId}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
@@ -213,7 +216,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       }
 
   def block64x4SurfaceFromLayers(segment: SegmentReference, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
-    layersForSegment(segment).map { layers =>
+    layersForSegment(segment).flatMap { layers =>
       val maps = layers.map { l =>
         val raf = new java.io.RandomAccessFile(l, "r")
         raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
@@ -292,7 +295,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/$uuid/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin")
 
   def createVolumeBlock64x4FromLayers(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
-    volumeLayersForFragment(scroll, meta, z, downsampling).map { layers =>
+    volumeLayersForFragment(scroll, meta, z, downsampling).flatMap { layers =>
       val maps = layers.map { l =>
         val raf = new java.io.RandomAccessFile(l, "r")
         val offset = meta.uuid match {
