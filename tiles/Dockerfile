@@ -33,8 +33,8 @@ RUN apt-get update && \
 
 RUN curl -O https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/0.16.1/jmx_prometheus_javaagent-0.16.1.jar
 
-COPY --from=builder /tmp/project/tiles/target/scala-3.4.1/deps.jar /deps.jar
-COPY --from=builder /tmp/project/tiles/target/scala-3.4.1/app.jar /app.jar
+COPY --from=builder /tmp/project/tiles/target/scala-3.4.2/deps.jar /deps.jar
+COPY --from=builder /tmp/project/tiles/target/scala-3.4.2/app.jar /app.jar
 COPY jmx-config.yaml config.yaml
 
 EXPOSE 8095/tcp
