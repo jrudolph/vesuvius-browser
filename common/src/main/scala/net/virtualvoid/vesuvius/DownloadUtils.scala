@@ -185,13 +185,19 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
   def download(url: String, to: File): Future[File] = {
     println(s"Downloading $url")
+    val start = System.currentTimeMillis()
     val tmpFile = new File(to.getParentFile, s".tmp.${to.getName}")
     Http().singleRequest(HttpRequest(HttpMethods.GET, uri = url, headers = auth :: Nil))
       .flatMap { res =>
         require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
         res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
       }
-      .map { _ => tmpFile.renameTo(to); to }
+      .map { _ =>
+        val end = System.currentTimeMillis()
+        println(f"Downloading $url length: ${tmpFile.length()} finished after ${end - start} ms (${(tmpFile.length().toFloat / 1000f / (end - start).toFloat)}%6.3f MB/s)")
+        tmpFile.renameTo(to)
+        to
+      }
   }
 
   def semaphore[T, U](numRequests: Int, queueLength: Int = 1000)(f: (T, Long) => Future[U]): (T => Future[U], T => Unit) = {
