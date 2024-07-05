@@ -45,7 +45,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
                     }
                   } else {
                     if (volumeBlock64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || volumeLayersAvailableFor(scroll, meta, z, downsampling))
-                      volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                      complete(createVolumeBlock64x4FromLayersToBytes(scroll, meta, x, y, z, bitmask, downsampling))
                     else {
                       // refresh request for grid files for this block
                       volumeLayersNeeded(z, downsampling).foreach(VolumeLayerCache(scroll, meta, _))
@@ -200,6 +200,34 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     target
   }(blockingDispatcher)
 
+  def blockBytes(downsampling: Int)(data: (Int, Int, Int) => Int): Future[Array[Byte]] = Future {
+    val res = new Array[Byte](64 * 64 * 64)
+
+    var i = 0
+    while (i < 64 * 64 * 64) {
+      // 2^21 = 2097152, 2^12 = 4096, numBlocks = 512 = 2^9, 8 blocks in each direction
+      // 128^3 in 16^3 blocks: zzzzzzzyyyyyyyxxxxxxx -> zzzyyyxxxzzzzyyyyxxxx
+      //  64^3 in  4^3 blocks:    zzzzzzyyyyyyxxxxxx ->    zzzzyyyyxxxxzzyyxx
+      val bz = i >> 14
+      val by = (i >> 10) & 0xf
+      val bx = (i >> 6) & 0xf
+
+      val pz = (i >> 4) & 0x3
+      val py = (i >> 2) & 0x3
+      val px = i & 0x3
+
+      val x = bx * 4 + px
+      val y = by * 4 + py
+      val z = bz * 4 + pz
+
+      res(i) = data(x, y, z).toByte
+
+      i += 1
+    }
+
+    res
+  }(blockingDispatcher)
+
   val SurfaceBlockCache = downloadUtils.computeCache[(SegmentReference, Int, Int, Int, Int, Int)](
     { case (segment, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${segment.scrollId}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
     CacheSettings.Default.copy(negTtlSeconds = 60)
@@ -316,6 +344,30 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         } else 0
       }
       println(s"Writing block $x $y $z q$downsampling done")
+      res
+    }(blockingDispatcher)
+
+  def createVolumeBlock64x4FromLayersToBytes(scroll: ScrollReference, meta: VolumeMetadata, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[Array[Byte]] =
+    volumeLayersForFragment(scroll, meta, z, downsampling).flatMap { maps =>
+      val numLayers = maps.size
+      import meta.{ width, height }
+
+      if (x * 64 * downsampling >= width || y * 64 * downsampling >= height)
+        throw new NoSuchElementException(s"Block $x $y $z q$downsampling is outside of volume bounds")
+
+      val res = blockBytes(downsampling) { (lx, ly, lz) =>
+        val globalX = (x * 64 + lx) * downsampling
+        val globalY = (y * 64 + ly) * downsampling
+        //val globalZ = (z * 64 + lz) // we already downsample when selecting layers
+
+        if (globalX >= 0 && globalX < width && globalY >= 0 && globalY < height && lz >= 0 && lz < numLayers) {
+          val data = maps(lz)
+          val offset = (globalY * width + globalX) * 2
+
+          data.get(offset + 1) & bitmask
+        } else 0
+      }
+      println(s"Generating block $x $y $z q$downsampling done")
       res
     }(blockingDispatcher)
 

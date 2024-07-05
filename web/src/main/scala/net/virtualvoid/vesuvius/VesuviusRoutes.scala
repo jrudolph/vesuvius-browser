@@ -479,7 +479,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
     cacheDownload(baseUrl, targetFile, ttlSeconds = 3600).map { f =>
       scala.io.Source.fromFile(f).getLines().collect {
-        case LinkR(segmentId) if !segmentId.startsWith("..") => segmentId
+        case LinkR(segmentId) if !segmentId.startsWith("..") =>
+          segmentId
       }.toVector
     }
 
