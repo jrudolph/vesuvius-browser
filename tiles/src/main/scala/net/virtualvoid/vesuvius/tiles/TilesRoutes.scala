@@ -45,7 +45,9 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
                     }
                   } else {
                     if (volumeBlock64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || volumeLayersAvailableFor(scroll, meta, z, downsampling))
-                      complete(createVolumeBlock64x4FromLayersToBytes(scroll, meta, x, y, z, bitmask, downsampling))
+                      volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                      // optionally: generate on the fly instead of using cached variant
+                      //complete(createVolumeBlock64x4FromLayersToBytes(scroll, meta, x, y, z, bitmask, downsampling))
                     else {
                       // refresh request for grid files for this block
                       volumeLayersNeeded(z, downsampling).foreach(VolumeLayerCache(scroll, meta, _))
