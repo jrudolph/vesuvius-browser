@@ -1,11 +1,13 @@
 package net.virtualvoid.vesuvius
 package tiles
 
+import net.virtualvoid.unix.Mmap
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.apache.pekko.http.scaladsl.server.Route
+import sun.nio.ch.DirectBuffer
 
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
 import java.nio.MappedByteBuffer
@@ -46,8 +48,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
                   } else {
                     if (volumeBlock64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || volumeLayersAvailableFor(scroll, meta, z, downsampling))
                       volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
-                      // optionally: generate on the fly instead of using cached variant
-                      //complete(createVolumeBlock64x4FromLayersToBytes(scroll, meta, x, y, z, bitmask, downsampling))
+                    // optionally: generate on the fly instead of using cached variant
+                    //complete(createVolumeBlock64x4FromLayersToBytes(scroll, meta, x, y, z, bitmask, downsampling))
                     else {
                       // refresh request for grid files for this block
                       volumeLayersNeeded(z, downsampling).foreach(VolumeLayerCache(scroll, meta, _))
@@ -118,6 +120,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
             .map { target =>
               val raf = new java.io.RandomAccessFile(target, "r")
               val mmap = raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
+              madviseSequential(mmap)
               id -> mmap
             }
       }.map(_.toMap)
@@ -250,7 +253,9 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     layersForSegment(segment).flatMap { layers =>
       val maps = layers.map { l =>
         val raf = new java.io.RandomAccessFile(l, "r")
-        raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
+        val map = raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
+        madviseSequential(map)
+        map
       }
       val numLayers = maps.size
       val (width, height) = {
@@ -333,6 +338,35 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       if (x * 64 * downsampling >= width || y * 64 * downsampling >= height)
         throw new NoSuchElementException(s"Block $x $y $z q$downsampling is outside of volume bounds")
 
+      // try to pre-load the data
+      // pages needed:
+      //  - for each z layer
+      //  - for each y row in question (y * 64 to (y + 1) * 64) * downsampling (base addr = y * width * 2)
+      //  - Number of pages = (64 * downsampling * 2) / 4096, rounded up to next page
+      //  -> 64 madvise calls for each layer
+
+      val xOffset = x * 64 * downsampling * 2
+      val numPages = (64 * downsampling * 2 + 4095) / 4096
+      val pages =
+        for {
+          y <- y * 64 until (y + 1) * 64
+        } yield 8 + y * downsampling * width * 2
+
+      val start = System.currentTimeMillis()
+      for {
+        map <- maps
+        yOffset <- pages
+      } {
+        val offset = (yOffset + xOffset) & ~4095 // align to page boundary
+        val baseAddr = map.asInstanceOf[DirectBuffer].address() - 8
+        //println(f"madvise $baseAddr%8x $offset%8x ${4096 * (numPages + 1)}")
+        val res = Mmap.INSTANCE.madvise(baseAddr + offset, 4096 * (numPages + 1), Mmap.MADV_WILLNEED)
+        if (res != 0)
+          println(f"madvise failed for $baseAddr%8x $offset%8x ${4096 * (numPages + 1)}: $res")
+      }
+      println(s"Preloading took ${System.currentTimeMillis() - start}ms")
+
+      val offs = new scala.collection.immutable.VectorBuilder[Int]()
       val res = writeBlock(target, downsampling) { (lx, ly, lz) =>
         val globalX = (x * 64 + lx) * downsampling
         val globalY = (y * 64 + ly) * downsampling
@@ -342,10 +376,16 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
           val data = maps(lz)
           val offset = (globalY * width + globalX) * 2
 
+          offs += offset - 8
           data.get(offset + 1) & bitmask
         } else 0
       }
-      println(s"Writing block $x $y $z q$downsampling done")
+
+      res.onComplete { _ =>
+        println(s"Writing block $x $y $z q$downsampling done")
+        //offs.result().map(_ & ~4095).distinct.sorted.foreach(x => println(f"x: $x%8x"))
+      }
+
       res
     }(blockingDispatcher)
 
@@ -395,7 +435,14 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
             case "20231117161658" => 368
             case _                => 8
           }
-          raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, offset, raf.length() - offset)
+          val map = raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, offset, raf.length() - offset)
+          madviseSequential(map)
+          map
       }
     }
+
+  def madviseSequential(map: MappedByteBuffer): Unit = {
+    val addr = map.asInstanceOf[DirectBuffer].address()
+    Mmap.INSTANCE.madvise(addr, map.capacity(), Mmap.MADV_SEQUENTIAL)
+  }
 }

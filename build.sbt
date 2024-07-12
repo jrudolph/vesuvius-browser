@@ -56,7 +56,7 @@ lazy val tiles = project.in(file("tiles"))
   .dependsOn(common)
   .settings(
     libraryDependencies ++= Seq(
-
+      "net.java.dev.jna" % "jna" % "5.14.0"
     ),
     // setup docker build
     // use separate dependency and app jars
