@@ -17,6 +17,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   import system.dispatcher
 
   val blockingDispatcher = system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher")
+  val MadviseCoalescePageGap = system.settings.config.getInt("app.madvise-coalesce-page-gap")
 
   val downloadUtils = new DownloadUtils(config)
   val metadataRepo = new VolumeMetadataRepository(downloadUtils, config.dataDir)
@@ -347,26 +348,61 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
       val xOffset = x * 64 * downsampling * 2
       val numPages = (64 * downsampling * 2 + 4095) / 4096
-      val pages =
+      val yOffsets =
         for {
           y <- y * 64 until (y + 1) * 64
         } yield 8 + y * downsampling * width * 2
 
+      val pages =
+        for {
+          yOffset <- yOffsets
+          startOffset = yOffset + xOffset
+          endOffset = startOffset + 64 * downsampling * 2
+          //page <- (startOffset & ~4095) to (endOffset & ~4095) by 4096
+        } yield ((startOffset & ~4095), (endOffset & ~4095) + 4096)
+
+      /*pages.foreach {
+        case (start, end) =>
+          println(f"start: $start%8x end: $end%8x num: ${(end - start) / 4096}")
+      }*/
+
+      val coalesced =
+        (pages.sortBy(_._1) :+ (Int.MaxValue, Int.MaxValue)).scanLeft(((-1, -1), Option.empty[(Int, Int)])) { (state, next) =>
+          val (open, _) = state
+          val (start1, end1) = open
+          val (start2, end2) = next
+          if (end1 > start2)
+            println(f"Overlap: $start1%8x $end1%8x $start2%8x $end2%8x")
+
+          val distance = (start2 - end1) / 4096
+          if (distance <= MadviseCoalescePageGap) {
+            //println(f"Coalescing: Distance between [$start1%8x-$end1%8x] to [$start2%8x-$end2%8x]: ${(start2 - end1) / 4096}")
+            ((start1, end2), None) // coalesce and emit nothing
+          } else ((start2, end2), Some(start1, end1)) // emit the previous range and continue with the current
+        }.flatMap(_._2).drop(1)
+
+      //coalesced.foreach(p => println(f"start: $p%8d end: ${p + numPages + 1}%8d num: ${numPages + 1} rowwidth: ${downsampling * width * 2}"))
+      /*coalesced.foreach {
+        case (start, end) =>
+          println(f"start: $start%8x end: $end%8x num: ${(end - start) / 4096}")
+      }*/
+
       val start = System.currentTimeMillis()
       for {
         map <- maps
-        yOffset <- pages
+        baseAddr = map.asInstanceOf[DirectBuffer].address() - 8
+        (start, end) <- coalesced
       } {
-        val offset = (yOffset + xOffset) & ~4095 // align to page boundary
-        val baseAddr = map.asInstanceOf[DirectBuffer].address() - 8
+        //val offset = (yOffset + xOffset) & ~4095 // align to page boundary
         //println(f"madvise $baseAddr%8x $offset%8x ${4096 * (numPages + 1)}")
-        val res = Mmap.INSTANCE.madvise(baseAddr + offset, 4096 * (numPages + 1), Mmap.MADV_WILLNEED)
+        val res = Mmap.INSTANCE.madvise(baseAddr + start, end - start, Mmap.MADV_WILLNEED)
         if (res != 0)
-          println(f"madvise failed for $baseAddr%8x $offset%8x ${4096 * (numPages + 1)}: $res")
+          println(f"madvise failed for $baseAddr%8x $start%8x ${end - start}: $res")
       }
       println(s"Preloading took ${System.currentTimeMillis() - start}ms")
 
-      val offs = new scala.collection.immutable.VectorBuilder[Int]()
+      val startWriting = System.currentTimeMillis()
+      //val offs = new scala.collection.immutable.VectorBuilder[Int]()
       val res = writeBlock(target, downsampling) { (lx, ly, lz) =>
         val globalX = (x * 64 + lx) * downsampling
         val globalY = (y * 64 + ly) * downsampling
@@ -376,14 +412,14 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
           val data = maps(lz)
           val offset = (globalY * width + globalX) * 2
 
-          offs += offset - 8
+          //offs += offset - 8
           data.get(offset + 1) & bitmask
         } else 0
       }
 
       res.onComplete { _ =>
-        println(s"Writing block $x $y $z q$downsampling done")
-        //offs.result().map(_ & ~4095).distinct.sorted.foreach(x => println(f"x: $x%8x"))
+        println(s"Writing block $x $y $z q$downsampling done after ${System.currentTimeMillis() - startWriting}ms")
+        //offs.result().groupBy(_ & ~4095).toVector.sortBy(_._1).foreach(x => println(f"x: ${x._1}%8x num: ${x._2.size} distinct: ${x._2.distinct.size}"))
       }
 
       res
