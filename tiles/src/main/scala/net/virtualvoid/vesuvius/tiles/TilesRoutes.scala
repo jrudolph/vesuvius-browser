@@ -399,7 +399,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         if (res != 0)
           println(f"madvise failed for $baseAddr%8x $start%8x ${end - start}: $res")
       }
-      println(s"Preloading took ${System.currentTimeMillis() - start}ms")
+      println(f"Preloading of ${maps.size * coalesced.size}%4d took ${System.currentTimeMillis() - start}%5dms")
 
       val startWriting = System.currentTimeMillis()
       //val offs = new scala.collection.immutable.VectorBuilder[Int]()
