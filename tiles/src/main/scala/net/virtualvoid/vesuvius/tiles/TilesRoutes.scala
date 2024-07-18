@@ -328,6 +328,40 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         createVolumeBlock64x4FromLayers(scroll, metadata, target, x, y, z, bitmask, downsampling)
     }
 
+  def pagesFor(width: Int, x: Int, y: Int, downsampling: Int): Seq[(Int, Int)] = {
+    val xOffset = x * 64 * downsampling * 2
+    val numPages = (64 * downsampling * 2 + 4095) / 4096
+    val yOffsets =
+      for {
+        y <- y * 64 until (y + 1) * 64
+      } yield 8 + y * downsampling * width * 2
+
+    val pages =
+      for {
+        yOffset <- yOffsets
+        startOffset = yOffset + xOffset
+        endOffset = startOffset + 64 * downsampling * 2
+      } yield ((startOffset & ~4095), (endOffset & ~4095) + 4096)
+
+    val coalesced =
+      (pages.sortBy(_._1) :+ (Int.MaxValue, Int.MaxValue)).scanLeft(((-1, -1), Option.empty[(Int, Int)])) { (state, next) =>
+        val (open, _) = state
+        val (start1, end1) = open
+        val (start2, end2) = next
+        if (end1 > start2)
+          println(f"Overlap: $start1%8x $end1%8x $start2%8x $end2%8x")
+
+        val distance = (start2 - end1) / 4096
+
+        if (distance <= MadviseCoalescePageGap) {
+          //println(f"Distance between [$start1%8x-$end1%8x] to [$start2%8x-$end2%8x]: ${(start2 - end1) / 4096}")
+          ((start1, end2), None) // coalesce and emit nothing
+        } else ((start2, end2), Some(start1, end1)) // emit the previous range and continue with the current
+      }.flatMap(_._2).drop(1)
+
+    coalesced
+  }
+
   def volumeBlock64x4File(scroll: ScrollReference, uuid: String, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): File =
     new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/$uuid/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin")
 
@@ -345,47 +379,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       //  - for each y row in question (y * 64 to (y + 1) * 64) * downsampling (base addr = y * width * 2)
       //  - Number of pages = (64 * downsampling * 2) / 4096, rounded up to next page
       //  -> 64 madvise calls for each layer
-
-      val xOffset = x * 64 * downsampling * 2
-      val numPages = (64 * downsampling * 2 + 4095) / 4096
-      val yOffsets =
-        for {
-          y <- y * 64 until (y + 1) * 64
-        } yield 8 + y * downsampling * width * 2
-
-      val pages =
-        for {
-          yOffset <- yOffsets
-          startOffset = yOffset + xOffset
-          endOffset = startOffset + 64 * downsampling * 2
-          //page <- (startOffset & ~4095) to (endOffset & ~4095) by 4096
-        } yield ((startOffset & ~4095), (endOffset & ~4095) + 4096)
-
-      /*pages.foreach {
-        case (start, end) =>
-          println(f"start: $start%8x end: $end%8x num: ${(end - start) / 4096}")
-      }*/
-
-      val coalesced =
-        (pages.sortBy(_._1) :+ (Int.MaxValue, Int.MaxValue)).scanLeft(((-1, -1), Option.empty[(Int, Int)])) { (state, next) =>
-          val (open, _) = state
-          val (start1, end1) = open
-          val (start2, end2) = next
-          if (end1 > start2)
-            println(f"Overlap: $start1%8x $end1%8x $start2%8x $end2%8x")
-
-          val distance = (start2 - end1) / 4096
-          if (distance <= MadviseCoalescePageGap) {
-            //println(f"Coalescing: Distance between [$start1%8x-$end1%8x] to [$start2%8x-$end2%8x]: ${(start2 - end1) / 4096}")
-            ((start1, end2), None) // coalesce and emit nothing
-          } else ((start2, end2), Some(start1, end1)) // emit the previous range and continue with the current
-        }.flatMap(_._2).drop(1)
-
-      //coalesced.foreach(p => println(f"start: $p%8d end: ${p + numPages + 1}%8d num: ${numPages + 1} rowwidth: ${downsampling * width * 2}"))
-      /*coalesced.foreach {
-        case (start, end) =>
-          println(f"start: $start%8x end: $end%8x num: ${(end - start) / 4096}")
-      }*/
+      val coalesced = pagesFor(width, x, y, downsampling)
 
       val start = System.currentTimeMillis()
       for {
@@ -399,7 +393,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         if (res != 0)
           println(f"madvise failed for $baseAddr%8x $start%8x ${end - start}: $res")
       }
-      println(f"Preloading of ${maps.size * coalesced.size}%4d took ${System.currentTimeMillis() - start}%5dms (gap between lines was ${downsampling * width * 2}%8d bytes or ${downsampling * width * 2 / 4096} pages)")
+      println(f"Preloading of ${maps.size * coalesced.size}%4d pages took ${System.currentTimeMillis() - start}%5dms (gap between lines was ${downsampling * width * 2}%8d bytes or ${downsampling * width * 2 / 4096} pages)")
 
       val startWriting = System.currentTimeMillis()
       //val offs = new scala.collection.immutable.VectorBuilder[Int]()
