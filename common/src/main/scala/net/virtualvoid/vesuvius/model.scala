@@ -98,7 +98,7 @@ case object FullScrollsBase extends ScrollServerBase {
 
   def isHighResSegment(segment: SegmentReference): Boolean =
     (segment.scrollId == "1667" && segment.segmentId < "20231210132040") ||
-      segment.scrollId == "0332"
+      (segment.scrollId == "0332" && segment.segmentId < "20240618142020")
 }
 
 case object FragmentsBase extends ScrollServerBase {
