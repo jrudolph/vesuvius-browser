@@ -68,6 +68,7 @@ lazy val tiles = project.in(file("tiles"))
       case PathList(ps@_*) if ps.last endsWith ".proto" => MergeStrategy.first
       case x => assemblyMergeStrategy.value(x)
     },
+    run/javaOptions ++= Seq("--add-opens", "java.base/sun.nio.ch=ALL-UNNAMED")
   )
 
 lazy val web = project.in(file("web"))
