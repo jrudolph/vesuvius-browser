@@ -262,7 +262,7 @@ object Tasks {
       .map { start =>
         val end = System.nanoTime()
         val lastedMillis = (end - start) / 1000000
-        println(f"Download of $url complete. Took ${lastedMillis / 1000}s. Thpt: ${tmpFile.length().toDouble / lastedMillis / 1000 / 1024 / 1024}%5.2fMB/s")
+        println(f"Download of $url complete. Size: ${tmpFile.length().toDouble / 1024d / 1024d}MB Took ${lastedMillis / 1000}s. Thpt: ${tmpFile.length().toDouble / 1024d / 1024d * 1000d / lastedMillis}%5.2fMB/s")
         tmpFile.renameTo(to);
         to
       }
