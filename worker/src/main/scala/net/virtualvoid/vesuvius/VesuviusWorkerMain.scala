@@ -157,10 +157,11 @@ object Tasks {
 
             val inferenceScript = new File(inferenceScriptDir, "inference.py")
             val model = new File(config.inferenceScriptDir, "model.ckpt") // model checkpoint itself is one level up
-            require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
+            //require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
 
             def runInference(): Future[(File, WorkItemResult)] = Future {
               import sys.process._
+              require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
               val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
               println(s"Running [$cmdLine]")
 
@@ -172,7 +173,10 @@ object Tasks {
               (outputFile, WorkCompleted(item, res))
             }
 
-            (() => runInference(), 30)
+            (() =>
+              download("https://media.virtual-void.net/s/Pn7CFqPzpJJMJ4G/download/model.ckpt", model)
+                .flatMap(_ =>
+                  runInference()), 30)
 
           case "grand-prize" =>
             val inferenceScriptDir = new File(config.inferenceScriptDir, "grand-prize")
@@ -187,10 +191,10 @@ object Tasks {
 
             val inferenceScript = new File(inferenceScriptDir, "inference_timesformer.py")
             val model = new File(config.inferenceScriptDir, "grand-price-model.ckpt") // model checkpoint itself is one level up
-            import sys.process._
-            require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
 
             def runInference(): Future[(File, WorkItemResult)] = Future {
+              import sys.process._
+              require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
               val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
               println(s"Running [$cmdLine]")
 
@@ -202,7 +206,9 @@ object Tasks {
               (outputFile, WorkCompleted(item, res))
             }
 
-            (() => runInference(), 26)
+            (() =>
+              download("https://media.virtual-void.net/s/iXFRiq8wRMHb9X7/download/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt", model)
+                .flatMap(_ => runInference()), 26)
 
           case x =>
             throw new IllegalArgumentException(s"Unsupported model $x")
@@ -290,7 +296,8 @@ object Tasks {
   val lastDownloadReport = new AtomicLong(System.currentTimeMillis())
   val lastReportDownloaded = new AtomicLong()
   val reportDownloadMillis = 10000
-  def countBytes(bytes: ByteString): ByteString = {
+  def countBytes(bytes: ByteString)(implicit ctx: WorkContext): ByteString = {
+    import ctx.println
     val total = totalDownloaded.addAndGet(bytes.size)
     val last = lastDownloadReport.get()
     val now = System.currentTimeMillis()
@@ -304,7 +311,11 @@ object Tasks {
     }
     bytes
   }
-  def download(url: String, to: File)(implicit ctx: WorkContext): Future[File] = {
+  def download(url: String, to: File)(implicit ctx: WorkContext): Future[File] = if (to.exists()) {
+    import ctx._
+    println(s"Skipping download of $url to $to, already exists")
+    Future.successful(to)
+  } else {
     import ctx._
     println(s"Downloading $url")
     to.getParentFile.mkdirs()

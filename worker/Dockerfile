@@ -19,4 +19,4 @@ COPY worker/run-worker-inference.sh /run-worker-inference.sh
 
 WORKDIR /
 
-CMD ["/run-worker-inference.sh"]
+CMD ["/run-worker.sh"]
