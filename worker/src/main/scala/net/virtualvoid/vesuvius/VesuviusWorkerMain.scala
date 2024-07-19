@@ -112,7 +112,7 @@ trait WorkContext {
   def println(msg: String): Unit
   def config: WorkerConfig
 
-  def authorizationHeader: HttpHeader =
+  lazy val DataServerAuthorizationHeader: HttpHeader =
     headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
 }
 object WorkContext {
@@ -134,7 +134,8 @@ object Tasks {
             val targetId = if (reverse) from + num - 1 - (layer - from) else layer
             download(
               segment.layerUrl(layer),
-              new File(to, f"layers/$targetId%02d.tif")
+              new File(to, f"layers/$targetId%02d.tif"),
+              Some(DataServerAuthorizationHeader)
             )
           }
           .runWith(Sink.ignore)
@@ -211,10 +212,10 @@ object Tasks {
 
       println(s"Working on $item")
       for {
-        model <- download(modelDownload, modelTarget)
+        model <- download(modelDownload, modelTarget, None)
         res <- downloadLayers(item.segment, input.startLayer, numLayers, segmentDir, input.reverseLayers)
         maskFileName = s"${item.segment.segmentId}_mask.png"
-        mask <- download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName))
+        mask <- download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName), Some(DataServerAuthorizationHeader))
         inference <- runInference()
       } yield inference
     }.flatten
@@ -229,7 +230,7 @@ object Tasks {
     val resultTarget = new File(segmentDir, s"${item.segment.segmentId}.fingerprint.json")
     val target = new File(segmentDir, s"${item.segment.segmentId}.ppm")
     val srcUrl = f"${item.segment.baseUrl}${item.segment.segmentId}.ppm"
-    download(srcUrl, target)
+    download(srcUrl, target, Some(DataServerAuthorizationHeader))
       .map { res =>
         val fingerprint = PPMFingerprinter.fingerprint(item.segment, res)
         val json = write(fingerprint, resultTarget)
@@ -246,7 +247,7 @@ object Tasks {
     val resultTarget = new File(segmentDir, s"${item.segment.segmentId}.ppm.bin")
     val target = new File(segmentDir, s"${item.segment.segmentId}.ppm")
     val srcUrl = f"${item.segment.baseUrl}${item.segment.segmentId}.ppm"
-    download(srcUrl, target)
+    download(srcUrl, target, Some(DataServerAuthorizationHeader))
       .map { ppmFile =>
         implicit val ppm = PPMReader(ppmFile)
         val dtpeSize = input.positionType match {
@@ -304,7 +305,7 @@ object Tasks {
     }
     bytes
   }
-  def download(url: String, to: File)(implicit ctx: WorkContext): Future[File] = if (to.exists()) {
+  def download(url: String, to: File, authorizationHeader: Option[HttpHeader])(implicit ctx: WorkContext): Future[File] = if (to.exists()) {
     import ctx._
     println(s"Skipping download of $url to $to, already exists")
     Future.successful(to)
@@ -313,7 +314,7 @@ object Tasks {
     println(s"Downloading $url to ${to.getAbsolutePath}")
     to.getParentFile.mkdirs()
     val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
-    Http().singleRequest(HttpRequest(HttpMethods.GET, uri = url, headers = authorizationHeader :: Nil))
+    Http().singleRequest(HttpRequest(HttpMethods.GET, uri = url, headers = authorizationHeader.toSeq))
       .flatMap { res =>
         val start = System.nanoTime()
         if (res.status == StatusCodes.OK)
