@@ -299,7 +299,7 @@ object Tasks {
         val old = lastReportDownloaded.getAndSet(total)
         val downloaded = total - old
         val lastedMillis = now - last
-        println(f"Global download counter ${downloaded.toDouble / 1024d / 1024d}%5.2fMB. Thpt: ${downloaded / 1024d / 1024d * 1000d / lastedMillis}%5.2fMB/s")
+        println(f"Global download counter ${downloaded.toDouble / 1024d / 1024d}%6.3fMB. Thpt: ${downloaded / 1024d / 1024d * 1000d / lastedMillis}%5.2fMB/s")
       }
     }
     bytes
@@ -310,7 +310,7 @@ object Tasks {
     Future.successful(to)
   } else {
     import ctx._
-    println(s"Downloading $url")
+    println(s"Downloading $url to ${to.getAbsolutePath}")
     to.getParentFile.mkdirs()
     val tmpFile = new File(to.getParentFile, s".tmp-${to.getName}")
     Http().singleRequest(HttpRequest(HttpMethods.GET, uri = url, headers = authorizationHeader :: Nil))
@@ -324,7 +324,7 @@ object Tasks {
       .map { start =>
         val end = System.nanoTime()
         val lastedMillis = (end - start) / 1000000
-        println(f"Download of $url complete. Size: ${tmpFile.length().toDouble / 1024d / 1024d}MB Took ${lastedMillis / 1000}s. Thpt: ${tmpFile.length().toDouble / 1024d / 1024d * 1000d / lastedMillis}%5.2fMB/s")
+        println(f"Download of $url complete. Size: ${tmpFile.length().toDouble / 1024d / 1024d}%6.3fMB Took ${lastedMillis / 1000}s. Thpt: ${tmpFile.length().toDouble / 1024d / 1024d * 1000d / lastedMillis}%5.2fMB/s")
         tmpFile.renameTo(to);
         to
       }
