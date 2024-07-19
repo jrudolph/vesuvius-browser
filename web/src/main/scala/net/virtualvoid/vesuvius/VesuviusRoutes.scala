@@ -56,6 +56,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   else if (layer == 2350) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32.png"))
   else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32_reverse.png"))
    */
+  val GrandPrize17Layer = LayerDefinition(2344, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize_17_32.png")))
   val Youssef15Layer = LayerDefinition(2342, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32.png")))
   val Youssef15ReverseLayer = LayerDefinition(2343, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32_reverse.png")))
   val Youssef63Layer = LayerDefinition(2350, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32.png")))
@@ -64,7 +65,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val AlphaMaskLayer = LayerDefinition(9999, "png", alphaMaskFor)
 
   val layers =
-    Seq(Youssef15Layer, Youssef15ReverseLayer, Youssef63Layer, Youssef63ReverseLayer, InkLabelLayer, AlphaMaskLayer)
+    Seq(Youssef15Layer, Youssef15ReverseLayer, Youssef63Layer, Youssef63ReverseLayer, InkLabelLayer, AlphaMaskLayer, GrandPrize17Layer)
       .map(l => l.layerId -> l).toMap
   def layerDefFor(z: Int): LayerDefinition =
     layers.getOrElse(z, LayerDefinition(z, "jpg", downloadedSegmentLayer(_, z)))
@@ -135,7 +136,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   else
                     (20 to 50 by 2)
 
-                val extraLayers = if (isHighResScroll) Seq(2350, 2351) else Seq(2342, 2343)
+                val extraLayers = if (isHighResScroll) Seq(2350, 2351) else Seq(2344, 2342, 2343)
                 val allExtraLayers = extraLayers :+ 3000
 
                 // check if inferred layers actually exist
@@ -166,6 +167,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   case "youssef-test-reversed" if Set("0332", "1667").contains(segment.scrollId) => Youssef_63_32_ReverseInput
                   case "youssef-test" => Youssef_15_32Input
                   case "youssef-test-reversed" => Youssef_15_32_ReverseInput
+                  case "grand-prize" => GrandPrize_17_32Input
                 }
                 concat(
                   pathEnd {

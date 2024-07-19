@@ -9,6 +9,7 @@
 <table>
     <tr>
         <th>Scroll</th><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th>
+        <th><a href="https://github.com/younader/Vesuvius-Grandprize-Winner">Grand Prize Model</a></th>
         <th><a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model</a></th>
         <th><a href="https://github.com/younader/Vesuvius-First-Letters">Youssef's Model (reversed layers)</a></th>
         <th>Mask</th>
@@ -21,6 +22,7 @@
         <td>@{info.area.map(_.formatted("%5.2f")).getOrElse("")}</td>
         <td>@info.width</td>
         <td>@info.height</td>
+        <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2344@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/grand-prize" height="100"/></a></td>
         <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2342@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test" height="100"/></a></td>
         <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2343@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test-reversed" height="100"/></a></td>
         <td><img src="/scroll/@info.scrollId/segment/@info.segmentId/mask" height="50"/></td>
