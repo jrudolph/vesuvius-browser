@@ -187,10 +187,10 @@ object Tasks {
 
             val inferenceScript = new File(inferenceScriptDir, "inference_timesformer.py")
             val model = new File(config.inferenceScriptDir, "timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt") // model checkpoint itself is one level up
-            require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
+            import sys.process._
+            require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
 
             def runInference(): Future[(File, WorkItemResult)] = Future {
-              import sys.process._
               val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
               println(s"Running [$cmdLine]")
 
