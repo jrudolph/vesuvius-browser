@@ -125,8 +125,6 @@ object WorkContext {
 
 object Tasks {
   def infer(item: WorkItem, input: InferenceWorkItemInput)(implicit ctx: WorkContext): Future[(File, WorkItemResult)] = {
-    require(input.model == "youssef-test", s"Only model 'youssef-test' is supported, got ${input.model}")
-
     import ctx._
 
     Future {
@@ -146,32 +144,72 @@ object Tasks {
       val segmentDir = new File(workDir, item.segment.segmentId)
       segmentDir.mkdirs()
 
-      val inferenceScriptDir = new File(config.inferenceScriptDir, "first-letters")
-      if (inferenceScriptDir.exists()) {
-        println("Fetching latest version of model")
-        import sys.process._
-        s"""git -C $inferenceScriptDir fetch""".!(ProcessLogger(println))
-        s"""git -C $inferenceScriptDir checkout origin/worker""".!(ProcessLogger(println))
-      }
+      val (runInference: (() => Future[(File, WorkItemResult)]), numLayers: Int) =
+        input.model match {
+          case "youssef-test" =>
+            val inferenceScriptDir = new File(config.inferenceScriptDir, "first-letters")
+            if (inferenceScriptDir.exists()) {
+              println("Fetching latest version of model")
+              import sys.process._
+              s"""git -C $inferenceScriptDir fetch""".!(ProcessLogger(println))
+              s"""git -C $inferenceScriptDir checkout origin/worker""".!(ProcessLogger(println))
+            }
 
-      val inferenceScript = new File(inferenceScriptDir, "inference.py")
-      val model = new File(config.inferenceScriptDir, "model.ckpt") // model checkpoint itself is one level up
-      require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
-      def runInference(): Future[(File, WorkItemResult)] = Future {
-        import sys.process._
-        val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
-        println(s"Running [$cmdLine]")
+            val inferenceScript = new File(inferenceScriptDir, "inference.py")
+            val model = new File(config.inferenceScriptDir, "model.ckpt") // model checkpoint itself is one level up
+            require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
 
-        val res = cmdLine.!!(ProcessLogger(println))
-        val outputFile = new File(workDir, s"${item.segment.segmentId}_${input.stride}_${input.startLayer}.png")
-        require(outputFile.exists, s"Output file $outputFile does not exist")
-        println(s"Output file $outputFile exists")
-        s"rm -r ${segmentDir.getAbsolutePath}".!!
-        (outputFile, WorkCompleted(item, res))
-      }
+            def runInference(): Future[(File, WorkItemResult)] = Future {
+              import sys.process._
+              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
+              println(s"Running [$cmdLine]")
+
+              val res = cmdLine.!!(ProcessLogger(println))
+              val outputFile = new File(workDir, s"${item.segment.segmentId}_${input.stride}_${input.startLayer}.png")
+              require(outputFile.exists, s"Output file $outputFile does not exist")
+              println(s"Output file $outputFile exists")
+              s"rm -r ${segmentDir.getAbsolutePath}".!!
+              (outputFile, WorkCompleted(item, res))
+            }
+
+            (() => runInference(), 30)
+
+          case "grand-prize" =>
+            val inferenceScriptDir = new File(config.inferenceScriptDir, "grand-prize")
+            if (inferenceScriptDir.exists()) {
+              println("Fetching latest version of model")
+              import sys.process._
+              s"""git -C $inferenceScriptDir fetch""".!(ProcessLogger(println))
+              s"""git -C $inferenceScriptDir checkout origin/worker""".!(ProcessLogger(println))
+            }
+
+            // python3 inference_timesformer.py --segment_id 20230827161847 --segment_path $(pwd)/train_scrolls --model_path timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt --stride 256 --workers=10
+
+            val inferenceScript = new File(inferenceScriptDir, "inference_timesformer.py")
+            val model = new File(config.inferenceScriptDir, "timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt") // model checkpoint itself is one level up
+            require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
+
+            def runInference(): Future[(File, WorkItemResult)] = Future {
+              import sys.process._
+              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
+              println(s"Running [$cmdLine]")
+
+              val res = cmdLine.!!(ProcessLogger(println))
+              val outputFile = new File(workDir, s"${item.segment.segmentId}_${input.stride}_${input.startLayer}.png")
+              require(outputFile.exists, s"Output file $outputFile does not exist")
+              println(s"Output file $outputFile exists")
+              s"rm -r ${segmentDir.getAbsolutePath}".!!
+              (outputFile, WorkCompleted(item, res))
+            }
+
+            (() => runInference(), 26)
+
+          case x =>
+            throw new IllegalArgumentException(s"Unsupported model $x")
+        }
 
       println(s"Working on $item")
-      downloadLayers(item.segment, input.startLayer, 30, segmentDir, input.reverseLayers)
+      downloadLayers(item.segment, input.startLayer, numLayers, segmentDir, input.reverseLayers)
         .flatMap { res =>
           val maskFileName = s"${item.segment.segmentId}_mask.png"
           download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName))
