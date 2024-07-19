@@ -316,10 +316,16 @@ object Tasks {
     Http().singleRequest(HttpRequest(HttpMethods.GET, uri = url, headers = authorizationHeader :: Nil))
       .flatMap { res =>
         val start = System.nanoTime()
-        require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
-        res.entity.dataBytes
-          .map(countBytes)
-          .runWith(FileIO.toPath(tmpFile.toPath)).map(_ => start)
+        if (res.status == StatusCodes.OK)
+          res.entity.dataBytes
+            .map(countBytes)
+            .runWith(FileIO.toPath(tmpFile.toPath)).map(_ => start)
+        else {
+          val text = Unmarshal(res).to[String]
+          text.map { t =>
+            throw new RuntimeException(s"Got status ${res.status} for $url: '$t'")
+          }
+        }
       }
       .map { start =>
         val end = System.nanoTime()
