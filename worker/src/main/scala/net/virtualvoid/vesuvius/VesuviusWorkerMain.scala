@@ -144,7 +144,7 @@ object Tasks {
       val segmentDir = new File(workDir, item.segment.segmentId)
       segmentDir.mkdirs()
 
-      val (runInference: (() => Future[(File, WorkItemResult)]), numLayers: Int) =
+      val (runInference: (() => Future[(File, WorkItemResult)]), numLayers: Int, modelDownload: String, modelTarget: File) =
         input.model match {
           case "youssef-test" =>
             val inferenceScriptDir = new File(config.inferenceScriptDir, "first-letters")
@@ -173,10 +173,7 @@ object Tasks {
               (outputFile, WorkCompleted(item, res))
             }
 
-            (() =>
-              download("https://media.virtual-void.net/s/Pn7CFqPzpJJMJ4G/download/model.ckpt", model)
-                .flatMap(_ =>
-                  runInference()), 30)
+            (() => runInference(), 30, "https://media.virtual-void.net/s/Pn7CFqPzpJJMJ4G/download/model.ckpt", model)
 
           case "grand-prize" =>
             val inferenceScriptDir = new File(config.inferenceScriptDir, "grand-prize")
@@ -206,24 +203,20 @@ object Tasks {
               (outputFile, WorkCompleted(item, res))
             }
 
-            (() =>
-              download("https://media.virtual-void.net/s/iXFRiq8wRMHb9X7/download/grand-prize-model.ckpt", model)
-                .flatMap(_ => runInference()), 26)
+            (() => runInference(), 26, "https://media.virtual-void.net/s/iXFRiq8wRMHb9X7/download/grand-prize-model.ckpt", model)
 
           case x =>
             throw new IllegalArgumentException(s"Unsupported model $x")
         }
 
       println(s"Working on $item")
-      downloadLayers(item.segment, input.startLayer, numLayers, segmentDir, input.reverseLayers)
-        .flatMap { res =>
-          val maskFileName = s"${item.segment.segmentId}_mask.png"
-          download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName))
-        }
-        .flatMap { res =>
-          println("Download complete, starting inference")
-          runInference()
-        }
+      for {
+        model <- download(modelDownload, modelTarget)
+        res <- downloadLayers(item.segment, input.startLayer, numLayers, segmentDir, input.reverseLayers)
+        maskFileName = s"${item.segment.segmentId}_mask.png"
+        mask <- download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName))
+        inference <- runInference()
+      } yield inference
     }.flatten
   }
 
