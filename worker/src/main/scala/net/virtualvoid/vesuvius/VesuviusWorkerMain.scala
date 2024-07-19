@@ -173,7 +173,7 @@ object Tasks {
               (outputFile, WorkCompleted(item, res))
             }
 
-            (() => runInference(), 30, "https://media.virtual-void.net/s/Pn7CFqPzpJJMJ4G/download/model.ckpt", model)
+            (() => runInference(), 30, "https://f004.backblazeb2.com/file/bulk-data-jr/model.ckpt", model)
 
           case "grand-prize" =>
             val inferenceScriptDir = new File(config.inferenceScriptDir, "grand-prize")
@@ -203,7 +203,7 @@ object Tasks {
               (outputFile, WorkCompleted(item, res))
             }
 
-            (() => runInference(), 26, "https://media.virtual-void.net/s/iXFRiq8wRMHb9X7/download/grand-prize-model.ckpt", model)
+            (() => runInference(), 26, "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt", model)
 
           case x =>
             throw new IllegalArgumentException(s"Unsupported model $x")
