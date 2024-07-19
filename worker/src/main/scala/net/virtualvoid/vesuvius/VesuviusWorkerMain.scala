@@ -7,10 +7,11 @@ import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.*
 import org.apache.pekko.http.scaladsl.marshalling.Marshal
 import org.apache.pekko.http.scaladsl.unmarshalling.Unmarshal
 import org.apache.pekko.stream.scaladsl.{ FileIO, Sink, Source }
+import org.apache.pekko.util.ByteString
 
 import scala.concurrent.{ ExecutionContext, Future }
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
-import Predef.{ println => _, _ }
+import java.util.concurrent.atomic.AtomicLong
 
 object VesuviusWorkerMain extends App {
   Console.println(s"Booting up Vesuvius worker version ${BuildInfo.version} built at ${BuildInfo.builtAtString}")
@@ -247,6 +248,24 @@ object Tasks {
     target
   }
 
+  val totalDownloaded = new AtomicLong()
+  val lastDownloadReport = new AtomicLong(System.currentTimeMillis())
+  val lastReportDownloaded = new AtomicLong()
+  val reportDownloadMillis = 10000
+  def countBytes(bytes: ByteString): ByteString = {
+    val total = totalDownloaded.addAndGet(bytes.size)
+    val last = lastDownloadReport.get()
+    val now = System.currentTimeMillis()
+    if (last + reportDownloadMillis < now) {
+      if (lastDownloadReport.compareAndSet(last, now)) { // we won the race
+        val old = lastReportDownloaded.getAndSet(total)
+        val downloaded = total - old
+        val lastedMillis = now - last
+        println(f"Global download counter ${downloaded.toDouble / 1024d / 1024d}%5.2fMB. Thpt: ${downloaded / 1024d / 1024d * 1000d / lastedMillis}%5.2fMB/s")
+      }
+    }
+    bytes
+  }
   def download(url: String, to: File)(implicit ctx: WorkContext): Future[File] = {
     import ctx._
     println(s"Downloading $url")
@@ -257,6 +276,7 @@ object Tasks {
         val start = System.nanoTime()
         require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
         res.entity.dataBytes
+          .map(countBytes)
           .runWith(FileIO.toPath(tmpFile.toPath)).map(_ => start)
       }
       .map { start =>
