@@ -186,7 +186,7 @@ object Tasks {
             // python3 inference_timesformer.py --segment_id 20230827161847 --segment_path $(pwd)/train_scrolls --model_path timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt --stride 256 --workers=10
 
             val inferenceScript = new File(inferenceScriptDir, "inference_timesformer.py")
-            val model = new File(config.inferenceScriptDir, "timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt") // model checkpoint itself is one level up
+            val model = new File(config.inferenceScriptDir, "grand-price-model.ckpt") // model checkpoint itself is one level up
             import sys.process._
             require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
 
