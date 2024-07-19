@@ -6,4 +6,4 @@ RUN apt-get update && \
 
 # prebuffer python dependencies, so that reclone will still be cached
 COPY worker/requirements.txt /tmp/requirements.txt
-RUN pip3 install -r /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
