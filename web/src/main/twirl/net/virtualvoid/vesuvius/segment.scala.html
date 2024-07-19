@@ -35,7 +35,7 @@ Use Shift-Click to open a tab with Yao Hsiao's <a href="https://github.com/tomhs
     <tr>
         <th>Model</th>
     </tr>
-    @for((id, modelName) <- Seq("youssef-test" -> "Youssef Layer 15 Up Stride 32", "youssef-test-reversed" -> "Youssef Layer 44 Down Stride 32 (reverse layering)")) {
+    @for((id, modelName) <- Seq("grand-prize" -> "2023 Grand Prize Model", "youssef-test" -> "Youssef Layer 15 Up Stride 32", "youssef-test-reversed" -> "Youssef Layer 44 Down Stride 32 (reverse layering)")) {
     <tr>
         <td><a href="inferred/@id/full" download>@modelName</a></td>
         <td><a href="inferred/@id/full?show"><img src="inferred/@id"/></a></td>
