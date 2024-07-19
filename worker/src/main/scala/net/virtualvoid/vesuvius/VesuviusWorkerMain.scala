@@ -207,7 +207,7 @@ object Tasks {
             }
 
             (() =>
-              download("https://media.virtual-void.net/s/iXFRiq8wRMHb9X7/download/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt", model)
+              download("https://media.virtual-void.net/s/iXFRiq8wRMHb9X7/download/grand-prize-model.ckpt", model)
                 .flatMap(_ => runInference()), 26)
 
           case x =>
