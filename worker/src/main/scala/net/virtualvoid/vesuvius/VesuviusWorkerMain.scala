@@ -124,6 +124,8 @@ object WorkContext {
 
 object Tasks {
   def infer(item: WorkItem, input: InferenceWorkItemInput)(implicit ctx: WorkContext): Future[(File, WorkItemResult)] = {
+    require(input.model == "youssef-test", s"Only model 'youssef-test' is supported, got ${input.model}")
+
     import ctx._
 
     Future {
@@ -143,17 +145,16 @@ object Tasks {
       val segmentDir = new File(workDir, item.segment.segmentId)
       segmentDir.mkdirs()
 
-      val inferenceScriptDir = config.inferenceScriptDir
-
-      if (config.inferenceScriptDir.exists()) {
+      val inferenceScriptDir = new File(config.inferenceScriptDir, "first-letters")
+      if (inferenceScriptDir.exists()) {
         println("Fetching latest version of model")
         import sys.process._
-        s"""git -C ${config.inferenceScriptDir} fetch""".!(ProcessLogger(println))
-        s"""git -C ${config.inferenceScriptDir} checkout origin/worker""".!(ProcessLogger(println))
+        s"""git -C $inferenceScriptDir fetch""".!(ProcessLogger(println))
+        s"""git -C $inferenceScriptDir checkout origin/worker""".!(ProcessLogger(println))
       }
 
       val inferenceScript = new File(inferenceScriptDir, "inference.py")
-      val model = new File(inferenceScriptDir, "model.ckpt")
+      val model = new File(config.inferenceScriptDir, "model.ckpt") // model checkpoint itself is one level up
       require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
       def runInference(): Future[(File, WorkItemResult)] = Future {
         import sys.process._
