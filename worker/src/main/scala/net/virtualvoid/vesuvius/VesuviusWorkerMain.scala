@@ -203,7 +203,7 @@ object Tasks {
               (outputFile, WorkCompleted(item, res))
             }
 
-            (() => runInference(), 26, "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt", model)
+            (() => runInference(), 26, "https://bulk-data-jr.s3.us-west-004.backblazeb2.com/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt", model)
 
           case x =>
             throw new IllegalArgumentException(s"Unsupported model $x")
