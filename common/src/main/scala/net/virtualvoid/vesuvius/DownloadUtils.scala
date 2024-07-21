@@ -238,6 +238,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     }
 
     (t => {
+      println(s"adding $t to queue")
       val promise = Promise[U]()
       queue.offer(t, promise)
       promise.future
