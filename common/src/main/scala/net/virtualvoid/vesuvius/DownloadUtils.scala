@@ -4,7 +4,7 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.caching.scaladsl.{ CachingSettings, LfuCacheSettings }
 import org.apache.pekko.http.scaladsl.Http
-import org.apache.pekko.http.scaladsl.model.{ HttpMethods, HttpRequest, StatusCodes, headers }
+import org.apache.pekko.http.scaladsl.model.{ HttpHeader, HttpMethods, HttpRequest, StatusCodes, headers }
 import org.apache.pekko.stream.scaladsl.{ FileIO, Keep, Sink }
 
 import java.io.{ File, PrintStream }
@@ -109,14 +109,21 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     urlPattern:            T => String,
     filePattern:           T => File,
     settings:              CacheSettings = CacheSettings.Default,
-    maxConcurrentRequests: Int           = 16): Cache[T, File] = {
+    maxConcurrentRequests: Int           = 16): Cache[T, File] =
+    requestDownloadCache(t => authenticatedDataServerRequest(urlPattern(t)), filePattern, settings, maxConcurrentRequests)
+
+  def requestDownloadCache[T](
+    requestPattern:        T => HttpRequest,
+    filePattern:           T => File,
+    settings:              CacheSettings    = CacheSettings.Default,
+    maxConcurrentRequests: Int              = 16): Cache[T, File] = {
     lazy val (limited: (T => Future[File]), refresh: (T => Unit)) = semaphore[T, File](maxConcurrentRequests) { (t, time) =>
       if (System.nanoTime() - time > 1000000000L * 60) {
         cache.remove(t)
         throw new ExpelledException(s"Request was not refreshed in queue for ${(System.nanoTime() - time) / 1000000000L} seconds, aborting")
       } else {
         cleanupCacheDir(settings)
-        download(urlPattern(t), filePattern(t))
+        download(requestPattern(t), filePattern(t))
       }
     }
 
@@ -183,8 +190,11 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   }
 
   val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
+  def authenticatedDataServerRequest(url: String, additionalHeaders: Seq[HttpHeader] = Nil): HttpRequest =
+    HttpRequest(HttpMethods.GET, uri = url, headers = auth +: additionalHeaders)
   def download(url: String, to: File): Future[File] =
-    download(HttpRequest(HttpMethods.GET, uri = url, headers = auth :: Nil), to)
+    download(authenticatedDataServerRequest(url), to)
+
   def download(request: HttpRequest, to: File): Future[File] = {
     println(s"Downloading ${request.uri}")
     val start = System.currentTimeMillis()
