@@ -19,18 +19,19 @@ class PriorityQueueWithRefreshStage[K, V] extends GraphStageWithMaterializedValu
       val refreshCallback = getAsyncCallback[K] { key =>
         val timestamp = System.nanoTime()
         map.get(key).foreach {
-          case (k, v, oldTimestamp) =>
-            map.put(k, (k, v, timestamp))
-            queue.remove(oldTimestamp)
-            queue.put(timestamp, (k, v))
+          case (k, v, oldTimestamp, id) =>
+            map.put(k, (k, v, timestamp, id))
+            queue.remove((oldTimestamp, id))
+            queue.put((timestamp, id), (k, v))
         }
       }
 
-      val map: mutable.HashMap[K, (K, V, Long)] = mutable.HashMap.empty
-      val queue: mutable.TreeMap[Long, (K, V)] = mutable.TreeMap.empty[Long, (K, V)](Ordering.by(-_))
+      var id = 0
+      val map: mutable.HashMap[K, (K, V, Long, Long)] = mutable.HashMap.empty
+      val queue: mutable.TreeMap[(Long, Long), (K, V)] = mutable.TreeMap.empty[(Long, Long), (K, V)](Ordering.by(x => (-x._1, x._2)))
       def dequeue(): (K, V, Long) = {
-        val (timestamp, (k, v)) = queue.head
-        queue.remove(timestamp)
+        val ((timestamp, id), (k, v)) = queue.head
+        queue.remove((timestamp, id))
         map.remove(k)
         (k, v, timestamp)
       }
@@ -39,8 +40,9 @@ class PriorityQueueWithRefreshStage[K, V] extends GraphStageWithMaterializedValu
         if (isAvailable(outlet)) push(outlet, (kv._1, kv._2, System.nanoTime()))
         else {
           val timestamp = System.nanoTime()
-          map.put(kv._1, (kv._1, kv._2, timestamp))
-          queue.put(timestamp, kv)
+          id += 1
+          map.put(kv._1, (kv._1, kv._2, timestamp, id))
+          queue.put((timestamp, id), kv)
         }
 
       def onPull(): Unit =
