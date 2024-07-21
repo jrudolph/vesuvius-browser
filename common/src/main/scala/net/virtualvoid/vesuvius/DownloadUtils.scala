@@ -124,7 +124,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
         cache.remove(t)
         throw new ExpelledException(s"Request was not refreshed in queue for ${(System.nanoTime() - time) / 1000000000L} seconds, aborting")
       } else {
-        cleanupCacheDir(settings)
+        //cleanupCacheDir(settings)
         download(requestPattern(t), filePattern(t), receiveFile)
       }
     }
@@ -238,7 +238,6 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     }
 
     (t => {
-      println(s"adding $t to queue")
       val promise = Promise[U]()
       queue.offer(t, promise)
       promise.future
