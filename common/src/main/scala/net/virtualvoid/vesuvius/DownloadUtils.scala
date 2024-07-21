@@ -183,18 +183,20 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   }
 
   val auth = headers.Authorization(headers.BasicHttpCredentials(config.dataServerUsername, config.dataServerPassword))
-  def download(url: String, to: File): Future[File] = {
-    println(s"Downloading $url")
+  def download(url: String, to: File): Future[File] =
+    download(HttpRequest(HttpMethods.GET, uri = url, headers = auth :: Nil), to)
+  def download(request: HttpRequest, to: File): Future[File] = {
+    println(s"Downloading ${request.uri}")
     val start = System.currentTimeMillis()
     val tmpFile = new File(to.getParentFile, s".tmp.${to.getName}")
-    Http().singleRequest(HttpRequest(HttpMethods.GET, uri = url, headers = auth :: Nil))
+    Http().singleRequest(request)
       .flatMap { res =>
-        require(res.status == StatusCodes.OK, s"Got status ${res.status} for $url")
+        require(res.status == StatusCodes.OK, s"Got status ${res.status} for ${request.uri}")
         res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
       }
       .map { _ =>
         val end = System.currentTimeMillis()
-        println(f"Downloading $url length: ${tmpFile.length()} finished after ${end - start} ms (${(tmpFile.length().toFloat / 1000f / (end - start).toFloat)}%6.3f MB/s)")
+        println(f"Downloading ${request.uri} length: ${tmpFile.length()} finished after ${end - start} ms (${(tmpFile.length().toFloat / 1000f / (end - start).toFloat)}%6.3f MB/s)")
         tmpFile.renameTo(to)
         to
       }
