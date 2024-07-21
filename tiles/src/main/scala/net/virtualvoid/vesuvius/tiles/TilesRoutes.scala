@@ -530,7 +530,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   def volumeLayerYBlocksAvailableFor(scroll: ScrollReference, meta: VolumeMetadata, y: Int, z: Int, downsampling: Int): Boolean =
     volumeLayerYBlocksNeeded(y, z, downsampling).forall((layer, yBlocks) =>
       VolumeLayerCache.isReady(scroll, meta, layer) ||
-        yBlocks.forall(VolumeLayerYBlockCache.isReady(scroll, meta, layer, _)) )
+        yBlocks.forall(VolumeLayerYBlockCache.isReady(scroll, meta, layer, _)))
 
   def createVolumeBlock64x4FromLayerYBlocks(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
     volumeLayerYBlocksForVolume(scroll, meta, y, z, downsampling).flatMap { layerYBlockMaps =>
