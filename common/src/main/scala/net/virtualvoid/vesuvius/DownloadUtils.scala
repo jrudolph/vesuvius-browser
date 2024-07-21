@@ -1,10 +1,11 @@
 package net.virtualvoid.vesuvius
 
+import org.apache.pekko.Done
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.caching.scaladsl.{ CachingSettings, LfuCacheSettings }
 import org.apache.pekko.http.scaladsl.Http
-import org.apache.pekko.http.scaladsl.model.{ HttpHeader, HttpMethods, HttpRequest, StatusCodes, headers }
+import org.apache.pekko.http.scaladsl.model.{ HttpHeader, HttpMethods, HttpRequest, HttpResponse, StatusCodes, headers }
 import org.apache.pekko.stream.scaladsl.{ FileIO, Keep, Sink }
 
 import java.io.{ File, PrintStream }
@@ -110,20 +111,21 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     filePattern:           T => File,
     settings:              CacheSettings = CacheSettings.Default,
     maxConcurrentRequests: Int           = 16): Cache[T, File] =
-    requestDownloadCache(t => authenticatedDataServerRequest(urlPattern(t)), filePattern, settings, maxConcurrentRequests)
+    requestDownloadCache(t => authenticatedDataServerRequest(urlPattern(t)), filePattern, receiveBody, settings, maxConcurrentRequests)
 
   def requestDownloadCache[T](
     requestPattern:        T => HttpRequest,
     filePattern:           T => File,
-    settings:              CacheSettings    = CacheSettings.Default,
-    maxConcurrentRequests: Int              = 16): Cache[T, File] = {
+    receiveFile:           (HttpResponse, HttpRequest, File) => Future[Done],
+    settings:              CacheSettings                                     = CacheSettings.Default,
+    maxConcurrentRequests: Int                                               = 16): Cache[T, File] = {
     lazy val (limited: (T => Future[File]), refresh: (T => Unit)) = semaphore[T, File](maxConcurrentRequests) { (t, time) =>
       if (System.nanoTime() - time > 1000000000L * 60) {
         cache.remove(t)
         throw new ExpelledException(s"Request was not refreshed in queue for ${(System.nanoTime() - time) / 1000000000L} seconds, aborting")
       } else {
         cleanupCacheDir(settings)
-        download(requestPattern(t), filePattern(t))
+        download(requestPattern(t), filePattern(t), receiveFile)
       }
     }
 
@@ -193,17 +195,19 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   def authenticatedDataServerRequest(url: String, additionalHeaders: Seq[HttpHeader] = Nil): HttpRequest =
     HttpRequest(HttpMethods.GET, uri = url, headers = auth +: additionalHeaders)
   def download(url: String, to: File): Future[File] =
-    download(authenticatedDataServerRequest(url), to)
+    download(authenticatedDataServerRequest(url), to, receiveBody)
 
-  def download(request: HttpRequest, to: File): Future[File] = {
+  def receiveBody(res: HttpResponse, request: HttpRequest, target: File): Future[Done] = {
+    require(res.status == StatusCodes.OK, s"Got status ${res.status} for ${request.uri}")
+    res.entity.dataBytes.runWith(FileIO.toPath(target.toPath)).map(_ => Done) // FIXME: handle io errors
+  }
+
+  def download(request: HttpRequest, to: File, receiveFile: (HttpResponse, HttpRequest, File) => Future[Done]): Future[File] = {
     println(s"Downloading ${request.uri}")
     val start = System.currentTimeMillis()
     val tmpFile = new File(to.getParentFile, s".tmp.${to.getName}")
     Http().singleRequest(request)
-      .flatMap { res =>
-        require(res.status == StatusCodes.OK, s"Got status ${res.status} for ${request.uri}")
-        res.entity.dataBytes.runWith(FileIO.toPath(tmpFile.toPath))
-      }
+      .flatMap(receiveFile(_, request, tmpFile))
       .map { _ =>
         val end = System.currentTimeMillis()
         println(f"Downloading ${request.uri} length: ${tmpFile.length()} finished after ${end - start} ms (${(tmpFile.length().toFloat / 1000f / (end - start).toFloat)}%6.3f MB/s)")
