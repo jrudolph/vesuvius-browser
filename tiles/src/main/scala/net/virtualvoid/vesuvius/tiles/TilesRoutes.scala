@@ -330,7 +330,6 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   def pagesFor(width: Int, x: Int, y: Int, downsampling: Int): Seq[(Int, Int)] = {
     val xOffset = x * 64 * downsampling * 2
-    val numPages = (64 * downsampling * 2 + 4095) / 4096
     val yOffsets =
       for {
         y <- y * 64 until (y + 1) * 64
