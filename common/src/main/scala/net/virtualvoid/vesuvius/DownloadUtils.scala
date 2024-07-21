@@ -218,9 +218,9 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
   def semaphore[T, U](numRequests: Int, queueLength: Int = 1000)(f: (T, Long) => Future[U]): (T => Future[U], T => Unit) = {
     val (queue, res) =
-      PriorityQueue.queue[(T, Promise[U])]()
+      PriorityQueue.queue[T, Promise[U]]()
         .mapAsyncUnordered(numRequests) {
-          case ((t, promise), time) =>
+          case (t, promise, time) =>
             Try(f(t, time)) match {
               case Success(fut) => fut.onComplete(promise.complete)
               case Failure(t)   => promise.failure(t)
@@ -239,9 +239,9 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
     (t => {
       val promise = Promise[U]()
-      queue.offer(t -> promise)
+      queue.offer(t, promise)
       promise.future
-    }, t => queue.refresh(_._1 == t))
+    }, (t: T) => queue.refresh(t))
   }
 
   def cleanupCacheDir(settings: CacheSettings): Unit = {
