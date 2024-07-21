@@ -9,7 +9,7 @@ import org.apache.pekko.http.scaladsl.model
 import org.apache.pekko.http.scaladsl.model.{ HttpRequest, HttpResponse, MediaTypes, StatusCodes, headers }
 import org.apache.pekko.http.scaladsl.model.headers.ByteRange
 import org.apache.pekko.http.scaladsl.server.Directives.*
-import org.apache.pekko.http.scaladsl.server.Route
+import org.apache.pekko.http.scaladsl.server.{ Directive1, Route }
 import org.apache.pekko.stream.scaladsl.FileIO
 import sun.nio.ch.DirectBuffer
 
@@ -51,15 +51,21 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
                       complete(StatusCodes.EnhanceYourCalm)
                     }
                   } else {
-                    if (volumeBlock64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || volumeLayerYBlocksAvailableFor(scroll, meta, y, z, downsampling))
+                    if (volumeBlock64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling))
                       volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
                     // optionally: generate on the fly instead of using cached variant
                     //complete(createVolumeBlock64x4FromLayersToBytes(scroll, meta, x, y, z, bitmask, downsampling))
                     else {
-                      // refresh request for grid files for this block
-                      volumeLayerYBlocksNeeded(y, z, downsampling).foreach((layers, yBlocks) => yBlocks.foreach(yBlock => volumeLayerYBlock((scroll, meta, layers, yBlock))))
-                      //volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling)
-                      complete(StatusCodes.EnhanceYourCalm)
+                      volumeLayerYBlocksAvailableFor(scroll, meta, y, z, downsampling) { available =>
+                        if (available)
+                          volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
+                        else {
+                          // refresh request for grid files for this block
+                          volumeLayerYBlocksNeeded(y, z, downsampling).foreach((layers, yBlocks) => yBlocks.foreach(yBlock => volumeLayerYBlock((scroll, meta, layers, yBlock))))
+                          //volumeBlock64x4(scroll, meta, x, y, z, bitmask, downsampling)
+                          complete(StatusCodes.EnhanceYourCalm)
+                        }
+                      }
                     }
                   }
                 }
@@ -527,10 +533,14 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         VolumeLayerYBlockCache(params)
   }
 
-  def volumeLayerYBlocksAvailableFor(scroll: ScrollReference, meta: VolumeMetadata, y: Int, z: Int, downsampling: Int): Boolean =
-    volumeLayerYBlocksNeeded(y, z, downsampling).forall((layer, yBlocks) =>
-      VolumeLayerCache.isReady(scroll, meta, layer) ||
-        yBlocks.forall(VolumeLayerYBlockCache.isReady(scroll, meta, layer, _)))
+  def volumeLayerYBlocksAvailableFor(scroll: ScrollReference, meta: VolumeMetadata, y: Int, z: Int, downsampling: Int): Directive1[Boolean] =
+    onSuccess {
+      Future {
+        volumeLayerYBlocksNeeded(y, z, downsampling).forall((layer, yBlocks) =>
+          VolumeLayerCache.isReady(scroll, meta, layer) ||
+            yBlocks.forall(VolumeLayerYBlockCache.isReady(scroll, meta, layer, _)))
+      }(blockingDispatcher)
+    }
 
   def createVolumeBlock64x4FromLayerYBlocks(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] =
     volumeLayerYBlocksForVolume(scroll, meta, y, z, downsampling).flatMap { layerYBlockMaps =>
