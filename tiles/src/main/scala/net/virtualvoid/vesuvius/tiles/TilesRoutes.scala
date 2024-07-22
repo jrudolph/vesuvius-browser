@@ -158,17 +158,20 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   def gridFile(scroll: ScrollReference, uuid: String, gx: Int, gy: Int, gz: Int): File =
     new File(config.dataDir, f"grid/scroll${scroll.scrollId}/$uuid/cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif")
 
+  val TilesCacheSettings = CacheSettings.Default.copy(
+    ttlSeconds = Long.MaxValue, // never invalidate layer files
+    negTtlSeconds = 3600 * 24,
+    baseDirectory = Some(new File(config.dataDir, "grid")),
+    maxCacheSize = config.gridCacheMaxSize,
+    cacheHighWatermark = config.gridCacheHighWatermark,
+    cacheLowWatermark = config.gridCacheLowWatermark
+  )
+
   lazy val GridTileCache = downloadUtils.downloadCache[(ScrollReference, String, Int, Int, Int)](
     { case (scroll, uuid, gx, gy, gz) => f"${scroll.volumeGridUrl(uuid)}cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif" },
     { case (scroll, uuid, gx, gy, gz) => gridFile(scroll, uuid, gx, gy, gz) },
     maxConcurrentRequests = config.maxConcurrentGridRequests,
-    settings = CacheSettings.Default.copy(
-      negTtlSeconds = 60,
-      baseDirectory = Some(new File(config.dataDir, "grid")),
-      maxCacheSize = config.gridCacheMaxSize,
-      cacheHighWatermark = config.gridCacheHighWatermark,
-      cacheLowWatermark = config.gridCacheLowWatermark
-    )
+    settings = TilesCacheSettings
   )
   def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
     GridTileCache((scroll, meta.uuid, gx, gy, gz))
@@ -290,13 +293,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     { case (segment, layer) => segment.layerUrl(layer) },
     { case (segment, layer) => layerFile(segment, layer) },
     maxConcurrentRequests = config.maxConcurrentGridRequests,
-    settings = CacheSettings.Default.copy(
-      negTtlSeconds = 60,
-      baseDirectory = Some(new File(config.dataDir, "grid")),
-      maxCacheSize = config.gridCacheMaxSize,
-      cacheHighWatermark = config.gridCacheHighWatermark,
-      cacheLowWatermark = config.gridCacheLowWatermark
-    )
+    settings = TilesCacheSettings
   )
 
   def layerFile(segment: SegmentReference, layer: Int): File =
@@ -449,13 +446,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     { case (scroll, meta, layer) => f"${scroll.volumeUrl(meta.uuid)}${meta.formatLayer(layer)}.tif" },
     { case (scroll, meta, layer) => volumeLayerFile(scroll, meta, layer) },
     maxConcurrentRequests = config.maxConcurrentGridRequests,
-    settings = CacheSettings.Default.copy(
-      negTtlSeconds = 60,
-      baseDirectory = Some(new File(config.dataDir, "grid")),
-      maxCacheSize = config.gridCacheMaxSize,
-      cacheHighWatermark = config.gridCacheHighWatermark,
-      cacheLowWatermark = config.gridCacheLowWatermark
-    )
+    settings = TilesCacheSettings
   ).map { (info, file) =>
       info match {
         case (scroll, meta, layer) =>
