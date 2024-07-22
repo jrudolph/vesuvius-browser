@@ -412,7 +412,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     resizedX(Future.successful(orig), target, height, rotate90)
   def resizedX(orig: Future[File], target: File, height: Int, rotate90: Boolean): Future[Option[File]] =
     orig.flatMap { f0 =>
-      cached(target, negTtlSeconds = 10, isValid = f => f0.exists() && f0.lastModified() < f.lastModified()) { () =>
+      cached(target, negativeTtl = 10.seconds, isValid = f => f0.exists() && f0.lastModified() < f.lastModified()) { () =>
         val f = Option(f0).filter(_.exists).getOrElse(throw new RuntimeException(s"File $f0 does not exist"))
         import sys.process._
         val rotatedFile =
@@ -479,7 +479,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   val LinkR = """.*href="(.*)/".*""".r
   def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
-    cacheDownload(baseUrl, targetFile, ttlSeconds = 3600).map { f =>
+    cacheDownload(baseUrl, targetFile, ttl = 1.hour).map { f =>
       scala.io.Source.fromFile(f).getLines().collect {
         case LinkR(segmentId) if !segmentId.startsWith("..") =>
           segmentId

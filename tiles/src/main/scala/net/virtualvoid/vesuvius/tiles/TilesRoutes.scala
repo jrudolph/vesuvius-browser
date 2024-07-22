@@ -12,6 +12,7 @@ import sun.nio.ch.DirectBuffer
 import java.io.{ BufferedOutputStream, File, FileOutputStream }
 import java.nio.MappedByteBuffer
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends SprayJsonSupport {
   import system.dispatcher
@@ -77,7 +78,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   val BlockCache = downloadUtils.computeCache[(ScrollReference, VolumeMetadata, Int, Int, Int, Int, Int)](
     { case (scroll, meta, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/${meta.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
-    CacheSettings.Default.copy(negTtlSeconds = 60)
+    BlockCacheSettings
   ) {
       case (scroll, metadata, x, y, z, bitmask, downsampling) =>
         val target = new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/${metadata.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: dry
@@ -158,13 +159,18 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   def gridFile(scroll: ScrollReference, uuid: String, gx: Int, gy: Int, gz: Int): File =
     new File(config.dataDir, f"grid/scroll${scroll.scrollId}/$uuid/cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif")
 
-  val TilesCacheSettings = CacheSettings.Default.copy(
-    ttlSeconds = 100 * 365 * 24 * 3600, // 100 years, i.e. basically never invalidate layer files (waiting for y2323 bug to happen)
-    negTtlSeconds = 3600 * 24,
+  lazy val TilesCacheSettings = CacheSettings.Default.copy(
+    ttl = Duration.Inf,
+    negativeTtl = 1.day,
     baseDirectory = Some(new File(config.dataDir, "grid")),
     maxCacheSize = config.gridCacheMaxSize,
     cacheHighWatermark = config.gridCacheHighWatermark,
     cacheLowWatermark = config.gridCacheLowWatermark
+  )
+
+  lazy val BlockCacheSettings = CacheSettings.Default.copy(
+    ttl = Duration.Inf,
+    negativeTtl = 60.seconds,
   )
 
   lazy val GridTileCache = downloadUtils.downloadCache[(ScrollReference, String, Int, Int, Int)](
@@ -239,7 +245,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   val SurfaceBlockCache = downloadUtils.computeCache[(SegmentReference, Int, Int, Int, Int, Int)](
     { case (segment, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${segment.scrollId}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
-    CacheSettings.Default.copy(negTtlSeconds = 60)
+    BlockCacheSettings
   ) {
       case (segment, x, y, z, bitmask, downsampling) =>
         val target = new File(config.dataDir, f"blocks/scroll${segment.scrollId}/segment/${segment.segmentId}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: DRY
@@ -318,7 +324,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   val VolumeBlockCache = downloadUtils.computeCache[(ScrollReference, VolumeMetadata, Int, Int, Int, Int, Int)](
     { case (scroll, meta, x, y, z, bitmask, downsampling) => new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/${meta.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") },
-    CacheSettings.Default.copy(negTtlSeconds = 60)
+    BlockCacheSettings
   ) {
       case (scroll, metadata, x, y, z, bitmask, downsampling) =>
         val target = new File(config.dataDir, f"blocks/scroll${scroll.scrollId}/${metadata.uuid}/64-4/d$downsampling%02d/z$z%03d/xyz-$x%03d-$y%03d-$z%03d-b$bitmask%02x.bin") // FIXME: dry

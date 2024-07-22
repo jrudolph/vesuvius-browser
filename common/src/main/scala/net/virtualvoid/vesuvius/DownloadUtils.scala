@@ -19,8 +19,8 @@ trait DataServerConfig {
 }
 
 case class CacheSettings(
-    ttlSeconds:         Long,
-    negTtlSeconds:      Long,
+    ttl:                Duration,
+    negativeTtl:        Duration,
     isValid:            File => Boolean,
     baseDirectory:      Option[File],
     maxCacheSize:       Long,
@@ -30,8 +30,8 @@ case class CacheSettings(
   require(maxCacheSize >= 0, s"maxCacheSize must be >= 0, but was $maxCacheSize")
 }
 object CacheSettings {
-  val DefaultPositiveTtl = 3600 * 24 * 365
-  val DefaultNegativeTtl = 7200
+  val DefaultPositiveTtl = 365.days
+  val DefaultNegativeTtl = 2.hours
 
   val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, Long.MaxValue, 0.9, 0.75)
 }
@@ -44,7 +44,7 @@ trait Cache[T, U] {
 
   def map[V](f: (T, U) => V)(implicit system: ActorSystem): Cache[T, V] = new Cache[T, V] {
     val settings = CacheSettings.Default
-    val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttlSeconds.seconds)
+    val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttl)
     val s = CachingSettings(system).withLfuCacheSettings(lfu)
     val cache = LfuCache[T, V](s)
 
@@ -64,9 +64,9 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   val blockingDispatcher = system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher")
 
   def computeCache[T](filePattern: T => File, settings: CacheSettings = CacheSettings.Default)(compute: T => Future[File]): Cache[T, File] = {
-    val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttlSeconds.seconds)
+    val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttl)
     val s = CachingSettings(system).withLfuCacheSettings(lfu)
-    val fCache = fileCache(filePattern, settings.ttlSeconds, settings.negTtlSeconds, settings.isValid)(compute)
+    val fCache = fileCache(filePattern, settings.ttl, settings.negativeTtl, settings.isValid)(compute)
     val cache = LfuCache[T, File](s)
 
     lazy val self: Cache[T, File] = new Cache[T, File] {
@@ -144,17 +144,21 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     }
   }
 
-  def cacheDownload(url: String, to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl): Future[File] =
-    cached(to, ttlSeconds, negTtlSeconds) { () => download(url, to) }
+  def cacheDownload(url: String, to: File, ttl: Duration = DefaultPositiveTtl, negativeTtl: Duration = DefaultNegativeTtl): Future[File] =
+    cached(to, ttl, negativeTtl) { () => download(url, to) }
 
-  def fileCache[T](filePattern: T => File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: T => Future[File]): Cache[T, File] =
+  def isDeadlineInTheFuture(originMillis: Long, deadlineDuration: Duration): Boolean =
+    !deadlineDuration.isFinite ||
+      originMillis + deadlineDuration.toMillis > System.currentTimeMillis()
+
+  def fileCache[T](filePattern: T => File, ttl: Duration = DefaultPositiveTtl, negativeTtl: Duration = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: T => Future[File]): Cache[T, File] =
     new Cache[T, File] {
       def apply(t: T): Future[File] = {
         val to = fileFor(t)
         to.getParentFile.mkdirs()
         val neg = new File(to.getParentFile, s".neg-${to.getName}")
-        if (to.exists() && to.lastModified() + ttlSeconds * 1000 > System.currentTimeMillis() && isValid(to)) Future.successful(to)
-        else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis() && isValid(neg)) Future.failed(new NoSuchElementException(s"Negatively cached"))
+        if (to.exists() && isDeadlineInTheFuture(to.lastModified(), ttl) && isValid(to)) Future.successful(to)
+        else if (neg.exists() && isDeadlineInTheFuture(neg.lastModified(), negativeTtl) && isValid(neg)) Future.failed(new NoSuchElementException(s"Negatively cached"))
         else
           f(t).recoverWith {
             case t: ExpelledException => Future.failed(t) // do not cache these negative instances
@@ -176,11 +180,11 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       def fileFor(t: T): File = filePattern(t)
     }
 
-  def cached(to: File, ttlSeconds: Long = DefaultPositiveTtl, negTtlSeconds: Long = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: () => Future[File]): Future[File] = {
+  def cached(to: File, ttl: Duration = DefaultPositiveTtl, negativeTtl: Duration = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: () => Future[File]): Future[File] = {
     to.getParentFile.mkdirs()
     val neg = new File(to.getParentFile, s".neg-${to.getName}")
-    if (to.exists() && to.lastModified() + ttlSeconds * 1000 > System.currentTimeMillis() && isValid(to)) Future.successful(to)
-    else if (neg.exists() && neg.lastModified() + negTtlSeconds * 1000 > System.currentTimeMillis() && isValid(neg)) Future.failed(new RuntimeException(s"Negatively cached"))
+    if (to.exists() && isDeadlineInTheFuture(to.lastModified(), ttl) && isValid(to)) Future.successful(to)
+    else if (neg.exists() && isDeadlineInTheFuture(neg.lastModified(), negativeTtl) && isValid(neg)) Future.failed(new RuntimeException(s"Negatively cached"))
     else
       f().recoverWith {
         case t: Throwable =>
