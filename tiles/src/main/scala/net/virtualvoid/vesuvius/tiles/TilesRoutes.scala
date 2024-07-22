@@ -159,7 +159,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     new File(config.dataDir, f"grid/scroll${scroll.scrollId}/$uuid/cell_yxz_$gy%03d_$gx%03d_$gz%03d.tif")
 
   val TilesCacheSettings = CacheSettings.Default.copy(
-    ttlSeconds = Long.MaxValue, // never invalidate layer files
+    ttlSeconds = 100 * 365 * 24 * 3600, // 100 years, i.e. basically never invalidate layer files (waiting for y2323 bug to happen)
     negTtlSeconds = 3600 * 24,
     baseDirectory = Some(new File(config.dataDir, "grid")),
     maxCacheSize = config.gridCacheMaxSize,
