@@ -331,12 +331,12 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
         createVolumeBlock64x4FromLayers(scroll, metadata, target, x, y, z, bitmask, downsampling)
     }
 
-  def pagesFor(width: Int, x: Int, y: Int, downsampling: Int): Seq[(Int, Int)] = {
+  def pagesFor(tiffOffset: Int, width: Int, x: Int, y: Int, downsampling: Int): Seq[(Int, Int)] = {
     val xOffset = x * 64 * downsampling * 2
     val yOffsets =
       for {
         y <- y * 64 until (y + 1) * 64
-      } yield 8 + y * downsampling * width * 2
+      } yield tiffOffset + y * downsampling * width * 2
 
     val pages =
       for {
@@ -375,18 +375,19 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       if (x * 64 * downsampling >= width || y * 64 * downsampling >= height)
         throw new NoSuchElementException(s"Block $x $y $z q$downsampling is outside of volume bounds")
 
+      val tiffOffset = tiffOffsetFor(meta)
       // try to pre-load the data
       // pages needed:
       //  - for each z layer
       //  - for each y row in question (y * 64 to (y + 1) * 64) * downsampling (base addr = y * width * 2)
       //  - Number of pages = (64 * downsampling * 2) / 4096, rounded up to next page
       //  -> 64 madvise calls for each layer
-      val coalesced = pagesFor(width, x, y, downsampling)
+      val coalesced = pagesFor(tiffOffset, width, x, y, downsampling)
 
       val start = System.currentTimeMillis()
       for {
         map <- maps
-        baseAddr = map.asInstanceOf[DirectBuffer].address() - 8
+        baseAddr = map.asInstanceOf[DirectBuffer].address() - tiffOffset
         (start, end) <- coalesced
       } {
         //val offset = (yOffset + xOffset) & ~4095 // align to page boundary
@@ -457,10 +458,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       info match {
         case (scroll, meta, layer) =>
           val raf = new java.io.RandomAccessFile(file, "r")
-          val offset = meta.uuid match {
-            case "20231117161658" => 368
-            case _                => 8
-          }
+          val offset = tiffOffsetFor(meta)
           val map = raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, offset, raf.length() - offset)
           madviseSequential(map)
           map
@@ -471,4 +469,10 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     val addr = map.asInstanceOf[DirectBuffer].address()
     Mmap.INSTANCE.madvise(addr, map.capacity(), Mmap.MADV_SEQUENTIAL)
   }
+
+  def tiffOffsetFor(meta: VolumeMetadata): Int =
+    meta.uuid match {
+      case "20231117161658" => 368
+      case _                => 8
+    }
 }
