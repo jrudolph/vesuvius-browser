@@ -3,17 +3,17 @@ package net.virtualvoid.vesuvius
 import org.apache.pekko.Done
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.caching.LfuCache
-import org.apache.pekko.http.caching.scaladsl.{CachingSettings, LfuCacheSettings}
+import org.apache.pekko.http.caching.scaladsl.{ CachingSettings, LfuCacheSettings }
 import org.apache.pekko.http.scaladsl.Http
-import org.apache.pekko.http.scaladsl.model.{HttpHeader, HttpMethods, HttpRequest, HttpResponse, StatusCodes, headers}
-import org.apache.pekko.stream.scaladsl.{FileIO, Flow, Keep, Sink}
+import org.apache.pekko.http.scaladsl.model.{ HttpHeader, HttpMethods, HttpRequest, HttpResponse, StatusCodes, headers }
+import org.apache.pekko.stream.scaladsl.{ FileIO, Flow, Keep, Sink }
 import org.apache.pekko.util.ByteString
 
-import java.io.{File, PrintStream}
+import java.io.{ File, PrintStream }
 import java.util.concurrent.atomic.AtomicLong
 import scala.concurrent.duration.*
-import scala.concurrent.{Future, Promise, TimeoutException}
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.{ Future, Promise, TimeoutException }
+import scala.util.{ Failure, Success, Try }
 
 trait DataServerConfig {
   def dataServerUsername: String
@@ -277,24 +277,24 @@ trait DownloadCounter {
 object DownloadCounter {
   def apply(): DownloadCounter =
     new DownloadCounter {
-    val totalDownloaded = new AtomicLong()
-    val lastDownloadReport = new AtomicLong(System.currentTimeMillis())
-    val lastReportDownloaded = new AtomicLong()
-    val reportDownloadMillis = 10000
+      val totalDownloaded = new AtomicLong()
+      val lastDownloadReport = new AtomicLong(System.currentTimeMillis())
+      val lastReportDownloaded = new AtomicLong()
+      val reportDownloadMillis = 10000
 
-    def countBytes(bytes: ByteString): ByteString = {
-      val total = totalDownloaded.addAndGet(bytes.size)
-      val last = lastDownloadReport.get()
-      val now = System.currentTimeMillis()
-      if (last + reportDownloadMillis < now) {
-        if (lastDownloadReport.compareAndSet(last, now)) { // we won the race
-          val old = lastReportDownloaded.getAndSet(total)
-          val downloaded = total - old
-          val lastedMillis = now - last
-          println(f"10s download avg: ${downloaded.toDouble / 1024d / 1024d}%6.3fMB. Thpt: ${downloaded / 1024d / 1024d * 1000d / lastedMillis}%5.2fMB/s")
+      def countBytes(bytes: ByteString): ByteString = {
+        val total = totalDownloaded.addAndGet(bytes.size)
+        val last = lastDownloadReport.get()
+        val now = System.currentTimeMillis()
+        if (last + reportDownloadMillis < now) {
+          if (lastDownloadReport.compareAndSet(last, now)) { // we won the race
+            val old = lastReportDownloaded.getAndSet(total)
+            val downloaded = total - old
+            val lastedMillis = now - last
+            println(f"10s download avg: ${downloaded.toDouble / 1024d / 1024d}%6.3fMB. Thpt: ${downloaded / 1024d / 1024d * 1000d / lastedMillis}%5.2fMB/s")
+          }
         }
+        bytes
       }
-      bytes
     }
-  }
 }
