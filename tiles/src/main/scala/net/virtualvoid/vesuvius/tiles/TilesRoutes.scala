@@ -182,6 +182,48 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
   def tileFor(scroll: ScrollReference, meta: VolumeMetadata, gx: Int, gy: Int, gz: Int): Future[File] =
     GridTileCache((scroll, meta.uuid, gx, gy, gz))
 
+  val Buffers = new ThreadLocal[Array[Byte]]() {
+    override def initialValue(): Array[Byte] = new Array[Byte](64 * 64 * 64)
+  }
+
+  def writeBlockReadOrder(target: File, downsampling: Int)(data: (Int, Int, Int) => Int): Future[File] = Future {
+    val buffer = Buffers.get()
+
+    var z = 0
+    while (z < 64) {
+      var y = 0
+      while (y < 64) {
+        var x = 0
+        while (x < 64) {
+          //buffer(x + y * 64 + z * 64 * 64) = data(x, y, z).toByte
+          val value = data(x, y, z)
+          val bx = x >> 2
+          val by = y >> 2
+          val bz = z >> 2
+
+          val px = x & 3
+          val py = y & 3
+          val pz = z & 3
+
+          val i = bz << 14 | by << 10 | bx << 6 | pz << 4 | py << 2 | px
+          buffer(i) = value.toByte
+
+          x += 1
+        }
+        y += 1
+      }
+      z += 1
+    }
+
+    target.getParentFile.mkdirs()
+    val tmp = new File(target.getParentFile, target.getName + ".tmp.block.bin")
+    val fos = new FileOutputStream(tmp) // buffer full file before writing to avoid too many syncs
+    fos.write(buffer)
+    fos.close()
+    tmp.renameTo(target)
+    target
+  }(blockingDispatcher)
+
   def writeBlock(target: File, downsampling: Int)(data: (Int, Int, Int) => Int): Future[File] = Future {
     target.getParentFile.mkdirs()
     val tmp = File.createTempFile(".tmp.block", ".bin", target.getParentFile)
@@ -400,7 +442,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
       val startWriting = System.currentTimeMillis()
       //val offs = new scala.collection.immutable.VectorBuilder[Int]()
-      val res = writeBlock(target, downsampling) { (lx, ly, lz) =>
+      val res = writeBlockReadOrder(target, downsampling) { (lx, ly, lz) =>
         val globalX = (x * 64 + lx) * downsampling
         val globalY = (y * 64 + ly) * downsampling
         //val globalZ = (z * 64 + lz) // we already downsample when selecting layers
