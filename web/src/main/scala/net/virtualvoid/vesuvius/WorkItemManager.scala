@@ -3,6 +3,7 @@ package net.virtualvoid.vesuvius
 import org.apache.pekko.http.scaladsl.model.DateTime
 
 import scala.collection.immutable.ListMap
+import scala.util.Random
 
 trait WorkItemManager {
   def assignNext(workerId: String, allowedTypes: String => Boolean): Option[WorkItem]
@@ -21,12 +22,17 @@ object WorkItemManager {
   }
 
   def apply(initialItems: Seq[WorkItem]): WorkItemManager = {
-    var itemState = ListMap[WorkItem, ItemState](initialItems.map(_ -> Queued): _*)
+    var itemState = ListMap[WorkItem, ItemState](initialItems.map(_ -> Queued)*)
+    val targetList = initialItems.map(_.segment.segmentId).distinct.toVector.sorted
 
     new WorkItemManager {
       def assignNext(workerId: String, allowedTypes: String => Boolean): Option[WorkItem] =
         synchronized {
-          itemState.find(x => allowedTypes(x._1.input.productPrefix) && x._2 == Queued).map {
+          val possible = itemState.filter(x => allowedTypes(x._1.input.productPrefix) && x._2 == Queued)
+          val workerRandom = new Random(workerId.hashCode)
+          val workerPerm = workerRandom.shuffle(targetList)
+          val firstPossible = workerPerm.find(id => possible.exists(_._1.segment.segmentId == id))
+          firstPossible.flatMap(id => possible.find(_._1.segment.segmentId == id)).map {
             case (item, _) =>
               itemState = itemState.updated(item, Assigned(workerId, System.currentTimeMillis()))
               item
