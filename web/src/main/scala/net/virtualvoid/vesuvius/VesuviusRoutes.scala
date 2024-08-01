@@ -57,6 +57,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32_reverse.png"))
    */
   val GrandPrize17Layer = LayerDefinition(2344, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize_17_32.png")))
+  val GrandPrizeFinetune0_17Layer = LayerDefinition(2400, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune0_17_32.png")))
+  val GrandPrizeFinetune1_17Layer = LayerDefinition(2401, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune1_17_32.png")))
+  val GrandPrizeFinetune2_17Layer = LayerDefinition(2402, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune2_17_32.png")))
+  val GrandPrizeFinetune3_17Layer = LayerDefinition(2403, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune3_17_32.png")))
+
   val Youssef15Layer = LayerDefinition(2342, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32.png")))
   val Youssef15ReverseLayer = LayerDefinition(2343, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32_reverse.png")))
   val Youssef63Layer = LayerDefinition(2350, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32.png")))
@@ -136,7 +141,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   else
                     (20 to 50 by 2)
 
-                val extraLayers = if (isHighResScroll) Seq(2350, 2351) else Seq(2344, 2342, 2343)
+                val extraLayers = (if (isHighResScroll) Seq(2350, 2351) else Seq(2344, 2342, 2343)) ++ (
+                  if (user.exists(_.admin)) Seq(2400, 2401, 2402, 2403)
+                  else Seq.empty
+                )
                 val allExtraLayers = extraLayers :+ 3000
 
                 // check if inferred layers actually exist
