@@ -218,9 +218,9 @@ object Tasks {
       println(s"Working on $item")
       for {
         model <- download(modelDownload, modelTarget, None)
-        res <- downloadLayers(item.segment, input.startLayer, numLayers, segmentDir, input.reverseLayers)
         maskFileName = s"${item.segment.segmentId}_mask.png"
         mask <- download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName), Some(DataServerAuthorizationHeader))
+        res <- downloadLayers(item.segment, input.startLayer, numLayers, segmentDir, input.reverseLayers)
         inference <- runInference()
       } yield inference
     }.flatten
