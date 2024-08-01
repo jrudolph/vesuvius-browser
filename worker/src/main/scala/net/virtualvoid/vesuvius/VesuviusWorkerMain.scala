@@ -146,7 +146,9 @@ object Tasks {
           .map(_ => to)
 
       val workDir = new File(config.dataDir, item.id)
-      val segmentDir = new File(config.dataDir, item.segment.segmentId)
+      workDir.mkdirs()
+      val segmentBaseDir = config.dataDir
+      val segmentDir = new File(segmentBaseDir, item.segment.segmentId)
       segmentDir.mkdirs()
 
       val (runInference: (() => Future[(File, WorkItemResult)]), numLayers: Int, modelDownload: String, modelTarget: File) =
@@ -167,7 +169,7 @@ object Tasks {
             def runInference(): Future[(File, WorkItemResult)] = Future {
               import sys.process._
               require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
-              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
+              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${segmentBaseDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
               println(s"Running [$cmdLine]")
 
               val res = cmdLine.!!(ProcessLogger(println))
@@ -197,7 +199,7 @@ object Tasks {
             def runInference(): Future[(File, WorkItemResult)] = Future {
               import sys.process._
               require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
-              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${workDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
+              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${segmentBaseDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
               println(s"Running [$cmdLine]")
 
               val res = cmdLine.!!(ProcessLogger(println))
