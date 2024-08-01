@@ -133,14 +133,11 @@ object Tasks {
           .mapAsync(config.concurrentDownloads) { layer =>
             val targetId = if (reverse) from + num - 1 - (layer - from) else layer
             val targetFile = new File(to, f"layers/$targetId%02d.tif")
-            if (targetFile.exists())
-              Future.successful(targetFile)
-            else
-              download(
-                segment.layerUrl(layer),
-                targetFile,
-                Some(DataServerAuthorizationHeader)
-              )
+            download(
+              segment.layerUrl(layer),
+              targetFile,
+              Some(DataServerAuthorizationHeader)
+            )
           }
           .runWith(Sink.ignore)
           .map(_ => to)
