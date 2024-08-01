@@ -50,12 +50,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       extension: String,
       layerBase: SegmentReference => Future[File]
   )
-  /*
-  else if (layer == 2342) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32.png"))
-  else if (layer == 2343) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_15_32_reverse.png"))
-  else if (layer == 2350) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32.png"))
-  else if (layer == 2351) Future.successful(new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_youssef-test_63_32_reverse.png"))
-   */
+
   val GrandPrize17Layer = LayerDefinition(2344, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize_17_32.png")))
   val GrandPrizeFinetune0_17Layer = LayerDefinition(2400, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune0_17_32.png")))
   val GrandPrizeFinetune1_17Layer = LayerDefinition(2401, "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune1_17_32.png")))
