@@ -212,6 +212,7 @@ object Tasks {
               case "grand-prize-finetune0" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_4972_epoch_3_by_valid_loss_0.704.ckpt"
               case "grand-prize-finetune1" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_9800_by_train_loss_0.575.ckpt"
               case "grand-prize-finetune2" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_8701_epoch_6_by_valid_loss_0.702.ckpt"
+              case "grand-prize-finetune3" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_14900_by_train_loss_0.556.ckpt"
             }
 
             (() => runInference(), 26, modelFileUrl, model)

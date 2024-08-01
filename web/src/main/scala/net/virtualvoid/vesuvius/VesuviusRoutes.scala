@@ -505,6 +505,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val GrandPrizeFinetune0_17_32Input = InferenceWorkItemInput("grand-prize-finetune0", 17, 32, false)
   val GrandPrizeFinetune1_17_32Input = InferenceWorkItemInput("grand-prize-finetune1", 17, 32, false)
   val GrandPrizeFinetune2_17_32Input = InferenceWorkItemInput("grand-prize-finetune2", 17, 32, false)
+  val GrandPrizeFinetune3_17_32Input = InferenceWorkItemInput("grand-prize-finetune3", 17, 32, false)
   val Youssef_15_32_ReverseInput = InferenceWorkItemInput("youssef-test", 15, 32, true)
   val Youssef_63_32Input = InferenceWorkItemInput("youssef-test", 63, 32, false)
   val Youssef_63_32_ReverseInput = InferenceWorkItemInput("youssef-test", 63, 32, true)
@@ -517,6 +518,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       //GrandPrizeFinetune0_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
       GrandPrizeFinetune1_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
       //GrandPrizeFinetune2_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
+      GrandPrizeFinetune3_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
       Youssef_15_32_ReverseInput -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
       //Youssef_63_32Input -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       //Youssef_63_32_ReverseInput -> (s => s.scrollId == "332" || s.scrollId == "1667"),
