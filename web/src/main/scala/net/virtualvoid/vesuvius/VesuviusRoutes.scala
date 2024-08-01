@@ -70,7 +70,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val AlphaMaskLayer = LayerDefinition(9999, "png", alphaMaskFor)
 
   val layers =
-    Seq(Youssef15Layer, Youssef15ReverseLayer, Youssef63Layer, Youssef63ReverseLayer, InkLabelLayer, AlphaMaskLayer, GrandPrize17Layer)
+    Seq(Youssef15Layer, Youssef15ReverseLayer, Youssef63Layer, Youssef63ReverseLayer, InkLabelLayer, AlphaMaskLayer, GrandPrize17Layer, GrandPrizeFinetune0_17Layer, GrandPrizeFinetune1_17Layer, GrandPrizeFinetune2_17Layer, GrandPrizeFinetune3_17Layer)
       .map(l => l.layerId -> l).toMap
   def layerDefFor(z: Int): LayerDefinition =
     layers.getOrElse(z, LayerDefinition(z, "jpg", downloadedSegmentLayer(_, z)))
