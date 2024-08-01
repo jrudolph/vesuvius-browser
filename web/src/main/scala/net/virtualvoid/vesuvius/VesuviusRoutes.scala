@@ -517,15 +517,18 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val Youssef_63_32Input = InferenceWorkItemInput("youssef-test", 63, 32, false)
   val Youssef_63_32_ReverseInput = InferenceWorkItemInput("youssef-test", 63, 32, true)
 
+  def hasReasonableSize(info: ImageInfo): Boolean =
+    info.area.exists(_ > 8) || (info.width * info.height > 100 * 1000 * 1000)
+
   type Filter = ImageInfo => Boolean
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
-      Youssef_15_32Input -> (s => s.scrollId == "1" && s.area.exists(_ > 10) && !s.ref.isHighResSegment /*|| s.scrollId == "2"*/ ),
-      GrandPrize_17_32Input -> (s => s.area.exists(_ > 10) && !s.ref.isHighResSegment), //(s => s.scrollId == "1"),
+      Youssef_15_32Input -> (s => s.scrollId == "1" && hasReasonableSize(s) && !s.ref.isHighResSegment /*|| s.scrollId == "2"*/ ),
+      GrandPrize_17_32Input -> (s => hasReasonableSize(s) && !s.ref.isHighResSegment), //(s => s.scrollId == "1"),
       //GrandPrizeFinetune0_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
-      GrandPrizeFinetune1_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10) && !s.ref.isHighResSegment),
+      GrandPrizeFinetune1_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && hasReasonableSize(s) && !s.ref.isHighResSegment),
       //GrandPrizeFinetune2_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
-      GrandPrizeFinetune3_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10) && !s.ref.isHighResSegment),
+      GrandPrizeFinetune3_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && hasReasonableSize(s) && !s.ref.isHighResSegment),
       Youssef_15_32_ReverseInput -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
       //Youssef_63_32Input -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       //Youssef_63_32_ReverseInput -> (s => s.scrollId == "332" || s.scrollId == "1667"),
