@@ -21,9 +21,9 @@ object WorkItemManager {
     def runningForSeconds: Int = ((System.currentTimeMillis() - atMillis) / 1000).toInt
   }
 
-  def apply(initialItems: Seq[WorkItem]): WorkItemManager = {
+  def apply(initialItems: Seq[WorkItem], segmentIds: Seq[SegmentReference]): WorkItemManager = {
     var itemState = ListMap[WorkItem, ItemState](initialItems.map(_ -> Queued)*)
-    val targetList = initialItems.map(_.segment.segmentId).distinct.toVector.sorted
+    val targetList = segmentIds.map(_.segmentId).distinct.toVector.sorted
 
     new WorkItemManager {
       def assignNext(workerId: String, allowedTypes: String => Boolean): Option[WorkItem] =

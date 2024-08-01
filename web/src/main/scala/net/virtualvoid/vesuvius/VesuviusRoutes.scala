@@ -513,7 +513,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   type Filter = ImageInfo => Boolean
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
-      Youssef_15_32Input -> (s => s.scrollId == "1" && s.area.exists(_ > 10)/*|| s.scrollId == "2"*/ ),
+      Youssef_15_32Input -> (s => s.scrollId == "1" && s.area.exists(_ > 10) /*|| s.scrollId == "2"*/ ),
       GrandPrize_17_32Input -> (s => s.area.exists(_ > 10)), //(s => s.scrollId == "1"),
       //GrandPrizeFinetune0_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
       GrandPrizeFinetune1_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
@@ -539,7 +539,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map { case ((ref, input), id) => WorkItem(s"$runnerId-$id", ref, input.`type`, input) }
       .runWith(Sink.seq)
 
-  lazy val workItemManager: Future[WorkItemManager] = workItems.map(WorkItemManager(_))
+  lazy val workItemManager: Future[WorkItemManager] =
+    for {
+      workItems <- workItems
+      scrollSegments <- scrollSegments
+    } yield WorkItemManager(workItems, scrollSegments.map(_.ref))
 
   lazy val depsFile: Directive1[File] =
     provide(sys.props("java.class.path").split(":").find(_.contains("deps.jar")).map(new File(_))).orReject
