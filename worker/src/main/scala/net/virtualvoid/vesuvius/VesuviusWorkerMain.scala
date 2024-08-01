@@ -132,17 +132,21 @@ object Tasks {
         Source(from until from + num)
           .mapAsync(config.concurrentDownloads) { layer =>
             val targetId = if (reverse) from + num - 1 - (layer - from) else layer
-            download(
-              segment.layerUrl(layer),
-              new File(to, f"layers/$targetId%02d.tif"),
-              Some(DataServerAuthorizationHeader)
-            )
+            val targetFile = new File(to, f"layers/$targetId%02d.tif")
+            if (targetFile.exists())
+              Future.successful(targetFile)
+            else
+              download(
+                segment.layerUrl(layer),
+                targetFile,
+                Some(DataServerAuthorizationHeader)
+              )
           }
           .runWith(Sink.ignore)
           .map(_ => to)
 
       val workDir = new File(config.dataDir, item.id)
-      val segmentDir = new File(workDir, item.segment.segmentId)
+      val segmentDir = new File(config.dataDir, item.segment.segmentId)
       segmentDir.mkdirs()
 
       val (runInference: (() => Future[(File, WorkItemResult)]), numLayers: Int, modelDownload: String, modelTarget: File) =
@@ -176,7 +180,7 @@ object Tasks {
 
             (() => runInference(), 30, "https://f004.backblazeb2.com/file/bulk-data-jr/model.ckpt", model)
 
-          case x if x startsWith "grand-prize" =>
+          case x if x `startsWith` "grand-prize" =>
             val inferenceScriptDir = new File(config.inferenceScriptDir, "grand-prize")
             if (inferenceScriptDir.exists()) {
               println("Fetching latest version of model")
