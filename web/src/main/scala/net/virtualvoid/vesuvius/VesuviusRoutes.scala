@@ -176,6 +176,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   case "youssef-test" => Youssef_15_32Input
                   case "youssef-test-reversed" => Youssef_15_32_ReverseInput
                   case "grand-prize" => GrandPrize_17_32Input
+                  case "grand-prize-finetune0" => GrandPrizeFinetune0_17_32Input
+                  case "grand-prize-finetune1" => GrandPrizeFinetune1_17_32Input
+                  case "grand-prize-finetune2" => GrandPrizeFinetune2_17_32Input
+                  case "grand-prize-finetune3" => GrandPrizeFinetune3_17_32Input
                 }
                 concat(
                   pathEnd {
