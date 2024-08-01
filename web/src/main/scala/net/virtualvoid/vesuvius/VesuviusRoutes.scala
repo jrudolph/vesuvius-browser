@@ -502,6 +502,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val DownSampleU16_2Input = DownsamplePPMWorkItemInput("u16", 2)
   val Youssef_15_32Input = InferenceWorkItemInput("youssef-test", 15, 32, false)
   val GrandPrize_17_32Input = InferenceWorkItemInput("grand-prize", 17, 32, false)
+  val GrandPrizeFinetune0_17_32Input = InferenceWorkItemInput("grand-prize-finetune0", 17, 32, false)
   val Youssef_15_32_ReverseInput = InferenceWorkItemInput("youssef-test", 15, 32, true)
   val Youssef_63_32Input = InferenceWorkItemInput("youssef-test", 63, 32, false)
   val Youssef_63_32_ReverseInput = InferenceWorkItemInput("youssef-test", 63, 32, true)
@@ -511,6 +512,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     Seq(
       Youssef_15_32Input -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
       GrandPrize_17_32Input -> (_ => true), //(s => s.scrollId == "1"),
+      GrandPrizeFinetune0_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId)),
       Youssef_15_32_ReverseInput -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
       //Youssef_63_32Input -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       //Youssef_63_32_ReverseInput -> (s => s.scrollId == "332" || s.scrollId == "1667"),

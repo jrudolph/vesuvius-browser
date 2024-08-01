@@ -176,7 +176,7 @@ object Tasks {
 
             (() => runInference(), 30, "https://f004.backblazeb2.com/file/bulk-data-jr/model.ckpt", model)
 
-          case "grand-prize" =>
+          case "grand-prize" | "grand-prize-finetune0" =>
             val inferenceScriptDir = new File(config.inferenceScriptDir, "grand-prize")
             if (inferenceScriptDir.exists()) {
               println("Fetching latest version of model")
@@ -202,6 +202,11 @@ object Tasks {
               println(s"Output file $outputFile exists")
               s"rm -r ${segmentDir.getAbsolutePath}".!!
               (outputFile, WorkCompleted(item, res))
+            }
+
+            val modelFileUrl = input.model match {
+              case "grand-prize"           => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt"
+              case "grand-prize-finetune0" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_4972_epoch_3_by_valid_loss_0.704.ckpt"
             }
 
             (() => runInference(), 26, "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt", model)
