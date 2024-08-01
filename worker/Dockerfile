@@ -15,7 +15,6 @@ WORKDIR /model/grand-prize
 RUN git fetch origin && git checkout origin/worker && pip3 install --no-cache-dir -r requirements.txt
 
 COPY worker/run-worker.sh /run-worker.sh
-COPY worker/run-worker-inference.sh /run-worker-inference.sh
 
 WORKDIR /
 
