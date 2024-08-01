@@ -211,7 +211,7 @@ object Tasks {
               case "grand-prize-finetune2" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_8701_epoch_6_by_valid_loss_0.702.ckpt"
             }
 
-            (() => runInference(), 26, "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt", model)
+            (() => runInference(), 26, modelFileUrl, model)
 
           case x =>
             throw new IllegalArgumentException(s"Unsupported model $x")
