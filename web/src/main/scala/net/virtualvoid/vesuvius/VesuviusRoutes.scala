@@ -503,16 +503,18 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val Youssef_15_32Input = InferenceWorkItemInput("youssef-test", 15, 32, false)
   val GrandPrize_17_32Input = InferenceWorkItemInput("grand-prize", 17, 32, false)
   val GrandPrizeFinetune0_17_32Input = InferenceWorkItemInput("grand-prize-finetune0", 17, 32, false)
+  val GrandPrizeFinetune1_17_32Input = InferenceWorkItemInput("grand-prize-finetune1", 17, 32, false)
   val Youssef_15_32_ReverseInput = InferenceWorkItemInput("youssef-test", 15, 32, true)
   val Youssef_63_32Input = InferenceWorkItemInput("youssef-test", 63, 32, false)
   val Youssef_63_32_ReverseInput = InferenceWorkItemInput("youssef-test", 63, 32, true)
 
-  type Filter = SegmentReference => Boolean
+  type Filter = ImageInfo => Boolean
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
       Youssef_15_32Input -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
       GrandPrize_17_32Input -> (_ => true), //(s => s.scrollId == "1"),
-      GrandPrizeFinetune0_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId)),
+      GrandPrizeFinetune0_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
+      GrandPrizeFinetune1_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
       Youssef_15_32_ReverseInput -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
       //Youssef_63_32Input -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       //Youssef_63_32_ReverseInput -> (s => s.scrollId == "332" || s.scrollId == "1667"),
@@ -525,7 +527,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     Source.futureSource(scrollSegments.map(x => Source(x.sortBy(_.segmentId).reverse)))
       .mapConcat { info =>
         requestedWorkInputs
-          .filter(_._2(info.ref))
+          .filter(_._2(info))
           .map(input => info.ref -> input._1)
       }
       .filter { case (ref, input) => !targetFileForInput(ref, input).exists() }
