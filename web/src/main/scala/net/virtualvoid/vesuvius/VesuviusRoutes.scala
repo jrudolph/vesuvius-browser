@@ -44,6 +44,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val userManagement = UserManagement(config)
   val downloadUtils = new DownloadUtils(config)
   import downloadUtils._
+  val volumeMetadataRepository = VolumeMetadataRepository(downloadUtils, dataDir)
 
   case class LayerDefinition(
       layerId:   Int,
@@ -349,7 +350,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     for {
       (width, height) <- sizeOf(segment)
       area <- areaFor(segment)
-    } yield ImageInfo(segment, width, height, area)
+      meta <- SegmentMetadataCache(segment).transform(x => Success(x.toOption))
+      volumeMetadata <- meta.map(m => volumeMetadataRepository.metadataForVolume(segment.scrollRef, m.volume).transform(x => Success(x.toOption))).getOrElse(Future.successful(None))
+    } yield ImageInfo(segment, width, height, area, meta, volumeMetadata)
   }.transform(x => Success(x.toOption))
 
   def segmentLayer(segment: SegmentReference, layer: Int): Future[File] =
@@ -499,6 +502,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
       .transform(x => Success(x.toOption))
   }
+
+  val SegmentMetadataCache: Cache[SegmentReference, SegmentMetadata] =
+    downloadUtils.downloadCache[SegmentReference](_.metaUrl, segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/meta.json"))
+      .map((_, metadata) => scala.io.Source.fromFile(metadata).mkString.parseJson.convertTo[SegmentMetadata])
 
   def segmentIds(scroll: ScrollReference): Future[Seq[SegmentReference]] =
     segmentIds(scroll.baseUrl, new File(config.dataDir, s"raw/scroll${scroll.scrollId}/${scroll.base}-path-listing.html"))

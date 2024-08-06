@@ -13,6 +13,8 @@ case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
   def maskUrl: String = base.maskFor(this)
   def inklabelUrl: String = base.inklabelFor(this)
 
+  def metaUrl: String = base.metaFor(this)
+
   def isHighResSegment: Boolean = base.isHighResSegment(this)
 }
 object SegmentReference {
@@ -79,6 +81,9 @@ sealed trait ScrollServerBase extends Product {
   def inklabelFor(segment: SegmentReference): String =
     s"${segmentUrl(segment)}/${segment.segmentId}_inklabels.png"
 
+  def metaFor(segment: SegmentReference): String =
+    s"${segmentUrl(segment)}/meta.json"
+
   def layerUrl(segment: SegmentReference, z: Int): String =
     f"${segmentUrl(segment)}layers/$z%02d.tif"
 
@@ -123,11 +128,25 @@ case object FragmentsBase extends ScrollServerBase {
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 
+case class SegmentMetadata(
+    name:   String,
+    uuid:   String,
+    volume: String
+)
+object SegmentMetadata {
+  import spray.json._
+  import DefaultJsonProtocol._
+
+  implicit val segmentMetadataFormat: RootJsonFormat[SegmentMetadata] = jsonFormat3(SegmentMetadata.apply)
+}
+
 case class ImageInfo(
-    ref:    SegmentReference,
-    width:  Int,
-    height: Int,
-    area:   Option[Float]
+    ref:            SegmentReference,
+    width:          Int,
+    height:         Int,
+    area:           Option[Float],
+    metadata:       Option[SegmentMetadata],
+    volumeMetadata: Option[VolumeMetadata]
 ) {
   def scrollId: String = ref.scrollId
   def segmentId: String = ref.segmentId
