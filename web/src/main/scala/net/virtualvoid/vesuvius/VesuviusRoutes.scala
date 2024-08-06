@@ -406,14 +406,34 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def resizedMask(segment: SegmentReference): Future[File] =
     imageInfo(segment).flatMap { info =>
       import segment._
-      resizedX(maskFor(segment), new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask_small_autorotated.png"), height = 100, rotate90 = !info.get.isLandscape).map(_.get)
+      resizedLetterbox(maskFor(segment), new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask_200x100-black-letterbox.png"), width = 200, height = 100).map(_.get)
     }
 
   def resizedInferred(segment: SegmentReference, input: InferenceWorkItemInput): Future[Option[File]] =
     imageInfo(segment).flatMap { i =>
       val file = targetFileForInput(segment, input)
-      resizedX(file, new File(file.getParentFile, file.getName.dropRight(4) + "_small_autorotated.png"), height = 100, rotate90 = !i.get.isLandscape)
+      resizedLetterbox(Future.successful(file), new File(file.getParentFile, file.getName.dropRight(4) + "_small_200x100-black-letterbox.png"), width = 200, height = 100)
     }
+
+  def resizedLetterbox(orig: Future[File], target: File, width: Int, height: Int): Future[Option[File]] =
+    orig.flatMap { f0 =>
+      cached(target, negativeTtl = 10.seconds, isValid = f => f0.exists() && f0.lastModified() < f.lastModified()) { () =>
+        val f = Option(f0).filter(_.exists).getOrElse(throw new RuntimeException(s"File $f0 does not exist"))
+        import sys.process._
+
+        val tmpFile = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
+        val cmd = s"""vips thumbnail ${f0.getAbsolutePath} $tmpFile ${width} --height $height"""
+        println(cmd)
+        cmd.!!
+        val tmpFile2 = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
+        val cmd2 = s"""vips gravity ${tmpFile.getAbsolutePath} ${tmpFile2.getAbsolutePath} centre $width $height --background "0,0,0""""
+        cmd2.!!
+        tmpFile.delete()
+
+        require(tmpFile2.renameTo(target))
+        Future.successful(target)
+      }
+    }.transform(x => Success(x.toOption))
 
   def resizedX(orig: File, target: File, height: Int, rotate90: Boolean): Future[Option[File]] =
     resizedX(Future.successful(orig), target, height, rotate90)
