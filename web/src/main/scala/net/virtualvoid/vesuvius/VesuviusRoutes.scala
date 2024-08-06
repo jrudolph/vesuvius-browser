@@ -406,13 +406,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def resizedMask(segment: SegmentReference): Future[File] =
     imageInfo(segment).flatMap { info =>
       import segment._
-      resizedLetterbox(maskFor(segment), new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask_200x100-black-letterbox.png"), width = 200, height = 100).map(_.get)
+      resizedLetterbox(maskFor(segment), new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask_300x150-black-letterbox.png"), width = 300, height = 150).map(_.get)
     }
 
   def resizedInferred(segment: SegmentReference, input: InferenceWorkItemInput): Future[Option[File]] =
     imageInfo(segment).flatMap { i =>
       val file = targetFileForInput(segment, input)
-      resizedLetterbox(Future.successful(file), new File(file.getParentFile, file.getName.dropRight(4) + "_small_200x100-black-letterbox.png"), width = 200, height = 100)
+      resizedLetterbox(Future.successful(file), new File(file.getParentFile, file.getName.dropRight(4) + "_small_300x150-black-letterbox.png"), width = 300, height = 150)
     }
 
   def resizedLetterbox(orig: Future[File], target: File, width: Int, height: Int): Future[Option[File]] =
