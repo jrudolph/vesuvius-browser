@@ -487,7 +487,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     import segment._
     cacheDownload(
       segment.inklabelUrl,
-      new File(dataDir, s"inklabels/scroll$scrollId/$segmentId/inklabel.png")
+      new File(dataDir, s"inklabels/scroll$scrollId/$segmentId/inklabel.png"),
+      negativeTtl = 30.days
     )
       .map(f => if (f.exists()) Some(f) else None)
       .transform(x => Success(x.toOption.flatten))
