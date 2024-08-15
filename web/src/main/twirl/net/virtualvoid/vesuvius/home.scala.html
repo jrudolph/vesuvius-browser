@@ -1,6 +1,6 @@
 @import net.virtualvoid.vesuvius._
 
-@(infos: Seq[ImageInfo])
+@(infos: Seq[ImageInfo], layerThumbnails: Seq[LayerDefinition])
 
 @for((scroll, infos) <- infos.groupBy(_.ref.scrollRef).toVector.sortBy(x => (if (x._1.base.productPrefix.contains("Fragment")) 1 else 0, scala.util.Try(x._1.scrollId.toInt).getOrElse(Int.MaxValue), x._1.scrollId))) {
 
@@ -9,9 +9,12 @@
 <table>
     <tr>
         <th>Scroll</th><th>Volume</th><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th>
-        <th><a href="https://github.com/younader/Vesuvius-Grandprize-Winner">Grand Prize Model</a></th>
-        <th><a href="https://github.com/younader/Vesuvius-First-Letters">First Word Model</a></th>
-        <th><a href="https://github.com/younader/Vesuvius-First-Letters">First Word Model (reversed)</a></th>
+        @for(
+            layer <- layerThumbnails;
+            reverse = if (layer.input.parameters.reverseLayers) " (reversed)" else ""
+        ) {
+            <th><a href=@layer.input.modelCheckpoint.architecture.url>@layer.input.modelCheckpoint.name@reverse</a></th>
+        }
         <th>Mask</th>
     </tr>
 
@@ -19,13 +22,13 @@
     <tr>
         <td>Scroll @info.scrollId</td>
         <td>@{info.metadata.map(_.volume).getOrElse("")}</br>@{info.volumeMetadata.map(_.name).getOrElse("")}</td>
-        <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/@{if (!info.isLandscape) "#rot=90" else ""}">@info.segmentId</a></td>
+        <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/">@info.segmentId</a></td>
         <td>@{info.area.map(_.formatted("%5.2f")).getOrElse("")}</td>
         <td>@info.width</td>
         <td>@info.height</td>
-        <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2344@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/grand-prize"/></a></td>
-        <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2342@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test"/></a></td>
-        <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=2343@{if (!info.isLandscape) "&rot=90" else ""}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/youssef-test-reversed"/></a></td>
+        @for(layer <- layerThumbnails) {
+            <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=@{layer.name}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/@layer.name"/></a></td>
+        }
         <td><img src="/scroll/@info.scrollId/segment/@info.segmentId/mask"/></td>
     </tr>
 }

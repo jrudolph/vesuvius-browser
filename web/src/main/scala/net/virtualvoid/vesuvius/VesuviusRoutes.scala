@@ -17,6 +17,23 @@ import scala.concurrent.duration._
 import scala.util.Success
 import scala.util.Try
 
+trait LayerSource {
+  def layerFor(segment: SegmentReference): Future[File]
+}
+
+trait InferenceLayerSource extends LayerSource {
+  def input: InferenceWorkItemInput
+}
+
+case class LayerDefinition(
+    name:      String,
+    extension: String,
+    source:    LayerSource,
+    isPublic:  Boolean
+) {
+  def input: InferenceWorkItemInput = source.asInstanceOf[InferenceLayerSource].input
+}
+
 class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Directives with TwirlSupport with SprayJsonSupport {
 
   import system.dispatcher
@@ -29,20 +46,29 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   import downloadUtils._
   val volumeMetadataRepository = VolumeMetadataRepository(downloadUtils, dataDir)
 
-  case class LayerDefinition(
-      name:      String,
-      extension: String,
-      layerBase: SegmentReference => Future[File],
-      isPublic:  Boolean
-  )
+  case class InferenceLayerSourceImpl(
+      input: InferenceWorkItemInput
+  ) extends InferenceLayerSource {
+    def layerFor(segment: SegmentReference): Future[File] =
+      Future.successful(targetFileForInput(segment, input))
+  }
+  case class SegmentLayerSource(
+      layer: Int
+  ) extends LayerSource {
+    def layerFor(segment: SegmentReference): Future[File] =
+      downloadedSegmentLayer(segment, layer)
+  }
+  case class AnonymousSource(f: SegmentReference => Future[File]) extends LayerSource {
+    def layerFor(segment: SegmentReference): Future[File] = f(segment)
+  }
 
   def inferenceLayer(input: InferenceWorkItemInput, isPublic: Boolean): LayerDefinition = {
     val params = input.parameters
-    LayerDefinition(s"${input.modelCheckpoint.shortName}_${params.suffix}", "png", segment => Future.successful(targetFileForInput(segment, input)), isPublic)
+    LayerDefinition(s"${input.modelCheckpoint.shortName}_${params.suffix}", "jpg", InferenceLayerSourceImpl(input), isPublic)
   }
 
-  val InkLabelLayer = LayerDefinition("inklabel", "jpg", inklabelFor(_).map(_.get), isPublic = true)
-  val AlphaMaskLayer = LayerDefinition("alpha", "png", alphaMaskFor, isPublic = false)
+  val InkLabelLayer = LayerDefinition("inklabel", "jpg", AnonymousSource(inklabelFor(_).map(_.get)), isPublic = true)
+  val AlphaMaskLayer = LayerDefinition("alpha", "png", AnonymousSource(alphaMaskFor), isPublic = false)
 
   lazy val allLayers =
     Seq(
@@ -63,8 +89,16 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   lazy val PublicLayers = allLayers.values.toSeq.filter(_.isPublic)
   lazy val AdminLayers = allLayers.values.toSeq.filterNot(_.isPublic)
 
-  def layerDefFor(name: String): LayerDefinition =
-    allLayers.getOrElse(name, LayerDefinition(name, "jpg", downloadedSegmentLayer(_, name.toInt), isPublic = true))
+  def layerDefFor(name: String): Option[LayerDefinition] =
+    allLayers
+      .get(name)
+      .orElse(Try(name.toInt).toOption.map(z => LayerDefinition(name, "jpg", SegmentLayerSource(z), isPublic = true)))
+
+  lazy val MainScreenLayerThumbnails = Seq(
+    "grand-prize_17_32",
+    "first-word_15_32",
+    "first-word_15_32_reverse",
+  ).map(layerDefFor(_).get)
 
   lazy val main =
     encodeResponse { mainRoute }
@@ -88,7 +122,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       pathSingleSlash {
         get {
           scrollSegments.await { infos =>
-            page(html.home(infos))
+            page(html.home(infos, MainScreenLayerThumbnails))
           }
         }
       },
@@ -139,8 +173,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   )
 
                   // check if inferred layers actually exist
-                  val allLayerSegments = Future.traverse(extraLayers)(l => l.layerBase(segment).transform {
-                    case Success(f) if f.exists => Success(Some(l.name))
+                  val allLayerSegments = Future.traverse(extraLayers)(l => l.source.layerFor(segment).transform {
+                    case Success(f) if f.exists => Success(Some(l))
                     case _                      => Success(None)
                   })
 
@@ -158,18 +192,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
               path("mask") {
                 resizedMask(segment).deliver
               },
-              pathPrefix("inferred" / Segment) { model =>
-                val input: InferenceWorkItemInput = model match {
-                  case "youssef-test" if Set("0332", "1667").contains(segment.scrollId) => Youssef_63_32Input
-                  case "youssef-test-reversed" if Set("0332", "1667").contains(segment.scrollId) => Youssef_63_32_ReverseInput
-                  case "youssef-test" => Youssef_15_32Input
-                  case "youssef-test-reversed" => Youssef_15_32_ReverseInput
-                  case "grand-prize" => GrandPrize_17_32Input
-                  case "grand-prize-finetune0" => GrandPrizeFinetune0_17_32Input
-                  case "grand-prize-finetune1" => GrandPrizeFinetune1_17_32Input
-                  case "grand-prize-finetune2" => GrandPrizeFinetune2_17_32Input
-                  case "grand-prize-finetune3" => GrandPrizeFinetune3_17_32Input
-                }
+              pathPrefix("inferred" / Segment) { layer =>
+                val input: InferenceWorkItemInput =
+                  layerDefFor(layer).get.source.asInstanceOf[InferenceLayerSource].input
+
                 concat(
                   pathEnd {
                     concat(
@@ -182,7 +208,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                       val inner = getFromFile(targetFileForInput(segment, input))
                       if (show.isDefined) inner
                       else
-                        respondWithHeader(headers.`Content-Disposition`(headers.ContentDispositionTypes.attachment, Map("filename" -> s"${segment.segmentId}_inference_${model}.png"))) {
+                        respondWithHeader(headers.`Content-Disposition`(headers.ContentDispositionTypes.attachment, Map("filename" -> s"${segment.segmentId}_inference_${layer}.png"))) {
                           inner
                         }
                     }
@@ -216,8 +242,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                   )
                 } else reject
               },
-              pathPrefix(Segment) { layerName =>
-                val layerDef = layerDefFor(layerName)
+              pathPrefix(Segment.flatMap(layerDefFor)) { layerDef =>
                 concat(
                   path("dzi") {
                     val dziImage = DZIImage(layerDef.extension, 0, 512, info.width, info.height) // FIXME: imagesize
@@ -228,7 +253,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                     val x = xStr.toInt
                     val y = yStr.toInt
 
-                    resizer(info, layer, x, y, layerName).deliver
+                    resizer(info, layer, x, y, layerDef.name).deliver
                   }
                 )
               }
@@ -354,7 +379,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   }.transform(x => Success(x.toOption))
 
   def segmentLayer(segment: SegmentReference, layerName: String): Future[File] =
-    layerDefFor(layerName).layerBase(segment)
+    layerDefFor(layerName)
+      .map(_.source.layerFor(segment))
+      .getOrElse(Future.failed(new RuntimeException(s"Layer $layerName not found")))
 
   def downloadedSegmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
     import segment._
@@ -367,14 +394,14 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def resizer(info: ImageInfo, layer: Int, tileX: Int, tileY: Int, layerName: String): Future[File] =
     dzdir(info, layerName).map { dir =>
-      val layerDef = layerDefFor(layerName)
+      val layerDef = layerDefFor(layerName).get
       new File(dir, s"$layer/${tileX}_$tileY.${layerDef.extension}")
     }
 
   val DZDirCache = LfuCache[(ImageInfo, String), File]
 
   def dzdir(info: ImageInfo, layerName: String): Future[File] = {
-    val layerDef = layerDefFor(layerName)
+    val layerDef = layerDefFor(layerName).get
     DZDirCache.getOrLoad((info, layerName), _ => extractDZ(info, layerName, layerDef.extension))
   }
 

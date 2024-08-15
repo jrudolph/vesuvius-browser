@@ -1,11 +1,12 @@
 @import net.virtualvoid.vesuvius._
 
-@(info: ImageInfo, selectedLayers: Seq[Int], extraLayers: Seq[String])
+@(info: ImageInfo, selectedLayers: Seq[Int], extraLayers: Seq[LayerDefinition])
 
 @for(
     tmp <- Seq(0);
-    allLayers = selectedLayers.map(_.toString) ++ extraLayers
+    extraLayerNames = extraLayers.map(_.name);
+    allLayers = selectedLayers.map(_.toString) ++ extraLayerNames
 ) {
 <div id="openseadragon1" style="width: 100%; height: 100%;"></div>
-@imageBrowser("openseadragon1", info, allLayers, extraLayers)
+@imageBrowser("openseadragon1", info, allLayers, extraLayerNames)
 }
