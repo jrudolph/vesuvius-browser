@@ -12,6 +12,10 @@ object VesuviusWebMain extends App {
   implicit val system: ActorSystem = ActorSystem()
   import system.dispatcher
 
+  // turn down the caffeine logger
+  val logger = java.util.logging.Logger.getLogger("com.github.benmanes.caffeine.cache.LocalAsyncCache")
+  logger.setFilter((r: java.util.logging.LogRecord) => !r.getMessage.contains("during asynchronous load"))
+
   val appConfig = AppConfig.fromConfig(system.settings.config)
 
   val routes = new VesuviusRoutes(appConfig).main
