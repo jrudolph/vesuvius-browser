@@ -190,6 +190,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                       .mapAsync(1) {
                         case t: TextMessage =>
                           t.toStrict(2.second).map(_.text)
+                        case _ => throw new IllegalStateException
                       }
                       .collect {
                         case Pattern(uStr, vStr) =>
@@ -212,7 +213,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                     complete(JsObject("Image" -> dziImage.toJson))
                   },
                   path("dzi_files" / IntNumber / Segment) { (layer, name) =>
-                    val NameR(xStr, yStr) = name
+                    val NameR(xStr, yStr) = name: @unchecked
                     val x = xStr.toInt
                     val y = yStr.toInt
 
@@ -407,7 +408,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def resizedLetterbox(orig: Future[File], target: File, width: Int, height: Int): Future[Option[File]] =
     orig.flatMap { f0 =>
       cached(target, negativeTtl = 10.seconds, isValid = f => f0.exists() && f0.lastModified() < f.lastModified()) { () =>
-        val f = Option(f0).filter(_.exists).getOrElse(throw new RuntimeException(s"File $f0 does not exist"))
+        Option(f0).filter(_.exists).getOrElse(throw new RuntimeException(s"File $f0 does not exist"))
         import sys.process._
 
         val tmpFile = File.createTempFile(".tmp.resized", ".png", target.getParentFile)

@@ -158,7 +158,7 @@ object PPMFingerprinter {
           }
           .map {
             case (theta, r, uv) =>
-              val res = RadarEntry(theta, r.toFloat, uv.u, uv.v, uv.x, uv.y)
+              val res = RadarEntry(theta.toFloat, r.toFloat, uv.u, uv.v, uv.x, uv.y)
               println(res)
               res
           }
