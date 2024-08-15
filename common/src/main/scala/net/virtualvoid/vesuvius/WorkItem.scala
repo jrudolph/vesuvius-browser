@@ -19,7 +19,8 @@ sealed trait WorkItemInput extends Product {
 object WorkItemInput extends SprayJsonHelpers {
   import DefaultJsonProtocol._
 
-  implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItemInput] = jsonFormat4(InferenceWorkItemInput.apply)
+  implicit val inferenceParametersFormat: JsonFormat[InferenceParameters] = jsonFormat3(InferenceParameters.apply)
+  implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItemInput] = jsonFormat3(InferenceWorkItemInput.apply)
   implicit val ppmFingerprintWorkItemFormat: JsonFormat[PPMFingerprintWorkItemInput.type] = jsonFormat0(() => PPMFingerprintWorkItemInput)
   implicit val downsamplePPMWorkItemFormat: JsonFormat[DownsamplePPMWorkItemInput] = jsonFormat2(DownsamplePPMWorkItemInput.apply)
   implicit val workItemFormat: RootJsonFormat[WorkItemInput] = new RootJsonFormat[WorkItemInput] {
@@ -40,14 +41,21 @@ object WorkItemInput extends SprayJsonHelpers {
     }
   }
 }
-case class InferenceWorkItemInput(
-    model:         String,
+
+case class InferenceParameters(
     startLayer:    Int,
     stride:        Int,
     reverseLayers: Boolean
+)
+
+case class InferenceWorkItemInput(
+    shortName:       String,
+    modelCheckpoint: InferenceModelCheckpoint,
+    parameters:      InferenceParameters
 ) extends WorkItemInput {
   def `type`: String = "inference"
 }
+
 case object PPMFingerprintWorkItemInput extends WorkItemInput {
   def `type`: String = "fingerprint"
 }

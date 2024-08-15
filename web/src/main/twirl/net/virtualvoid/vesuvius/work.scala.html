@@ -10,7 +10,9 @@
     <th>Type</th>
     <th>Worker ID</th>
     <th>Started</th>
-    <th>Model</th>
+    <th>Short Name</th>
+    <th>Architecture</th>
+    <th>Checkpoint</td>
     <th>Start Layer</th>
     <th>Stride</th>
     <th>Reverse Layers</th>
@@ -32,10 +34,12 @@
     }
 
     @for(case item: InferenceWorkItemInput <- Seq(item.input)) {
-        <td>@item.model</td>
-        <td>@item.startLayer</td>
-        <td>@item.stride</td>
-        <td>@item.reverseLayers</td>
+        <td>@item.shortName</td>
+        <td>@item.modelCheckpoint.architecture.name</td>
+        <td>@item.modelCheckpoint.name</td>
+        <td>@item.parameters.startLayer</td>
+        <td>@item.parameters.stride</td>
+        <td>@item.parameters.reverseLayers</td>
     }
 </tr>
 }

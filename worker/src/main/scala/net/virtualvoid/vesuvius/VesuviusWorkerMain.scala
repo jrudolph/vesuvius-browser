@@ -148,9 +148,10 @@ object Tasks {
       val segmentDir = new File(segmentBaseDir, item.segment.segmentId)
       segmentDir.mkdirs()
 
+      val params = input.parameters
       val (runInference: (() => Future[(File, WorkItemResult)]), numLayers: Int, modelDownload: String, modelTarget: File) =
-        input.model match {
-          case "youssef-test" =>
+        input.modelCheckpoint.architecture match {
+          case InferenceModelArchitecture.FirstWordModel =>
             val inferenceScriptDir = new File(config.inferenceScriptDir, "first-letters")
             if (inferenceScriptDir.exists()) {
               println("Fetching latest version of model")
@@ -160,26 +161,26 @@ object Tasks {
             }
 
             val inferenceScript = new File(inferenceScriptDir, "inference.py")
-            val model = new File(config.inferenceScriptDir, "model.ckpt") // model checkpoint itself is one level up
+            val model = new File(config.inferenceScriptDir, s"${input.modelCheckpoint.shortName}.ckpt") // model checkpoint itself is one level up
             //require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}")
 
             def runInference(): Future[(File, WorkItemResult)] = Future {
               import sys.process._
               require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
-              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${segmentBaseDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
+              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${segmentBaseDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${params.stride} --start_idx ${params.startLayer} --workers 6"
               println(s"Running [$cmdLine]")
 
               val res = cmdLine.!!(ProcessLogger(println))
-              val outputFile = new File(workDir, s"${item.segment.segmentId}_${input.stride}_${input.startLayer}.png")
+              val outputFile = new File(workDir, s"${item.segment.segmentId}_${params.stride}_${params.startLayer}.png")
               require(outputFile.exists, s"Output file $outputFile does not exist")
               println(s"Output file $outputFile exists")
               s"rm -r ${segmentDir.getAbsolutePath}".!!
               (outputFile, WorkCompleted(item, res))
             }
 
-            (() => runInference(), 30, "https://f004.backblazeb2.com/file/bulk-data-jr/model.ckpt", model)
+            (() => runInference(), 30, input.modelCheckpoint.checkpointUrl, model)
 
-          case x if x `startsWith` "grand-prize" =>
+          case InferenceModelArchitecture.GrandPrizeModel =>
             val inferenceScriptDir = new File(config.inferenceScriptDir, "grand-prize")
             if (inferenceScriptDir.exists()) {
               println("Fetching latest version of model")
@@ -191,31 +192,23 @@ object Tasks {
             // python3 inference_timesformer.py --segment_id 20230827161847 --segment_path $(pwd)/train_scrolls --model_path timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt --stride 256 --workers=10
 
             val inferenceScript = new File(inferenceScriptDir, "inference_timesformer.py")
-            val model = new File(config.inferenceScriptDir, s"${input.model}.ckpt") // model checkpoint itself is one level up
+            val model = new File(config.inferenceScriptDir, s"${input.modelCheckpoint.shortName}.ckpt") // model checkpoint itself is one level up
 
             def runInference(): Future[(File, WorkItemResult)] = Future {
               import sys.process._
               require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
-              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${segmentBaseDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${input.stride} --start_idx ${input.startLayer} --workers 6"
+              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${segmentBaseDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${params.stride} --start_idx ${params.startLayer} --workers 6"
               println(s"Running [$cmdLine]")
 
               val res = cmdLine.!!(ProcessLogger(println))
-              val outputFile = new File(workDir, s"${item.segment.segmentId}_${input.stride}_${input.startLayer}.png")
+              val outputFile = new File(workDir, s"${item.segment.segmentId}_${params.stride}_${params.startLayer}.png")
               require(outputFile.exists, s"Output file $outputFile does not exist")
               println(s"Output file $outputFile exists")
               s"rm -r ${segmentDir.getAbsolutePath}".!!
               (outputFile, WorkCompleted(item, res))
             }
 
-            val modelFileUrl = input.model match {
-              case "grand-prize"           => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt"
-              case "grand-prize-finetune0" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_4972_epoch_3_by_valid_loss_0.704.ckpt"
-              case "grand-prize-finetune1" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_9800_by_train_loss_0.575.ckpt"
-              case "grand-prize-finetune2" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_8701_epoch_6_by_valid_loss_0.702.ckpt"
-              case "grand-prize-finetune3" => "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_14900_by_train_loss_0.556.ckpt"
-            }
-
-            (() => runInference(), 26, modelFileUrl, model)
+            (() => runInference(), 26, input.modelCheckpoint.checkpointUrl, model)
 
           case x =>
             throw new IllegalArgumentException(s"Unsupported model $x")
@@ -226,7 +219,7 @@ object Tasks {
         model <- download(modelDownload, modelTarget, None)
         maskFileName = s"${item.segment.segmentId}_mask.png"
         mask <- download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName), Some(DataServerAuthorizationHeader))
-        res <- downloadLayers(item.segment, input.startLayer, numLayers, segmentDir, input.reverseLayers)
+        res <- downloadLayers(item.segment, input.parameters.startLayer, numLayers, segmentDir, input.parameters.reverseLayers)
         inference <- runInference()
       } yield inference
     }.flatten

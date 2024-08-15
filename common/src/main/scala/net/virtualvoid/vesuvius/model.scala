@@ -153,3 +153,83 @@ case class ImageInfo(
 
   def isLandscape: Boolean = width > height
 }
+
+case class InferenceModelArchitecture(
+    name: String,
+    url:  String
+)
+object InferenceModelArchitecture {
+  val GrandPrizeModel = InferenceModelArchitecture(
+    "Grand Prize Model",
+    "https://github.com/younader/Vesuvius-Grandprize-Winner"
+  )
+  val FirstWordModel = InferenceModelArchitecture(
+    "First Word Model",
+    "https://github.com/younader/Vesuvius-First-Letters"
+  )
+
+  val Architectures: Seq[InferenceModelArchitecture] = Seq(
+    GrandPrizeModel,
+    FirstWordModel
+  )
+
+  import spray.json._
+  import DefaultJsonProtocol._
+  implicit val inferenceModelArchitectureFormat: RootJsonFormat[InferenceModelArchitecture] = jsonFormat2(InferenceModelArchitecture.apply)
+}
+
+case class InferenceModelCheckpoint(
+    name:          String,
+    architecture:  InferenceModelArchitecture,
+    checkpointUrl: String
+) {
+  def shortName: String = name.toLowerCase().replace(" ", "_")
+}
+
+object InferenceModelCheckpoint {
+
+  val GrandPrizeModel = InferenceModelCheckpoint(
+    "2023 Grand Prize Model",
+    InferenceModelArchitecture.GrandPrizeModel,
+    "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt"
+  )
+  val GrandPrizeFineTune0 = InferenceModelCheckpoint(
+    "Grand Prize JR Fine-Tune 0",
+    InferenceModelArchitecture.GrandPrizeModel,
+    "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_4972_epoch_3_by_valid_loss_0.704.ckpt"
+  )
+  val GrandPrizeFineTune1 = InferenceModelCheckpoint(
+    "Grand Prize JR Fine-Tune 1",
+    InferenceModelArchitecture.GrandPrizeModel,
+    "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_9800_by_train_loss_0.575.ckpt"
+  )
+  val GrandPrizeFineTune2 = InferenceModelCheckpoint(
+    "Grand Prize JR Fine-Tune 2",
+    InferenceModelArchitecture.GrandPrizeModel,
+    "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_8701_epoch_6_by_valid_loss_0.702.ckpt"
+  )
+  val GrandPrizeFineTune3 = InferenceModelCheckpoint(
+    "Grand Prize JR Fine-Tune 3",
+    InferenceModelArchitecture.GrandPrizeModel,
+    "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_14900_by_train_loss_0.556.ckpt"
+  )
+
+  val FirstWordModel = InferenceModelCheckpoint(
+    "First Word Model",
+    InferenceModelArchitecture.FirstWordModel,
+    "https://f004.backblazeb2.com/file/bulk-data-jr/model.ckpt"
+  )
+
+  val models: Seq[InferenceModelCheckpoint] = Seq(
+    GrandPrizeModel,
+    GrandPrizeFineTune0,
+    GrandPrizeFineTune1,
+    GrandPrizeFineTune2,
+    GrandPrizeFineTune3,
+    FirstWordModel
+  )
+
+  import spray.json._
+  import DefaultJsonProtocol._
+  implicit val inferenceModelCheckpointFormat: RootJsonFormat[InferenceModelCheckpoint] = jsonFormat3(InferenceModelCheckpoint.apply)
+}

@@ -515,9 +515,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def targetFileForInput(segment: SegmentReference, input: WorkItemInput): File = {
     import segment._
     input match {
-      case InferenceWorkItemInput(model, startLayer, stride, reverseLayers) =>
+      case InferenceWorkItemInput(shortName, checkpoint, InferenceParameters(startLayer, stride, reverseLayers)) =>
         val reversed = if (reverseLayers) "_reverse" else ""
-        new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_${model}_${startLayer}_${stride}$reversed.png")
+        new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_${shortName}_${startLayer}_${stride}$reversed.png")
       case PPMFingerprintWorkItemInput =>
         new File(dataDir, s"ppm/scroll${segment.scrollId}/${segment.segmentId}/fingerprint.json")
       case DownsamplePPMWorkItemInput(tpe, downsamplingBits) =>
@@ -525,16 +525,28 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }
   }
 
+  val Forward15Stride32 = InferenceParameters(15, 32, reverseLayers = false)
+  val Reverse15Stride32 = InferenceParameters(15, 32, reverseLayers = true)
+
+  val Forward63Stride32 = InferenceParameters(63, 32, reverseLayers = false)
+  val Reverse63Stride32 = InferenceParameters(63, 32, reverseLayers = true)
+
+  val Forward17Stride32 = InferenceParameters(17, 32, reverseLayers = false)
+
+  import InferenceModelCheckpoint._
   val DownSampleU16_2Input = DownsamplePPMWorkItemInput("u16", 2)
-  val Youssef_15_32Input = InferenceWorkItemInput("youssef-test", 15, 32, false)
-  val GrandPrize_17_32Input = InferenceWorkItemInput("grand-prize", 17, 32, false)
-  val GrandPrizeFinetune0_17_32Input = InferenceWorkItemInput("grand-prize-finetune0", 17, 32, false)
-  val GrandPrizeFinetune1_17_32Input = InferenceWorkItemInput("grand-prize-finetune1", 17, 32, false)
-  val GrandPrizeFinetune2_17_32Input = InferenceWorkItemInput("grand-prize-finetune2", 17, 32, false)
-  val GrandPrizeFinetune3_17_32Input = InferenceWorkItemInput("grand-prize-finetune3", 17, 32, false)
-  val Youssef_15_32_ReverseInput = InferenceWorkItemInput("youssef-test", 15, 32, true)
-  val Youssef_63_32Input = InferenceWorkItemInput("youssef-test", 63, 32, false)
-  val Youssef_63_32_ReverseInput = InferenceWorkItemInput("youssef-test", 63, 32, true)
+
+  val GrandPrize_17_32Input = InferenceWorkItemInput("grand-prize", GrandPrizeModel, Forward17Stride32)
+  val GrandPrizeFinetune0_17_32Input = InferenceWorkItemInput("grand-prize-finetune0", GrandPrizeFineTune0, Forward17Stride32)
+  val GrandPrizeFinetune1_17_32Input = InferenceWorkItemInput("grand-prize-finetune1", GrandPrizeFineTune1, Forward17Stride32)
+  val GrandPrizeFinetune2_17_32Input = InferenceWorkItemInput("grand-prize-finetune2", GrandPrizeFineTune2, Forward17Stride32)
+  val GrandPrizeFinetune3_17_32Input = InferenceWorkItemInput("grand-prize-finetune3", GrandPrizeFineTune3, Forward17Stride32)
+
+  val Youssef_15_32Input = InferenceWorkItemInput("youssef-test", FirstWordModel, Forward15Stride32)
+  val Youssef_15_32_ReverseInput = InferenceWorkItemInput("youssef-test", FirstWordModel, Reverse15Stride32)
+
+  val Youssef_63_32Input = InferenceWorkItemInput("youssef-test", FirstWordModel, Forward63Stride32)
+  val Youssef_63_32_ReverseInput = InferenceWorkItemInput("youssef-test", FirstWordModel, Forward63Stride32)
 
   def hasReasonableSize(info: ImageInfo): Boolean =
     info.area.exists(_ > 8) || (info.width * info.height > 100 * 1000 * 1000)

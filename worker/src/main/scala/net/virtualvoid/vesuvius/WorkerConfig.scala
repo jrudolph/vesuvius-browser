@@ -30,7 +30,7 @@ object WorkerConfig {
   }
 
   def parseWorkType: String => String = {
-    case "inference"      => InferenceWorkItemInput("", 0, 0, false).productPrefix
+    case "inference"      => InferenceWorkItemInput("", null, InferenceParameters(0, 0, false)).productPrefix
     case "fingerprint"    => PPMFingerprintWorkItemInput.productPrefix
     case "downsample_ppm" => DownsamplePPMWorkItemInput("", 0).productPrefix
   }
