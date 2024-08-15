@@ -32,27 +32,32 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   case class LayerDefinition(
       name:      String,
       extension: String,
-      layerBase: SegmentReference => Future[File]
+      layerBase: SegmentReference => Future[File],
+      isPublic:  Boolean
   )
 
-  val GrandPrize17Layer = LayerDefinition("gp", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize_17_32.png")))
-  val GrandPrizeFinetune0_17Layer = LayerDefinition("gp-jr-ft0", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune0_17_32.png")))
-  val GrandPrizeFinetune1_17Layer = LayerDefinition("gp-jr-ft1", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune1_17_32.png")))
-  val GrandPrizeFinetune2_17Layer = LayerDefinition("gp-jr-ft2", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune2_17_32.png")))
-  val GrandPrizeFinetune3_17Layer = LayerDefinition("gp-jr-ft3", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune3_17_32.png")))
+  val GrandPrize17Layer = LayerDefinition("gp", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize_17_32.png")), isPublic = true)
+  val GrandPrizeFinetune0_17Layer = LayerDefinition("gp-jr-ft0", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune0_17_32.png")), isPublic = false)
+  val GrandPrizeFinetune1_17Layer = LayerDefinition("gp-jr-ft1", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune1_17_32.png")), isPublic = false)
+  val GrandPrizeFinetune2_17Layer = LayerDefinition("gp-jr-ft2", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune2_17_32.png")), isPublic = false)
+  val GrandPrizeFinetune3_17Layer = LayerDefinition("gp-jr-ft3", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune3_17_32.png")), isPublic = false)
 
-  val Youssef15Layer = LayerDefinition("fw-15", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32.png")))
-  val Youssef15ReverseLayer = LayerDefinition("fw-15-reverse", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32_reverse.png")))
-  val Youssef63Layer = LayerDefinition("fw-63", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32.png")))
-  val Youssef63ReverseLayer = LayerDefinition("fw-63-reverse", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32_reverse.png")))
-  val InkLabelLayer = LayerDefinition("inklabel", "jpg", inklabelFor(_).map(_.get))
-  val AlphaMaskLayer = LayerDefinition("alpha", "png", alphaMaskFor)
+  val Youssef15Layer = LayerDefinition("fw-15", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32.png")), isPublic = true)
+  val Youssef15ReverseLayer = LayerDefinition("fw-15-reverse", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32_reverse.png")), isPublic = true)
+  val Youssef63Layer = LayerDefinition("fw-63", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32.png")), isPublic = true)
+  val Youssef63ReverseLayer = LayerDefinition("fw-63-reverse", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32_reverse.png")), isPublic = true)
+  val InkLabelLayer = LayerDefinition("inklabel", "jpg", inklabelFor(_).map(_.get), isPublic = true)
+  val AlphaMaskLayer = LayerDefinition("alpha", "png", alphaMaskFor, isPublic = false)
 
-  val layers =
+  val allLayers =
     Seq(Youssef15Layer, Youssef15ReverseLayer, Youssef63Layer, Youssef63ReverseLayer, InkLabelLayer, AlphaMaskLayer, GrandPrize17Layer, GrandPrizeFinetune0_17Layer, GrandPrizeFinetune1_17Layer, GrandPrizeFinetune2_17Layer, GrandPrizeFinetune3_17Layer)
       .map(l => l.name -> l).toMap
+
+  val PublicLayers = allLayers.values.toSeq.filter(_.isPublic)
+  val AdminLayers = allLayers.values.toSeq.filterNot(_.isPublic)
+
   def layerDefFor(name: String): LayerDefinition =
-    layers.getOrElse(name, LayerDefinition(name, "jpg", downloadedSegmentLayer(_, name.toInt)))
+    allLayers.getOrElse(name, LayerDefinition(name, "jpg", downloadedSegmentLayer(_, name.toInt), isPublic = true))
 
   lazy val main =
     encodeResponse { mainRoute }
@@ -121,15 +126,14 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                     else
                       (20 to 50 by 2)
 
-                  val extraLayers = (if (isHighResScroll) Seq("fw-63", "fw-63-reverse") else Seq("gp", "fw-15", "fw-15-reverse")) ++ (
-                    if (user.exists(_.admin)) Seq("gp-jr-ft0", "gp-jr-ft1", "gp-jr-ft2", "gp-jr-ft3")
+                  val extraLayers = PublicLayers ++ (
+                    if (user.exists(_.admin)) AdminLayers
                     else Seq.empty
                   )
-                  val allExtraLayers = extraLayers :+ "inklabel"
 
                   // check if inferred layers actually exist
-                  val allLayerSegments = Future.traverse(allExtraLayers)(l => segmentLayer(segment, l).transform {
-                    case Success(f) if f.exists => Success(Some(l))
+                  val allLayerSegments = Future.traverse(extraLayers)(l => l.layerBase(segment).transform {
+                    case Success(f) if f.exists => Success(Some(l.name))
                     case _                      => Success(None)
                   })
 
