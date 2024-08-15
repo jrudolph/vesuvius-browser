@@ -1,10 +1,10 @@
 @import net.virtualvoid.vesuvius._
 
-@(info: ImageInfo, selectedLayers: Seq[Int], extraLayers: Seq[Int])
+@(info: ImageInfo, selectedLayers: Seq[Int], extraLayers: Seq[String])
 
 @for(
     tmp <- Seq(0);
-    allLayers = selectedLayers ++ extraLayers
+    allLayers = selectedLayers.map(_.toString) ++ extraLayers
 ) {
 
 <h2>Scroll @info.scrollId / @info.segmentId</h2>

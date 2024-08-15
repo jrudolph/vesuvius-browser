@@ -1,19 +1,18 @@
 @import net.virtualvoid.vesuvius._
 
-@(containerId: String, info: ImageInfo, allLayers: Seq[Int], extraLayers: Seq[Int])
+@(containerId: String, info: ImageInfo, allLayers: Seq[String], extraLayers: Seq[String])
 
 <script src="/openseadragon/openseadragon.min.js"></script>
 <script src="/js/jquery-3.7.1.min.js.js"></script>
 <script type="text/javascript">
 
     var origHash = window.location.hash.substring(1);
+
     var layers = [@for(l <- allLayers) { "@l", }];
 var viewer = OpenSeadragon({
     id: "@containerId",
     prefixUrl: "/openseadragon/images/",
-    tileSources: [@for(l <- allLayers) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, } {
-        tileSource: "9999/dzi", opacity: 1, preload: 0, layer: "9999", compositeOperation: "destination-in"
-    }],
+    tileSources: [@for(l <- allLayers) { { tileSource: "@l/dzi", opacity: 0, preload: 0, layer: "@l" }, }],
     initialPage: 6,
     showNavigator: true,
     showRotationControl: true,
@@ -137,7 +136,7 @@ viewer.addHandler('open', function() {
         var i = layers.indexOf(layer);
         show(i);
     } else
-        show(7);
+        show(idxOfLayer("32"));
 });
 
 function idxOfLayer(layer) {
