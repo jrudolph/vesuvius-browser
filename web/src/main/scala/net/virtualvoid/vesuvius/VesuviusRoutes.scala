@@ -100,6 +100,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     "first-word_15_32_reverse",
   ).map(layerDefFor(_).get)
 
+  lazy val AdminMainScreenLayerThumbnails = Seq(
+    "grand-prize-finetune0_17_32",
+    "grand-prize-finetune1_17_32",
+    "grand-prize-finetune2_17_32",
+    "grand-prize-finetune3_17_32",
+  ).map(layerDefFor(_).get) ++ MainScreenLayerThumbnails
+
   lazy val main =
     encodeResponse { mainRoute }
 
@@ -122,7 +129,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       pathSingleSlash {
         get {
           scrollSegments.await { infos =>
-            page(html.home(infos, MainScreenLayerThumbnails))
+            userManagement.loggedIn { user =>
+              val thumbs = if (user.exists(_.admin)) AdminMainScreenLayerThumbnails else MainScreenLayerThumbnails
+              page(html.home(infos, thumbs))
+            }
           }
         }
       },
