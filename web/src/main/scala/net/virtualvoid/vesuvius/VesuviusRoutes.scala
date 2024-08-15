@@ -292,7 +292,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def segmentPath: Directive1[Boolean] =
     (pathSingleSlash & provide(false)) |
-      (path("segment") & provide(true))
+      (path("plain") & provide(true))
 
   def adminRoutes =
     userManagement.ensureAdmin {
