@@ -15,6 +15,7 @@ import java.io.File
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Success
+import scala.util.Try
 
 class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Directives with TwirlSupport with SprayJsonSupport {
 
@@ -376,7 +377,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       vipsCommandRunner(cmd).map { _ =>
         val tmpDir = new File(tmpFile.getParentFile, tmpFile.getName + "_files")
         require(tmpDir.renameTo(targetDir))
-        imageFile.delete()
+        if (Try(layerName.toInt).isSuccess) imageFile.delete()
         tmpFile.delete()
         targetDir
       }
