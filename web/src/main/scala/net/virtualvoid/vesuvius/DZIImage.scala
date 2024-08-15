@@ -13,7 +13,7 @@ case class DZIImage(
 object DZIImage {
   import DefaultJsonProtocol._
 
-  implicit val sizeFormat: RootJsonFormat[DZISize] = jsonFormat2(DZISize.apply _)
+  implicit val sizeFormat: RootJsonFormat[DZISize] = jsonFormat2(DZISize.apply)
   implicit val imageFormat: RootJsonFormat[DZIImage] = jsonFormat5(new DZIImage(_, _, _, _, _))
 
   def apply(format: String, overlap: Int, tileSize: Int, width: Int, height: Int): DZIImage =
