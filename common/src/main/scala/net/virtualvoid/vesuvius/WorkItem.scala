@@ -20,7 +20,7 @@ object WorkItemInput extends SprayJsonHelpers {
   import DefaultJsonProtocol._
 
   implicit val inferenceParametersFormat: JsonFormat[InferenceParameters] = jsonFormat3(InferenceParameters.apply)
-  implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItemInput] = jsonFormat3(InferenceWorkItemInput.apply)
+  implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItemInput] = jsonFormat2(InferenceWorkItemInput.apply)
   implicit val ppmFingerprintWorkItemFormat: JsonFormat[PPMFingerprintWorkItemInput.type] = jsonFormat0(() => PPMFingerprintWorkItemInput)
   implicit val downsamplePPMWorkItemFormat: JsonFormat[DownsamplePPMWorkItemInput] = jsonFormat2(DownsamplePPMWorkItemInput.apply)
   implicit val workItemFormat: RootJsonFormat[WorkItemInput] = new RootJsonFormat[WorkItemInput] {
@@ -46,10 +46,14 @@ case class InferenceParameters(
     startLayer:    Int,
     stride:        Int,
     reverseLayers: Boolean
-)
+) {
+  def suffix: String = {
+    val reversed = if (reverseLayers) "_reverse" else ""
+    s"${startLayer}_${stride}$reversed"
+  }
+}
 
 case class InferenceWorkItemInput(
-    shortName:       String,
     modelCheckpoint: InferenceModelCheckpoint,
     parameters:      InferenceParameters
 ) extends WorkItemInput {

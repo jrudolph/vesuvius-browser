@@ -36,25 +36,32 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       isPublic:  Boolean
   )
 
-  val GrandPrize17Layer = LayerDefinition("gp", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize_17_32.png")), isPublic = true)
-  val GrandPrizeFinetune0_17Layer = LayerDefinition("gp-jr-ft0", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune0_17_32.png")), isPublic = false)
-  val GrandPrizeFinetune1_17Layer = LayerDefinition("gp-jr-ft1", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune1_17_32.png")), isPublic = false)
-  val GrandPrizeFinetune2_17Layer = LayerDefinition("gp-jr-ft2", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune2_17_32.png")), isPublic = false)
-  val GrandPrizeFinetune3_17Layer = LayerDefinition("gp-jr-ft3", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_grand-prize-finetune3_17_32.png")), isPublic = false)
+  def inferenceLayer(input: InferenceWorkItemInput, isPublic: Boolean): LayerDefinition = {
+    val params = input.parameters
+    LayerDefinition(s"${input.modelCheckpoint.shortName}_${params.suffix}", "png", segment => Future.successful(targetFileForInput(segment, input)), isPublic)
+  }
 
-  val Youssef15Layer = LayerDefinition("fw-15", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32.png")), isPublic = true)
-  val Youssef15ReverseLayer = LayerDefinition("fw-15-reverse", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_15_32_reverse.png")), isPublic = true)
-  val Youssef63Layer = LayerDefinition("fw-63", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32.png")), isPublic = true)
-  val Youssef63ReverseLayer = LayerDefinition("fw-63-reverse", "jpg", segment => Future.successful(new File(dataDir, s"inferred/scroll${segment.scrollId}/${segment.segmentId}/inference_youssef-test_63_32_reverse.png")), isPublic = true)
   val InkLabelLayer = LayerDefinition("inklabel", "jpg", inklabelFor(_).map(_.get), isPublic = true)
   val AlphaMaskLayer = LayerDefinition("alpha", "png", alphaMaskFor, isPublic = false)
 
-  val allLayers =
-    Seq(Youssef15Layer, Youssef15ReverseLayer, Youssef63Layer, Youssef63ReverseLayer, InkLabelLayer, AlphaMaskLayer, GrandPrize17Layer, GrandPrizeFinetune0_17Layer, GrandPrizeFinetune1_17Layer, GrandPrizeFinetune2_17Layer, GrandPrizeFinetune3_17Layer)
+  lazy val allLayers =
+    Seq(
+      inferenceLayer(GrandPrize_17_32Input, isPublic = true),
+      inferenceLayer(GrandPrizeFinetune0_17_32Input, isPublic = false),
+      inferenceLayer(GrandPrizeFinetune1_17_32Input, isPublic = false),
+      inferenceLayer(GrandPrizeFinetune2_17_32Input, isPublic = false),
+      inferenceLayer(GrandPrizeFinetune3_17_32Input, isPublic = false),
+      inferenceLayer(Youssef_15_32Input, isPublic = true),
+      inferenceLayer(Youssef_15_32_ReverseInput, isPublic = true),
+      inferenceLayer(Youssef_63_32Input, isPublic = true),
+      inferenceLayer(Youssef_63_32_ReverseInput, isPublic = true),
+      InkLabelLayer,
+      AlphaMaskLayer
+    )
       .map(l => l.name -> l).toMap
 
-  val PublicLayers = allLayers.values.toSeq.filter(_.isPublic)
-  val AdminLayers = allLayers.values.toSeq.filterNot(_.isPublic)
+  lazy val PublicLayers = allLayers.values.toSeq.filter(_.isPublic)
+  lazy val AdminLayers = allLayers.values.toSeq.filterNot(_.isPublic)
 
   def layerDefFor(name: String): LayerDefinition =
     allLayers.getOrElse(name, LayerDefinition(name, "jpg", downloadedSegmentLayer(_, name.toInt), isPublic = true))
@@ -515,9 +522,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   def targetFileForInput(segment: SegmentReference, input: WorkItemInput): File = {
     import segment._
     input match {
-      case InferenceWorkItemInput(shortName, checkpoint, InferenceParameters(startLayer, stride, reverseLayers)) =>
-        val reversed = if (reverseLayers) "_reverse" else ""
-        new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_${shortName}_${startLayer}_${stride}$reversed.png")
+      case InferenceWorkItemInput(checkpoint, params) =>
+        val shortName0 = checkpoint.shortName
+        val shortName = if (checkpoint.architecture == InferenceModelArchitecture.FirstWordModel) "youssef-test" else shortName0
+        new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_${shortName}_${params.suffix}.png")
       case PPMFingerprintWorkItemInput =>
         new File(dataDir, s"ppm/scroll${segment.scrollId}/${segment.segmentId}/fingerprint.json")
       case DownsamplePPMWorkItemInput(tpe, downsamplingBits) =>
@@ -536,17 +544,17 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   import InferenceModelCheckpoint._
   val DownSampleU16_2Input = DownsamplePPMWorkItemInput("u16", 2)
 
-  val GrandPrize_17_32Input = InferenceWorkItemInput("grand-prize", GrandPrizeModel, Forward17Stride32)
-  val GrandPrizeFinetune0_17_32Input = InferenceWorkItemInput("grand-prize-finetune0", GrandPrizeFineTune0, Forward17Stride32)
-  val GrandPrizeFinetune1_17_32Input = InferenceWorkItemInput("grand-prize-finetune1", GrandPrizeFineTune1, Forward17Stride32)
-  val GrandPrizeFinetune2_17_32Input = InferenceWorkItemInput("grand-prize-finetune2", GrandPrizeFineTune2, Forward17Stride32)
-  val GrandPrizeFinetune3_17_32Input = InferenceWorkItemInput("grand-prize-finetune3", GrandPrizeFineTune3, Forward17Stride32)
+  val GrandPrize_17_32Input = InferenceWorkItemInput(GrandPrizeModel, Forward17Stride32)
+  val GrandPrizeFinetune0_17_32Input = InferenceWorkItemInput(GrandPrizeFineTune0, Forward17Stride32)
+  val GrandPrizeFinetune1_17_32Input = InferenceWorkItemInput(GrandPrizeFineTune1, Forward17Stride32)
+  val GrandPrizeFinetune2_17_32Input = InferenceWorkItemInput(GrandPrizeFineTune2, Forward17Stride32)
+  val GrandPrizeFinetune3_17_32Input = InferenceWorkItemInput(GrandPrizeFineTune3, Forward17Stride32)
 
-  val Youssef_15_32Input = InferenceWorkItemInput("youssef-test", FirstWordModel, Forward15Stride32)
-  val Youssef_15_32_ReverseInput = InferenceWorkItemInput("youssef-test", FirstWordModel, Reverse15Stride32)
+  val Youssef_15_32Input = InferenceWorkItemInput(FirstWordModel, Forward15Stride32)
+  val Youssef_15_32_ReverseInput = InferenceWorkItemInput(FirstWordModel, Reverse15Stride32)
 
-  val Youssef_63_32Input = InferenceWorkItemInput("youssef-test", FirstWordModel, Forward63Stride32)
-  val Youssef_63_32_ReverseInput = InferenceWorkItemInput("youssef-test", FirstWordModel, Forward63Stride32)
+  val Youssef_63_32Input = InferenceWorkItemInput(FirstWordModel, Forward63Stride32)
+  val Youssef_63_32_ReverseInput = InferenceWorkItemInput(FirstWordModel, Forward63Stride32)
 
   def hasReasonableSize(info: ImageInfo): Boolean =
     info.area.exists(_ > 8) || (info.width * info.height > 100 * 1000 * 1000)

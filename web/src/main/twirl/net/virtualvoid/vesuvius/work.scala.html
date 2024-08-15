@@ -34,7 +34,7 @@
     }
 
     @for(case item: InferenceWorkItemInput <- Seq(item.input)) {
-        <td>@item.shortName</td>
+        <td>@item.modelCheckpoint.shortName</td>
         <td>@item.modelCheckpoint.architecture.name</td>
         <td>@item.modelCheckpoint.name</td>
         <td>@item.parameters.startLayer</td>
