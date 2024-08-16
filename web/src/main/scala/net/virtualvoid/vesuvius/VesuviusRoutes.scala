@@ -94,6 +94,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     LayerDefinition(name, "jpg", AnonymousSource(findFile), isPublic)
   }
 
+  val PolytropeTest1Predictions = externalLayer("polytrope-test1-predictions", "external/polytrope-test1-model", isPublic = false)
+  val PolytropeTest2Predictions = externalLayer("polytrope-test2-predictions", "external/polytrope-test2-model", isPublic = false)
   val PolytropeTest3Predictions = externalLayer("polytrope-test3-predictions", "external/polytrope-test3-model")
   val PolytropeInklabels20240816 = externalLayer("polytrope-inklabels-2024-08-16", "external/polytrope-inklabels-2024-08-16")
   val GrandPrizeInklabels = externalLayer("grand-prize-inklabels", "external/grand-prize-inklabels")
@@ -105,6 +107,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   lazy val allLayers =
     Seq(
       inferenceLayer(GrandPrize_17_32Input, isPublic = true),
+      PolytropeTest1Predictions,
+      PolytropeTest2Predictions,
       PolytropeTest3Predictions,
       inferenceLayer(GrandPrizeFinetune0_17_32Input, isPublic = false),
       inferenceLayer(GrandPrizeFinetune1_17_32Input, isPublic = false),
@@ -145,6 +149,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     "grand-prize-finetune1_17_32",
     "grand-prize-finetune2_17_32",
     "grand-prize-finetune3_17_32",
+    "polytrope-test1-predictions",
+    "polytrope-test2-predictions"
   ).map(layerDefFor(_).get) ++ MainScreenLayerThumbnails
 
   lazy val main =
