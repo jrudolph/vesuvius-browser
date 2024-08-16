@@ -2,7 +2,7 @@ package net.virtualvoid.vesuvius
 
 import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.model.headers.HttpCookie
-import org.apache.pekko.http.scaladsl.server.{ Directive0, Directive1, ExceptionHandler, Route }
+import org.apache.pekko.http.scaladsl.server.{ Directive, Directive0, Directive1, Route }
 import org.apache.pekko.http.scaladsl.server.Directives.*
 import org.parboiled2.util.Base64
 import spray.json.*
@@ -48,14 +48,14 @@ object UserManagement {
     val defaultValidityMillis = 24 * 60 * 60 * 1000L
 
     def loggedIn: Directive1[Option[LoggedInUser]] =
-      handleExceptions(ExceptionHandler {
-        case _: Throwable =>
-          logout // clear potentially broken cookie
-      }) &
-        cookie("ves_user").flatMap { pair =>
+      cookie("ves_user").flatMap { pair =>
+        try {
           val user = decrypt[LoggedInUser](pair.value)
           provide(Some(user).filter(_.validUntil > System.currentTimeMillis()))
+        } catch {
+          case _: Throwable => deleteCookie("ves_user") & provide(None)
         }
+      }
         .recover(_ => provide(None))
 
     def ensureAdmin: Directive0 =
