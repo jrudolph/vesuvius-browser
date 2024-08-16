@@ -7,6 +7,7 @@
     extraLayerNames = extraLayers.map(_.name);
     allLayers = selectedLayers.map(_.toString) ++ extraLayerNames
 ) {
-<div id="openseadragon1" style="width: 100%; height: 100%;"></div>
+<div id="plainbrowser">
 @imageBrowser("openseadragon1", info, allLayers, extraLayerNames)
+</div>
 }
