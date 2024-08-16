@@ -8,19 +8,25 @@
 
 <table>
     <tr>
-        <th>Scroll</th><th>Volume</th><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th>
+        <th>Scroll</th><th>Volume</th><th>Scan Resolution</th><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th>
         @for(
             layer <- layerThumbnails
         ) {
-            <th><a href=@layer.url>@layer.longName</a></th>
+            <th><a href="@layer.url">@layer.longName</a></th>
         }
         <th>Mask</th>
     </tr>
 
 @for(info <- infos.sortBy(_.segmentId).reverse) {
     <tr>
-        <td>@info.scrollId / @scroll.newScrollId.name</td>
-        <td>@{info.metadata.map(_.volume).getOrElse("")}</td>
+        <td>@scroll.newScrollId.name</td>
+        @for(volumeMeta <- info.volumeMetadata) {
+            <td>@volumeMeta.uuid</td>
+            <td>@{volumeMeta.voxelsize}μm</td>
+        }
+        @if(info.volumeMetadata.isEmpty) {
+            <td colspan="2"></td>
+        }
         <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/">@info.segmentId</a></td>
         <td>@{info.area.map(_.formatted("%5.2f")).getOrElse("")}</td>
         <td>@info.width</td>
