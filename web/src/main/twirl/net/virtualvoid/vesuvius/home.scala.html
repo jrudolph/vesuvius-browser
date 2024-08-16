@@ -29,9 +29,9 @@
         <td>@info.width</td>
         <td>@info.height</td>
         @for(layer <- layerThumbnails) {
-            <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=@{layer.name}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/@layer.name"/></a></td>
+            <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/#layer=@{layer.name}"><img src="/scroll/@info.scrollId/segment/@info.segmentId/inferred/@layer.name?@CacheBusterId" loading="lazy"/></a></td>
         }
-        <td><img src="/scroll/@info.scrollId/segment/@info.segmentId/mask"/></td>
+        <td><img src="/scroll/@info.scrollId/segment/@info.segmentId/mask?@CacheBusterId" loading="lazy"/></td>
     </tr>
 }
 </table>

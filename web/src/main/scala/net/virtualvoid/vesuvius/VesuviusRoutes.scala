@@ -469,10 +469,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }(cpuBound)
   }
 
+  val (ThumbnailWidth @ _, ThumbnailHeight @ _) = (250, 125)
+
   def resizedMask(segment: SegmentReference): Future[File] =
     imageInfo(segment).flatMap { info =>
       import segment._
-      resizedLetterbox(maskFor(segment), new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask_300x150-black-letterbox.png"), width = 300, height = 150).map(_.get)
+      resizedLetterbox(maskFor(segment), new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask_${ThumbnailWidth}x${ThumbnailHeight}-black-letterbox.png"), width = ThumbnailWidth, height = ThumbnailHeight).map(_.get)
     }
 
   def resizedLayer(segment: SegmentReference, layer: LayerDefinition): Future[Option[File]] =
@@ -481,7 +483,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       file <- layer.layerFor(segment)
       resized <- file.map(file => resizedLetterbox(
         Future.successful(file),
-        new File(thumbnailDir(file), file.getName.dropRight(4) + "_small_300x150-black-letterbox.png"), width = 300, height = 150))
+        new File(thumbnailDir(file), file.getName.dropRight(4) + s"_small_${ThumbnailWidth}x${ThumbnailHeight}-black-letterbox.png"), width = ThumbnailWidth, height = ThumbnailHeight))
         .getOrElse(Future.successful(None))
     } yield resized
 
