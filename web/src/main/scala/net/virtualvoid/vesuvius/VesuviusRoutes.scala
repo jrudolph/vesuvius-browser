@@ -99,8 +99,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   lazy val allLayers =
     Seq(
-      PolytropeTest3Predictions,
       inferenceLayer(GrandPrize_17_32Input, isPublic = true),
+      PolytropeTest3Predictions,
       inferenceLayer(GrandPrizeFinetune0_17_32Input, isPublic = false),
       inferenceLayer(GrandPrizeFinetune1_17_32Input, isPublic = false),
       inferenceLayer(GrandPrizeFinetune2_17_32Input, isPublic = false),
@@ -123,8 +123,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .orElse(Try(name.toInt).toOption.map(z => LayerDefinition(name, "jpg", SegmentLayerSource(z), isPublic = true)))
 
   lazy val MainScreenLayerThumbnails = Seq(
-    "polytrope-test3-predictions",
     "grand-prize_17_32",
+    "polytrope-test3-predictions",
     "first-word_15_32",
     "first-word_15_32_reverse",
   ).map(layerDefFor(_).get)
