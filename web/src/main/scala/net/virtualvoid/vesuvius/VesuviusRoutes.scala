@@ -96,6 +96,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   val PolytropeTest3Predictions = externalLayer("polytrope-test3-predictions", "external/polytrope-test3-model")
   val PolytropeInklabels20240816 = externalLayer("polytrope-inklabels-2024-08-16", "external/polytrope-inklabels-2024-08-16")
+  val GrandPrizeInklabels = externalLayer("grand-prize-inklabels", "external/grand-prize-inklabels")
 
   val InkLabelLayer = LayerDefinition("inklabel", "jpg", AnonymousSource(inklabelFor(_)), isPublic = true)
   val AlphaMaskLayer = LayerDefinition("alpha", "png", AnonymousSource(s => alphaMaskFor(s).map(Some(_))), isPublic = false)
@@ -112,6 +113,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       inferenceLayer(Youssef_15_32_ReverseInput, isPublic = true),
       inferenceLayer(Youssef_63_32Input, isPublic = true),
       inferenceLayer(Youssef_63_32_ReverseInput, isPublic = true),
+      GrandPrizeInklabels,
       PolytropeInklabels20240816,
       InkLabelLayer,
       AlphaMaskLayer
