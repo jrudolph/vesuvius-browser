@@ -112,13 +112,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       InkLabelLayer,
       AlphaMaskLayer
     )
-      .map(l => l.name -> l).toMap
+  lazy val allLayersMap =
+    allLayers.map(l => l.name -> l).toMap
 
-  lazy val PublicLayers = allLayers.values.toSeq.filter(_.isPublic)
-  lazy val AdminLayers = allLayers.values.toSeq.filterNot(_.isPublic)
+  lazy val (PublicLayers @ _, AdminLayers @ _) = allLayers.partition(_.isPublic)
 
   def layerDefFor(name: String): Option[LayerDefinition] =
-    allLayers
+    allLayersMap
       .get(name)
       .orElse(Try(name.toInt).toOption.map(z => LayerDefinition(name, "jpg", SegmentLayerSource(z), isPublic = true)))
 
