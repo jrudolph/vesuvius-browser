@@ -76,13 +76,13 @@ sealed trait ScrollServerBase extends Product {
     s"${baseUrl(segment.newScrollId)}${segment.segmentId}/"
 
   def maskFor(segment: SegmentReference): String =
-    s"${segmentUrl(segment)}/${segment.segmentId}_mask.png"
+    s"${segmentUrl(segment)}${segment.segmentId}_mask.png"
 
   def inklabelFor(segment: SegmentReference): String =
-    s"${segmentUrl(segment)}/${segment.segmentId}_inklabels.png"
+    s"${segmentUrl(segment)}${segment.segmentId}_inklabels.png"
 
   def metaFor(segment: SegmentReference): String =
-    s"${segmentUrl(segment)}/meta.json"
+    s"${segmentUrl(segment)}meta.json"
 
   def layerUrl(segment: SegmentReference, z: Int): String =
     f"${segmentUrl(segment)}layers/$z%02d.tif"
