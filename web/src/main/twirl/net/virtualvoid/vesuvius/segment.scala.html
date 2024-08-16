@@ -40,15 +40,19 @@ Use Shift-Click to open a tab with Yao Hsiao's <a href="https://github.com/tomhs
         <th>Reverse</th>
     </tr>
     @for(
-        layer <- extraLayers;
-        case s: InferenceLayerSource <- Seq(layer.source);
-        input = s.input
+        layer <- extraLayers
     ) {
     <tr>
-        <td><a href="inferred/@{layer.name}/full" download>@{input.modelCheckpoint.name}</a></td>
-        <td>@{input.parameters.startLayer}</td>
-        <td>@{input.parameters.stride}</td>
-        <td>@{input.parameters.reverseLayers}</td>
+        <td><a href="inferred/@{layer.name}/full" download>@{layer.longName}</a></td>
+        @if(layer.source.isInstanceOf[InferenceLayerSource]) {
+            @for(case s: InferenceLayerSource <- Seq(layer.source); input = s.input) {
+                <td>@{input.parameters.startLayer}</td>
+                <td>@{input.parameters.stride}</td>
+                <td>@{input.parameters.reverseLayers}</td>
+            }
+        } else {
+            <td colspan="3"></td>
+        }
         <td><a href="inferred/@{layer.name}/full?show"><img src="inferred/@{layer.name}"/></a></td>
     </tr>
     }

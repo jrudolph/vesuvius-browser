@@ -10,10 +10,9 @@
     <tr>
         <th>Scroll</th><th>Volume</th><th>Segment</th><th>Area / cm²</th><th>Width</th><th>Height</th>
         @for(
-            layer <- layerThumbnails;
-            reverse = if (layer.input.parameters.reverseLayers) " (reversed)" else ""
+            layer <- layerThumbnails
         ) {
-            <th><a href=@layer.input.modelCheckpoint.architecture.url>@layer.input.modelCheckpoint.name@reverse</a></th>
+            <th><a href=@layer.url>@layer.longName</a></th>
         }
         <th>Mask</th>
     </tr>

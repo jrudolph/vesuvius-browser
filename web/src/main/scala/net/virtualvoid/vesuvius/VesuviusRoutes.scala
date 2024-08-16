@@ -18,7 +18,7 @@ import scala.util.Success
 import scala.util.Try
 
 trait LayerSource {
-  def layerFor(segment: SegmentReference): Future[File]
+  def layerFor(segment: SegmentReference): Future[Option[File]]
 }
 
 trait InferenceLayerSource extends LayerSource {
@@ -32,6 +32,22 @@ case class LayerDefinition(
     isPublic:  Boolean
 ) {
   def input: InferenceWorkItemInput = source.asInstanceOf[InferenceLayerSource].input
+
+  def layerFor(segment: SegmentReference): Future[Option[File]] =
+    source.layerFor(segment)
+
+  def longName: String =
+    source match {
+      case s: InferenceLayerSource =>
+        val reverse = if (s.input.parameters.reverseLayers) " (reversed)" else ""
+        s.input.modelCheckpoint.name + reverse
+      case _ => name
+    }
+  def url: String =
+    source match {
+      case s: InferenceLayerSource => s.input.modelCheckpoint.architecture.url
+      case _                       => ""
+    }
 }
 
 class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Directives with TwirlSupport with SprayJsonSupport {
@@ -49,17 +65,17 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   case class InferenceLayerSourceImpl(
       input: InferenceWorkItemInput
   ) extends InferenceLayerSource {
-    def layerFor(segment: SegmentReference): Future[File] =
-      Future.successful(targetFileForInput(segment, input))
+    def layerFor(segment: SegmentReference): Future[Option[File]] =
+      Future.successful(Some(targetFileForInput(segment, input)).filter(_.exists))
   }
   case class SegmentLayerSource(
       layer: Int
   ) extends LayerSource {
-    def layerFor(segment: SegmentReference): Future[File] =
-      downloadedSegmentLayer(segment, layer)
+    def layerFor(segment: SegmentReference): Future[Option[File]] =
+      downloadedSegmentLayer(segment, layer).transform(r => Success(r.toOption))
   }
-  case class AnonymousSource(f: SegmentReference => Future[File]) extends LayerSource {
-    def layerFor(segment: SegmentReference): Future[File] = f(segment)
+  case class AnonymousSource(f: SegmentReference => Future[Option[File]]) extends LayerSource {
+    def layerFor(segment: SegmentReference): Future[Option[File]] = f(segment)
   }
 
   def inferenceLayer(input: InferenceWorkItemInput, isPublic: Boolean): LayerDefinition = {
@@ -67,11 +83,23 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     LayerDefinition(s"${input.modelCheckpoint.shortName}_${params.suffix}", "jpg", InferenceLayerSourceImpl(input), isPublic)
   }
 
-  val InkLabelLayer = LayerDefinition("inklabel", "jpg", AnonymousSource(inklabelFor(_).map(_.get)), isPublic = true)
-  val AlphaMaskLayer = LayerDefinition("alpha", "png", AnonymousSource(alphaMaskFor), isPublic = false)
+  val PolytropeTest3Predictions = {
+    def dir(segment: SegmentReference) = new File(dataDir, s"external/polytrope-test3-model/Scroll${segment.scrollId}/")
+
+    def findFile(segment: SegmentReference): Future[Option[File]] = {
+      val res = FileUtils.firstFileNameMatching(dir(segment), s""".*${segment.segmentId}.*\\.png""")
+      Future.successful(res)
+    }
+
+    LayerDefinition("polytrope-test3-predictions", "jpg", AnonymousSource(findFile), isPublic = true)
+  }
+
+  val InkLabelLayer = LayerDefinition("inklabel", "jpg", AnonymousSource(inklabelFor(_)), isPublic = true)
+  val AlphaMaskLayer = LayerDefinition("alpha", "png", AnonymousSource(s => alphaMaskFor(s).map(Some(_))), isPublic = false)
 
   lazy val allLayers =
     Seq(
+      PolytropeTest3Predictions,
       inferenceLayer(GrandPrize_17_32Input, isPublic = true),
       inferenceLayer(GrandPrizeFinetune0_17_32Input, isPublic = false),
       inferenceLayer(GrandPrizeFinetune1_17_32Input, isPublic = false),
@@ -95,6 +123,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .orElse(Try(name.toInt).toOption.map(z => LayerDefinition(name, "jpg", SegmentLayerSource(z), isPublic = true)))
 
   lazy val MainScreenLayerThumbnails = Seq(
+    "polytrope-test3-predictions",
     "grand-prize_17_32",
     "first-word_15_32",
     "first-word_15_32_reverse",
@@ -184,8 +213,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
                   // check if inferred layers actually exist
                   val allLayerSegments = Future.traverse(extraLayers)(l => l.source.layerFor(segment).transform {
-                    case Success(f) if f.exists => Success(Some(l))
-                    case _                      => Success(None)
+                    case Success(Some(f)) if f.exists => Success(Some(l))
+                    case _                            => Success(None)
                   })
 
                   allLayerSegments.await { extras =>
@@ -203,19 +232,18 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
                 resizedMask(segment).deliver
               },
               pathPrefix("inferred" / Segment) { layer =>
-                val input: InferenceWorkItemInput =
-                  layerDefFor(layer).get.source.asInstanceOf[InferenceLayerSource].input
+                val layerDef = layerDefFor(layer).get
 
                 concat(
                   pathEnd {
                     concat(
-                      resizedInferred(segment, input).await.orReject.deliver,
+                      resizedLayer(segment, layerDef).await.orReject.deliver,
                       complete(ImageTools.EmptyImageResponse)
                     )
                   },
                   path("full") {
                     parameter("show".?) { show =>
-                      val inner = getFromFile(targetFileForInput(segment, input))
+                      val inner = layerDef.source.layerFor(segment).await.orReject.deliver
                       if (show.isDefined) inner
                       else
                         respondWithHeader(headers.`Content-Disposition`(headers.ContentDispositionTypes.attachment, Map("filename" -> s"${segment.segmentId}_inference_${layer}.png"))) {
@@ -390,7 +418,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def segmentLayer(segment: SegmentReference, layerName: String): Future[File] =
     layerDefFor(layerName)
-      .map(_.source.layerFor(segment))
+      .map(_.layerFor(segment).map(_.get))
       .getOrElse(Future.failed(new RuntimeException(s"Layer $layerName not found")))
 
   def downloadedSegmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
@@ -452,6 +480,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       val file = targetFileForInput(segment, input)
       resizedLetterbox(Future.successful(file), new File(file.getParentFile, file.getName.dropRight(4) + "_small_300x150-black-letterbox.png"), width = 300, height = 150)
     }
+
+  def resizedLayer(segment: SegmentReference, layer: LayerDefinition): Future[Option[File]] =
+    for {
+      i <- imageInfo(segment)
+      file <- layer.layerFor(segment)
+      resized <- file.map(file => resizedLetterbox(Future.successful(file), new File(file.getParentFile, file.getName.dropRight(4) + "_small_300x150-black-letterbox.png"), width = 300, height = 150)).getOrElse(Future.successful(None))
+    } yield resized
 
   def resizedLetterbox(orig: Future[File], target: File, width: Int, height: Int): Future[Option[File]] =
     orig.flatMap { f0 =>
