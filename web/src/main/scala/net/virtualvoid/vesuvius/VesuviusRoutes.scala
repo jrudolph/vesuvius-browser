@@ -135,6 +135,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     "polytrope-test3-predictions",
     "first-word_15_32",
     "first-word_15_32_reverse",
+    "polytrope-inklabels-2024-08-16",
+    "grand-prize-inklabels",
+    "first-letters-inklabels",
   ).map(layerDefFor(_).get)
 
   lazy val AdminMainScreenLayerThumbnails = Seq(
