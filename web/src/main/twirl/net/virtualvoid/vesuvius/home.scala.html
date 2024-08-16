@@ -4,7 +4,7 @@
 
 @for((scroll, infos) <- infos.groupBy(_.ref.scrollRef).toVector.sortBy(x => (if (x._1.base.productPrefix.contains("Fragment")) 1 else 0, scala.util.Try(x._1.scrollId.toInt).getOrElse(Int.MaxValue), x._1.scrollId))) {
 
-<h3>Scroll @scroll.scrollId</h3>
+<h3>Scroll @scroll.scrollId / @scroll.newScrollId.name</h3>
 
 <table>
     <tr>
@@ -19,8 +19,8 @@
 
 @for(info <- infos.sortBy(_.segmentId).reverse) {
     <tr>
-        <td>Scroll @info.scrollId</td>
-        <td>@{info.metadata.map(_.volume).getOrElse("")}</br>@{info.volumeMetadata.map(_.name).getOrElse("")}</td>
+        <td>@info.scrollId / @scroll.newScrollId.name</td>
+        <td>@{info.metadata.map(_.volume).getOrElse("")}</td>
         <td><a href="/scroll/@info.scrollId/segment/@info.segmentId/">@info.segmentId</a></td>
         <td>@{info.area.map(_.formatted("%5.2f")).getOrElse("")}</td>
         <td>@info.width</td>
