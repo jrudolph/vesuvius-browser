@@ -98,6 +98,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val PolytropeTest2Predictions = externalLayer("polytrope-test2-predictions", "external/polytrope-test2-model", isPublic = false)
   val PolytropeTest3Predictions = externalLayer("polytrope-test3-predictions", "external/polytrope-test3-model")
   val PolytropeInklabels20240816 = externalLayer("polytrope-inklabels-2024-08-16", "external/polytrope-inklabels-2024-08-16")
+  val RepushkoInklabels20231123 = externalLayer("repushko-inklabels-2023-11-23", "external/repushko-inklabels-2023-11-23", isPublic = false)
   val GrandPrizeInklabels = externalLayer("grand-prize-inklabels", "external/grand-prize-inklabels")
   val FirstLettersInklabels = externalLayer("first-letters-inklabels", "external/first-letters-inklabels")
 
@@ -121,6 +122,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       GrandPrizeInklabels,
       PolytropeInklabels20240816,
       FirstLettersInklabels,
+      RepushkoInklabels20231123,
       InkLabelLayer,
       AlphaMaskLayer
     )
@@ -150,7 +152,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     "grand-prize-finetune2_17_32",
     "grand-prize-finetune3_17_32",
     "polytrope-test1-predictions",
-    "polytrope-test2-predictions"
+    "polytrope-test2-predictions",
+    "repushko-inklabels-2023-11-23"
   ).map(layerDefFor(_).get) ++ MainScreenLayerThumbnails
 
   lazy val main =
