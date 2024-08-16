@@ -475,18 +475,21 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       resizedLetterbox(maskFor(segment), new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask_300x150-black-letterbox.png"), width = 300, height = 150).map(_.get)
     }
 
-  def resizedInferred(segment: SegmentReference, input: InferenceWorkItemInput): Future[Option[File]] =
-    imageInfo(segment).flatMap { i =>
-      val file = targetFileForInput(segment, input)
-      resizedLetterbox(Future.successful(file), new File(file.getParentFile, file.getName.dropRight(4) + "_small_300x150-black-letterbox.png"), width = 300, height = 150)
-    }
-
   def resizedLayer(segment: SegmentReference, layer: LayerDefinition): Future[Option[File]] =
     for {
       i <- imageInfo(segment)
       file <- layer.layerFor(segment)
-      resized <- file.map(file => resizedLetterbox(Future.successful(file), new File(file.getParentFile, file.getName.dropRight(4) + "_small_300x150-black-letterbox.png"), width = 300, height = 150)).getOrElse(Future.successful(None))
+      resized <- file.map(file => resizedLetterbox(
+        Future.successful(file),
+        new File(thumbnailDir(file), file.getName.dropRight(4) + "_small_300x150-black-letterbox.png"), width = 300, height = 150))
+        .getOrElse(Future.successful(None))
     } yield resized
+
+  def thumbnailDir(orig: File): File = {
+    require(orig.getAbsolutePath.startsWith(dataDir.getAbsolutePath))
+    val relativePathToData = orig.getAbsolutePath.drop(dataDir.getAbsolutePath.size)
+    new File(dataDir, s"thumbnails$relativePathToData").getParentFile()
+  }
 
   def resizedLetterbox(orig: Future[File], target: File, width: Int, height: Int): Future[Option[File]] =
     orig.flatMap { f0 =>
