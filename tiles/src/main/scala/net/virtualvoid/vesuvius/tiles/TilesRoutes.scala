@@ -111,6 +111,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       case "20230205180739" => 500147 // scroll 1
       case "20230210143520" => 500147 // scroll 2 fine
       case "20230212125146" => 500147 // scroll 2 coarse
+      case "20231117143551" => 500000 // scroll 3 coarse
       case "20231027191953" => 500262 // scroll 0332
       case "20231107190228" => 500262 // scroll 1667
     }
