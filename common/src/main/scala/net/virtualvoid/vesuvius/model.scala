@@ -37,7 +37,6 @@ object SegmentReference {
 case class NewScrollId(number: Int, name: String)
 
 case class ScrollReference(scrollId: String, newScrollId: NewScrollId, base: ScrollServerBase, defaultVolumeId: String) {
-  def baseUrl: String = base.baseUrl(newScrollId)
   def scrollUrl: String = base.scrollUrl(newScrollId)
   def volumeMetadataUrl(volumeId: String): String = s"${volumeUrl(volumeId)}meta.json"
   def volumeUrl(volumeId: String): String = s"${scrollUrl}volumes/$volumeId/"
@@ -68,26 +67,60 @@ object ScrollReference {
   def byId(id: String): Option[ScrollReference] = scrolls.find(_.scrollId == id)
 }
 
+sealed trait SegmentDirectoryStyle extends Product {
+  def baseUrl(scrollRef: ScrollReference): String
+  def segmentUrl(segment: SegmentReference): String
+  def maskFor(segment: SegmentReference): String
+  def inklabelFor(segment: SegmentReference): String
+  def metaFor(segment: SegmentReference): String
+  def layerUrl(segment: SegmentReference, z: Int): String
+  def isHighResSegment(segment: SegmentReference): Boolean
+}
+
+sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
+  def baseUrl(scrollRef: ScrollReference): String = s"${scrollRef.scrollUrl}paths/"
+  def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}${segment.segmentId}/"
+  def maskFor(segment: SegmentReference): String = s"${segmentUrl(segment)}mask.png"
+  def inklabelFor(segment: SegmentReference): String = s"${segmentUrl(segment)}inklabels.png"
+  def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
+  def layerUrl(segment: SegmentReference, z: Int): String =
+    if (isHighResSegment(segment))
+      f"${segmentUrl(segment)}layers/$z%03d.tif"
+    else
+      f"${segmentUrl(segment)}layers/$z%02d.tif"
+}
+case object RegularSegmentDirectoryStyle extends RegularSegmentDirectoryStyle {
+  def isHighResSegment(segment: SegmentReference): Boolean =
+    (segment.scrollId == "1667" && segment.segmentId < "20231210132040") ||
+      (segment.scrollId == "0332" && segment.segmentId < "20240618142020")
+}
+
 sealed trait ScrollServerBase extends Product {
   def scrollUrl(newScrollId: NewScrollId): String
 
-  def baseUrl(newScrollId: NewScrollId): String = s"${scrollUrl(newScrollId)}paths/"
+  /* def baseUrl(newScrollId: NewScrollId): String =
+    s"${scrollUrl(newScrollId)}paths/" */
   def segmentUrl(segment: SegmentReference): String =
-    s"${baseUrl(segment.newScrollId)}${segment.segmentId}/"
+    directoryStyleFor(segment).segmentUrl(segment)
 
   def maskFor(segment: SegmentReference): String =
-    s"${segmentUrl(segment)}${segment.segmentId}_mask.png"
+    directoryStyleFor(segment).maskFor(segment)
 
   def inklabelFor(segment: SegmentReference): String =
-    s"${segmentUrl(segment)}${segment.segmentId}_inklabels.png"
+    directoryStyleFor(segment).inklabelFor(segment)
 
   def metaFor(segment: SegmentReference): String =
-    s"${segmentUrl(segment)}meta.json"
+    directoryStyleFor(segment).metaFor(segment)
 
   def layerUrl(segment: SegmentReference, z: Int): String =
-    f"${segmentUrl(segment)}layers/$z%02d.tif"
+    directoryStyleFor(segment).layerUrl(segment, z)
 
-  def isHighResSegment(segment: SegmentReference): Boolean
+  def isHighResSegment(segment: SegmentReference): Boolean =
+    directoryStyleFor(segment).isHighResSegment(segment)
+
+  def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle
+
+  def supportedDirectoryStyles: Seq[SegmentDirectoryStyle]
 }
 
 case object FullScrollsBase extends ScrollServerBase {
@@ -95,37 +128,48 @@ case object FullScrollsBase extends ScrollServerBase {
   def scrollUrl(newScrollId: NewScrollId): String =
     s"https://dl.ash2txt.org/full-scrolls/Scroll${newScrollId.number}/${newScrollId.name}.volpkg/"
 
-  override def layerUrl(segment: SegmentReference, z: Int): String =
-    if (isHighResSegment(segment))
-      f"${segmentUrl(segment)}layers/$z%03d.tif"
-    else
-      f"${segmentUrl(segment)}layers/$z%02d.tif"
+  def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle =
+    RegularSegmentDirectoryStyle
 
-  def isHighResSegment(segment: SegmentReference): Boolean =
-    (segment.scrollId == "1667" && segment.segmentId < "20231210132040") ||
-      (segment.scrollId == "0332" && segment.segmentId < "20240618142020")
+  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(RegularSegmentDirectoryStyle)
+}
+
+sealed trait FragmentDirectoryStyle extends RegularSegmentDirectoryStyle {
+  override def baseUrl(scrollRef: ScrollReference): String =
+    s"${scrollRef.scrollUrl}working/"
+
+  def isHighResSegment(segment: SegmentReference): Boolean = false
+}
+case object FragmentDirectoryStyle extends FragmentDirectoryStyle {
+  override def layerUrl(segment: SegmentReference, z: Int): String =
+    if (segment.scrollId == "Frag4")
+      f"${segmentUrl(segment)}PHercParis1Fr39_54keV_surface_volume/$z%02d.tif"
+    else
+      f"${segmentUrl(segment)}surface_volume/$z%02d.tif"
+
+  override def maskFor(segment: SegmentReference): String =
+    if (segment.scrollId == "Frag4")
+      f"${segmentUrl(segment)}PHercParis1Fr39_54keV_mask.png"
+    else
+      super.maskFor(segment)
+
+  override def inklabelFor(segment: SegmentReference): String =
+    if (segment.scrollId == "Frag4")
+      f"${segmentUrl(segment)}PHercParis1Fr39_54keV_inklabels.png"
+    else
+      super.inklabelFor(segment)
+
 }
 
 case object FragmentsBase extends ScrollServerBase {
   def scrollUrl(newScrollId: NewScrollId): String =
     s"https://dl.ash2txt.org/fragments/Frag${newScrollId.number}/${newScrollId.name}.volpkg/"
 
-  override def baseUrl(newScrollId: NewScrollId): String =
-    s"${scrollUrl(newScrollId)}working/"
+  override def isHighResSegment(segment: SegmentReference): Boolean = false
 
-  override def layerUrl(segment: SegmentReference, z: Int): String =
-    if (segment.scrollId == "Frag4") f"${segmentUrl(segment)}PHercParis1Fr39_54keV_surface_volume/$z%02d.tif"
-    else f"${segmentUrl(segment)}surface_volume/$z%02d.tif"
+  def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle = FragmentDirectoryStyle
 
-  override def maskFor(segment: SegmentReference): String =
-    if (segment.scrollId == "Frag4") f"${segmentUrl(segment)}PHercParis1Fr39_54keV_mask.png"
-    else s"${segmentUrl(segment)}mask.png"
-
-  override def inklabelFor(segment: SegmentReference): String =
-    if (segment.scrollId == "Frag4") f"${segmentUrl(segment)}PHercParis1Fr39_54keV_inklabels.png"
-    else s"${segmentUrl(segment)}inklabels.png"
-
-  def isHighResSegment(segment: SegmentReference): Boolean = false
+  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(FragmentDirectoryStyle)
 }
 
 case class SegmentMetadata(

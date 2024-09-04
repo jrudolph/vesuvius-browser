@@ -604,8 +604,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map((_, metadata) => scala.io.Source.fromFile(metadata).mkString.parseJson.convertTo[SegmentMetadata])
 
   def segmentIds(scroll: ScrollReference): Future[Seq[SegmentReference]] =
-    segmentIds(scroll.baseUrl, new File(config.dataDir, s"raw/scroll${scroll.scrollId}/${scroll.base}-path-listing.html"))
-      .map(_.map(segment => SegmentReference(scroll, segment)))
+    Future.traverse(scroll.base.supportedDirectoryStyles) { style =>
+      segmentIds(style.baseUrl(scroll), new File(config.dataDir, s"raw/scroll${scroll.scrollId}/${scroll.base}-${style.productPrefix}-path-listing.html"))
+        .map(_.map(segment => SegmentReference(scroll, segment)))
+    }.map(_.flatten)
 
   val LinkR = """.*href="(.*)/".*""".r
   def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
