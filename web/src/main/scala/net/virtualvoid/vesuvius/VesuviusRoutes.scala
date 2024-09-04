@@ -454,16 +454,13 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     val tmpFile = File.createTempFile(".tmp.download", ".tif", dir)
     download(url, tmpFile)
   }
+
+  lazy val AutoSegmentPredictionCache = downloadUtils.downloadCache[SegmentReference](
+    AutoSegmentedDirectoryStyle.predictionUrlFor,
+    segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/prediction.png")
+  )
   def downloadedAutosegmentPrediction(segment: SegmentReference): Future[Option[File]] =
-    if (segment.scrollId == "1" && segment.base.directoryStyleFor(segment) == AutoSegmentedDirectoryStyle) {
-      import segment._
-      val dir = new File(dataDir, s"raw/scroll$scrollId/$segmentId/prediction")
-      dir.mkdirs()
-      val url = AutoSegmentedDirectoryStyle.predictionUrlFor(segment)
-      val tmpFile = File.createTempFile(".tmp.download", ".png", dir)
-      download(url, tmpFile).map(_ => Some(tmpFile))
-    } else
-      Future.successful(None)
+    AutoSegmentPredictionCache(segment).transform(x => Success(x.toOption))
 
   def resizer(info: ImageInfo, layer: Int, tileX: Int, tileY: Int, layerName: String): Future[File] =
     dzdir(info, layerName).map { dir =>
