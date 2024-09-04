@@ -102,6 +102,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val GrandPrizeInklabels = externalLayer("grand-prize-inklabels", "external/grand-prize-inklabels")
   val FirstLettersInklabels = externalLayer("first-letters-inklabels", "external/first-letters-inklabels")
 
+  val AutosegmentedPrediction =
+    LayerDefinition("autosegmented-prediction", "jpg", AnonymousSource(downloadedAutosegmentPrediction(_)), isPublic = true)
+
   val InkLabelLayer = LayerDefinition("inklabel", "jpg", AnonymousSource(inklabelFor(_)), isPublic = true)
   val AlphaMaskLayer = LayerDefinition("alpha", "png", AnonymousSource(s => alphaMaskFor(s).map(Some(_))), isPublic = false)
 
@@ -123,6 +126,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       PolytropeInklabels20240816,
       FirstLettersInklabels,
       RepushkoInklabels20231123,
+      AutosegmentedPrediction,
       InkLabelLayer,
       AlphaMaskLayer
     )
@@ -144,6 +148,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     "grand-prize-inklabels",
     "polytrope-inklabels-2024-08-16",
     "first-letters-inklabels",
+    "autosegmented-prediction",
   ).map(layerDefFor(_).get)
 
   lazy val AdminMainScreenLayerThumbnails = Seq(
@@ -449,6 +454,16 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     val tmpFile = File.createTempFile(".tmp.download", ".tif", dir)
     download(url, tmpFile)
   }
+  def downloadedAutosegmentPrediction(segment: SegmentReference): Future[Option[File]] =
+    if (segment.scrollId == "1" && segment.base.directoryStyleFor(segment) == AutoSegmentedDirectoryStyle) {
+      import segment._
+      val dir = new File(dataDir, s"raw/scroll$scrollId/$segmentId/prediction")
+      dir.mkdirs()
+      val url = AutoSegmentedDirectoryStyle.predictionUrlFor(segment)
+      val tmpFile = File.createTempFile(".tmp.download", ".png", dir)
+      download(url, tmpFile).map(_ => Some(tmpFile))
+    } else
+      Future.successful(None)
 
   def resizer(info: ImageInfo, layer: Int, tileX: Int, tileY: Int, layerName: String): Future[File] =
     dzdir(info, layerName).map { dir =>

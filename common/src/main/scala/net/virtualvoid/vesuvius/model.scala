@@ -122,6 +122,9 @@ case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
     dirName.drop("working_".length)
   }
   def isValidSegmentDirectory(dirName: String): Boolean = dirName.startsWith("working_")
+
+  def predictionUrlFor(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}predictions/working_${segment.segmentId}_prediction_rotated_0_layer_17.png"
+
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 
