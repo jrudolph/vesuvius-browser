@@ -457,7 +457,8 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   lazy val AutoSegmentPredictionCache = downloadUtils.downloadCache[SegmentReference](
     AutoSegmentedDirectoryStyle.predictionUrlFor,
-    segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/prediction.png")
+    segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/prediction.png"),
+    maxConcurrentRequests = 3
   )
   def downloadedAutosegmentPrediction(segment: SegmentReference): Future[Option[File]] =
     AutoSegmentPredictionCache(segment).transform(x => Success(x.toOption))
