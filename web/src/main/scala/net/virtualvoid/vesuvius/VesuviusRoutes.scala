@@ -496,7 +496,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }
   }
 
-  lazy val (vipsCommandRunner, _) = downloadUtils.semaphore[String, String](3) { (cmd, _) =>
+  lazy val (vipsCommandRunner, _) = downloadUtils.semaphore[String, String](config.concurrentResizes) { (cmd, _) =>
     Future {
       import sys.process._
       println(s"Running $cmd")
@@ -537,14 +537,16 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
         val tmpFile = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
         val cmd = s"""vips thumbnail ${f0.getAbsolutePath} $tmpFile ${width} --height $height"""
         println(cmd)
-        cmd.!!
-        val tmpFile2 = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
-        val cmd2 = s"""vips gravity ${tmpFile.getAbsolutePath} ${tmpFile2.getAbsolutePath} centre $width $height --background "0,0,0""""
-        cmd2.!!
-        tmpFile.delete()
-
-        require(tmpFile2.renameTo(target))
-        Future.successful(target)
+        for {
+          _ <- vipsCommandRunner(cmd)
+          tmpFile2 = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
+          cmd2 = s"""vips gravity ${tmpFile.getAbsolutePath} ${tmpFile2.getAbsolutePath} centre $width $height --background "0,0,0""""
+          _ <- vipsCommandRunner(cmd2)
+        } yield {
+          tmpFile.delete()
+          require(tmpFile2.renameTo(target))
+          target
+        }
       }
     }.transform(x => Success(x.toOption))
 
