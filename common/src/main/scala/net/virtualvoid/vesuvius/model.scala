@@ -74,6 +74,8 @@ sealed trait SegmentDirectoryStyle extends Product {
   def inklabelFor(segment: SegmentReference): String
   def metaFor(segment: SegmentReference): String
   def layerUrl(segment: SegmentReference, z: Int): String
+  def segmentIdForDirectory(dirName: String): String
+  def isValidSegmentDirectory(dirName: String): Boolean
   def isHighResSegment(segment: SegmentReference): Boolean
 }
 
@@ -88,11 +90,39 @@ sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
       f"${segmentUrl(segment)}layers/$z%03d.tif"
     else
       f"${segmentUrl(segment)}layers/$z%02d.tif"
+
+  def segmentIdForDirectory(dirName: String): String = dirName
+  def isValidSegmentDirectory(dirName: String): Boolean = true
 }
 case object RegularSegmentDirectoryStyle extends RegularSegmentDirectoryStyle {
   def isHighResSegment(segment: SegmentReference): Boolean =
     (segment.scrollId == "1667" && segment.segmentId < "20231210132040") ||
       (segment.scrollId == "0332" && segment.segmentId < "20240618142020")
+}
+case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
+  def baseUrl(scrollRef: ScrollReference): String = s"${scrollRef.scrollUrl}scroll1_autosegmentation_20240821000000/"
+  def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}working_${segment.segmentId}/"
+
+  def shortSegmentId(segment: SegmentReference): String =
+    if (segment.segmentId.endsWith("_1"))
+      segment.segmentId.dropRight(2)
+    else
+      segment.segmentId
+
+  def maskFor(segment: SegmentReference): String = {
+    s"${segmentUrl(segment)}${shortSegmentId(segment)}_mask.png"
+  }
+
+  def inklabelFor(segment: SegmentReference): String = s"${segmentUrl(segment)}inklabels.png"
+  def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
+  def layerUrl(segment: SegmentReference, z: Int): String = f"${segmentUrl(segment)}layers/$z%02d.jpg"
+
+  def segmentIdForDirectory(dirName: String): String = {
+    require(dirName.startsWith("working_"))
+    dirName.drop("working_".length)
+  }
+  def isValidSegmentDirectory(dirName: String): Boolean = dirName.startsWith("working_")
+  def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 
 sealed trait ScrollServerBase extends Product {
@@ -129,9 +159,12 @@ case object FullScrollsBase extends ScrollServerBase {
     s"https://dl.ash2txt.org/full-scrolls/Scroll${newScrollId.number}/${newScrollId.name}.volpkg/"
 
   def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle =
-    RegularSegmentDirectoryStyle
+    if (segment.segmentId.startsWith("mesh_window"))
+      AutoSegmentedDirectoryStyle
+    else
+      RegularSegmentDirectoryStyle
 
-  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(RegularSegmentDirectoryStyle)
+  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(RegularSegmentDirectoryStyle, AutoSegmentedDirectoryStyle)
 }
 
 sealed trait FragmentDirectoryStyle extends RegularSegmentDirectoryStyle {

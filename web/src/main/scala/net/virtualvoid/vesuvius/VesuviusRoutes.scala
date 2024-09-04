@@ -605,18 +605,22 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def segmentIds(scroll: ScrollReference): Future[Seq[SegmentReference]] =
     Future.traverse(scroll.base.supportedDirectoryStyles) { style =>
-      segmentIds(style.baseUrl(scroll), new File(config.dataDir, s"raw/scroll${scroll.scrollId}/${scroll.base}-${style.productPrefix}-path-listing.html"))
+      segmentIds(scroll, style, new File(config.dataDir, s"raw/scroll${scroll.scrollId}/${scroll.base}-${style.productPrefix}-path-listing.html"))
         .map(_.map(segment => SegmentReference(scroll, segment)))
     }.map(_.flatten)
 
   val LinkR = """.*href="(.*)/".*""".r
-  def segmentIds(baseUrl: String, targetFile: File): Future[Seq[String]] =
-    cacheDownload(baseUrl, targetFile, ttl = 1.hour).map { f =>
-      scala.io.Source.fromFile(f).getLines().collect {
-        case LinkR(segmentId) if !segmentId.startsWith("..") =>
-          segmentId
-      }.toVector
-    }
+  def segmentIds(scroll: ScrollReference, style: SegmentDirectoryStyle, targetFile: File): Future[Seq[String]] =
+    cacheDownload(style.baseUrl(scroll), targetFile, ttl = 1.hour)
+      .map { f =>
+        scala.io.Source.fromFile(f).getLines().collect {
+          case LinkR(dirName) if !dirName.startsWith("..") && style.isValidSegmentDirectory(dirName) =>
+            style.segmentIdForDirectory(dirName)
+        }.toVector
+      }
+      .recover {
+        case _ => Vector.empty // FIXME: restrict to certain exceptions?
+      }
 
   def targetFileForInput(segment: SegmentReference, input: WorkItemInput): File = {
     import segment._
