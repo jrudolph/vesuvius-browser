@@ -19,6 +19,8 @@ import scala.util.Try
 
 trait LayerSource {
   def layerFor(segment: SegmentReference): Future[Option[File]]
+  /* Returns the file that would be used for the layer, even if it doesn't exist */
+  def layerFileFor(segment: SegmentReference): File
 }
 
 trait InferenceLayerSource extends LayerSource {
@@ -35,6 +37,10 @@ case class LayerDefinition(
 
   def layerFor(segment: SegmentReference): Future[Option[File]] =
     source.layerFor(segment)
+
+  /* Returns the file that would be used for the layer, even if it doesn't exist */
+  def layerFileFor(segment: SegmentReference): File =
+    source.layerFileFor(segment)
 
   def longName: String =
     source match {
@@ -67,15 +73,26 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   ) extends InferenceLayerSource {
     def layerFor(segment: SegmentReference): Future[Option[File]] =
       Future.successful(Some(targetFileForInput(segment, input)).filter(_.exists))
+
+    def layerFileFor(segment: SegmentReference): File = targetFileForInput(segment, input)
   }
   case class SegmentLayerSource(
       layer: Int
   ) extends LayerSource {
     def layerFor(segment: SegmentReference): Future[Option[File]] =
       downloadedSegmentLayer(segment, layer).transform(r => Success(r.toOption))
+
+    def layerFileFor(segment: SegmentReference): File =
+      segmentLayerTarget(segment, layer)
   }
-  case class AnonymousSource(f: SegmentReference => Future[Option[File]]) extends LayerSource {
+  case class AnonymousSource(f: SegmentReference => Future[Option[File]], targetFileFor: SegmentReference => File) extends LayerSource {
     def layerFor(segment: SegmentReference): Future[Option[File]] = f(segment)
+    def layerFileFor(segment: SegmentReference): File = targetFileFor(segment)
+  }
+
+  case class FileCacheSource(cache: FileCache[SegmentReference]) extends LayerSource {
+    def layerFor(segment: SegmentReference): Future[Option[File]] = cache(segment).transform(x => Success(x.toOption))
+    def layerFileFor(segment: SegmentReference): File = cache.targetFile(segment)
   }
 
   def inferenceLayer(input: InferenceWorkItemInput, isPublic: Boolean): LayerDefinition = {
@@ -85,13 +102,14 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
 
   def externalLayer(name: String, baseDir: String, extension: String = "png", isPublic: Boolean = true): LayerDefinition = {
     def dir(segment: SegmentReference) = new File(dataDir, s"$baseDir/Scroll${segment.scrollId}/")
+    def simpleFile(segment: SegmentReference) = new File(dir(segment), s"${segment.segmentId}.${extension}")
 
-    def findFile(segment: SegmentReference): Future[Option[File]] = {
+    def findFile(segment: SegmentReference): Option[File] = {
       val res = FileUtils.firstFileNameMatching(dir(segment), s""".*${segment.segmentId}.*\\.${extension}""")
-      Future.successful(res)
+      res
     }
 
-    LayerDefinition(name, "jpg", AnonymousSource(findFile), isPublic)
+    LayerDefinition(name, "jpg", AnonymousSource(findFile.andThen(Future.successful), segment => simpleFile(segment)), isPublic)
   }
 
   val PolytropeTest1Predictions = externalLayer("polytrope-test1-predictions", "external/polytrope-test1-model", isPublic = false)
@@ -103,10 +121,10 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val FirstLettersInklabels = externalLayer("first-letters-inklabels", "external/first-letters-inklabels")
 
   val AutosegmentedPrediction =
-    LayerDefinition("autosegmented-prediction", "jpg", AnonymousSource(downloadedAutosegmentPrediction(_)), isPublic = true)
+    LayerDefinition("autosegmented-prediction", "jpg", FileCacheSource(AutoSegmentPredictionCache), isPublic = true)
 
-  val InkLabelLayer = LayerDefinition("inklabel", "jpg", AnonymousSource(inklabelFor(_)), isPublic = true)
-  val AlphaMaskLayer = LayerDefinition("alpha", "png", AnonymousSource(s => alphaMaskFor(s).map(Some(_))), isPublic = false)
+  val InkLabelLayer = LayerDefinition("inklabel", "jpg", FileCacheSource(InklabelCache), isPublic = true)
+  val AlphaMaskLayer = LayerDefinition("alpha", "png", FileCacheSource(AlphaMaskCache), isPublic = false)
 
   lazy val allLayers =
     Seq(
@@ -446,13 +464,15 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       .map(_.layerFor(segment).map(_.get))
       .getOrElse(Future.failed(new RuntimeException(s"Layer $layerName not found")))
 
+  def segmentLayerTarget(segment: SegmentReference, layer: Int): File =
+    new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/layers/$layer.tif")
+
   def downloadedSegmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
     import segment._
-    val dir = new File(dataDir, s"raw/scroll$scrollId/$segmentId/layers/")
-    dir.mkdirs()
     val url = segment.layerUrl(layer)
-    val tmpFile = File.createTempFile(".tmp.download", ".tif", dir)
-    download(url, tmpFile)
+    val target = segmentLayerTarget(segment, layer)
+    target.getParentFile().mkdirs()
+    download(url, target)
   }
 
   lazy val AutoSegmentPredictionCache = downloadUtils.downloadCache[SegmentReference](
@@ -460,8 +480,6 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/prediction.png"),
     maxConcurrentRequests = 3
   )
-  def downloadedAutosegmentPrediction(segment: SegmentReference): Future[Option[File]] =
-    AutoSegmentPredictionCache(segment).transform(x => Success(x.toOption))
 
   def resizer(info: ImageInfo, layer: Int, tileX: Int, tileY: Int, layerName: String): Future[File] =
     dzdir(info, layerName).map { dir =>
@@ -505,19 +523,17 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
   val (ThumbnailWidth @ _, ThumbnailHeight @ _) = (250, 125)
 
   def resizedMask(segment: SegmentReference): Future[File] =
-    imageInfo(segment).flatMap { info =>
-      import segment._
-      resizedLetterbox(maskFor(segment), new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask_${ThumbnailWidth}x${ThumbnailHeight}-black-letterbox.png"), width = ThumbnailWidth, height = ThumbnailHeight).map(_.get)
-    }
+    for {
+      info <- imageInfo(segment)
+      mask <- maskFor(segment)
+      resized <- ThumbnailCache((mask, ThumbnailWidth, ThumbnailHeight, () => Future.successful(mask)))
+    } yield resized
 
   def resizedLayer(segment: SegmentReference, layer: LayerDefinition): Future[Option[File]] =
     for {
       i <- imageInfo(segment)
-      file <- layer.layerFor(segment)
-      resized <- file.map(file => resizedLetterbox(
-        Future.successful(file),
-        new File(thumbnailDir(file), file.getName.dropRight(4) + s"_small_${ThumbnailWidth}x${ThumbnailHeight}-black-letterbox.png"), width = ThumbnailWidth, height = ThumbnailHeight))
-        .getOrElse(Future.successful(None))
+      file = layer.layerFileFor(segment)
+      resized <- ThumbnailCache((file, ThumbnailWidth, ThumbnailHeight, () => layer.layerFor(segment).map(_.get))).transform(x => Success(x.toOption))
     } yield resized
 
   def thumbnailDir(orig: File): File = {
@@ -526,27 +542,38 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     new File(dataDir, s"thumbnails$relativePathToData").getParentFile()
   }
 
-  def resizedLetterbox(orig: Future[File], target: File, width: Int, height: Int): Future[Option[File]] =
-    orig.flatMap { f0 =>
-      cached(target, negativeTtl = 10.seconds, isValid = f => f0.exists() && f0.lastModified() < f.lastModified()) { () =>
-        Option(f0).filter(_.exists).getOrElse(throw new RuntimeException(s"File $f0 does not exist"))
-        import sys.process._
+  lazy val ThumbnailCache = {
+    def thumbnailLocationFor(f: File, w: Int, h: Int): File =
+      new File(thumbnailDir(f), f.getName.dropRight(4) + s"_small_${w}x${h}-black-letterbox.png")
 
-        val tmpFile = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
-        val cmd = s"""vips thumbnail ${f0.getAbsolutePath} $tmpFile ${width} --height $height"""
-        println(cmd)
-        for {
-          _ <- vipsCommandRunner(cmd)
-          tmpFile2 = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
-          cmd2 = s"""vips gravity ${tmpFile.getAbsolutePath} ${tmpFile2.getAbsolutePath} centre $width $height --background "0,0,0""""
-          _ <- vipsCommandRunner(cmd2)
-        } yield {
-          tmpFile.delete()
-          require(tmpFile2.renameTo(target))
-          target
-        }
+    downloadUtils.computeCache[(File, Int, Int, () => Future[File])](
+      { case (f, w, h, _) => thumbnailLocationFor(f, w, h) }) {
+        case (f, w, h, compute) =>
+          if (f.exists())
+            createLetterboxThumbnail(f, thumbnailLocationFor(f, w, h), w, h)
+          else
+            compute().flatMap { f =>
+              createLetterboxThumbnail(f, thumbnailLocationFor(f, w, h), w, h)
+            }
       }
-    }.transform(x => Success(x.toOption))
+  }
+
+  def createLetterboxThumbnail(f0: File, target: File, width: Int, height: Int): Future[File] = Future(()).flatMap { _ =>
+    Option(f0).filter(_.exists).getOrElse({ println(s"File $f0 does not exist"); throw new RuntimeException(s"File $f0 does not exist") })
+    val tmpFile = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
+    val cmd = s"""vips thumbnail ${f0.getAbsolutePath} $tmpFile ${width} --height $height"""
+    println(cmd)
+    for {
+      _ <- vipsCommandRunner(cmd)
+      tmpFile2 = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
+      cmd2 = s"""vips gravity ${tmpFile.getAbsolutePath} ${tmpFile2.getAbsolutePath} centre $width $height --background "0,0,0""""
+      _ <- vipsCommandRunner(cmd2)
+    } yield {
+      tmpFile.delete()
+      require(tmpFile2.renameTo(target))
+      target
+    }
+  }
 
   def resizedX(orig: File, target: File, height: Int, rotate90: Boolean): Future[Option[File]] =
     resizedX(Future.successful(orig), target, height, rotate90)
@@ -590,19 +617,11 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       }
     }
 
-  def alphaMaskFor(segment: SegmentReference): Future[File] =
-    AlphaMaskCache(segment)
-
-  def inklabelFor(segment: SegmentReference): Future[Option[File]] = {
-    import segment._
-    cacheDownload(
-      segment.inklabelUrl,
-      new File(dataDir, s"inklabels/scroll$scrollId/$segmentId/inklabel.png"),
-      negativeTtl = 30.days
+  lazy val InklabelCache =
+    downloadUtils.downloadCache[SegmentReference](
+      _.inklabelUrl,
+      segment => { import segment._; new File(dataDir, s"inklabels/scroll$scrollId/$segmentId/inklabel.png") },
     )
-      .map(f => if (f.exists()) Some(f) else None)
-      .transform(x => Success(x.toOption.flatten))
-  }
 
   def areaFor(segment: SegmentReference): Future[Option[Float]] = {
     import segment._
