@@ -600,12 +600,12 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
       }
     }.transform(x => Success(x.toOption))
 
-  def maskFor(segment: SegmentReference): Future[File] = {
-    import segment._
-    cacheDownload(
-      segment.maskUrl,
-      new File(dataDir, s"raw/scroll$scrollId/$segmentId/mask.png"))
-  }
+  lazy val MaskCache = downloadUtils.downloadCache[SegmentReference](
+    _.maskUrl,
+    segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/mask.png")
+  )
+
+  def maskFor(segment: SegmentReference): Future[File] = MaskCache(segment)
 
   val AlphaMaskCache = computeCache[SegmentReference](
     segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/mask-alpha.png")

@@ -82,7 +82,7 @@ sealed trait SegmentDirectoryStyle extends Product {
 sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
   def baseUrl(scrollRef: ScrollReference): String = s"${scrollRef.scrollUrl}paths/"
   def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}${segment.segmentId}/"
-  def maskFor(segment: SegmentReference): String = s"${segmentUrl(segment)}mask.png"
+  def maskFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}_mask.png"
   def inklabelFor(segment: SegmentReference): String = s"${segmentUrl(segment)}inklabels.png"
   def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
   def layerUrl(segment: SegmentReference, z: Int): String =
