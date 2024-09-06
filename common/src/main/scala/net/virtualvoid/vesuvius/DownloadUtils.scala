@@ -60,19 +60,23 @@ trait Cache[T, U] {
   }
 }
 
+trait FileCache[T] extends Cache[T, File] {
+  def targetFile(t: T): File
+}
+
 class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
   import CacheSettings.{ DefaultNegativeTtl, DefaultPositiveTtl }
   import system.dispatcher
   val blockingDispatcher = system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher")
   val downloadCounter = DownloadCounter()
 
-  def computeCache[T](filePattern: T => File, settings: CacheSettings = CacheSettings.Default)(compute: T => Future[File]): Cache[T, File] = {
+  def computeCache[T](filePattern: T => File, settings: CacheSettings = CacheSettings.Default)(compute: T => Future[File]): FileCache[T] = {
     val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttl)
     val s = CachingSettings(system).withLfuCacheSettings(lfu)
     val fCache = fileCache(filePattern, settings.ttl, settings.negativeTtl, settings.isValid)(compute)
     val cache = LfuCache[T, File](s)
 
-    lazy val self: Cache[T, File] = new Cache[T, File] {
+    lazy val self: FileCache[T] = new FileCache[T] {
       def apply(t: T): Future[File] = {
         cache.getOrLoad(t, { _ =>
           val res = fCache(t)
@@ -98,6 +102,8 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
         case None    => fCache.isReady(t)
       }
       def remove(t: T): Unit = cache.remove(t)
+
+      def targetFile(t: T): File = filePattern(t)
     }
     self
   }
@@ -113,7 +119,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     urlPattern:            T => String,
     filePattern:           T => File,
     settings:              CacheSettings = CacheSettings.Default,
-    maxConcurrentRequests: Int           = 16): Cache[T, File] =
+    maxConcurrentRequests: Int           = 16): FileCache[T] =
     requestDownloadCache(t => authenticatedDataServerRequest(urlPattern(t)), filePattern, receiveBody, settings, maxConcurrentRequests)
 
   def requestDownloadCache[T](
@@ -121,7 +127,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     filePattern:           T => File,
     receiveFile:           (HttpResponse, HttpRequest, File) => Future[Done],
     settings:              CacheSettings                                     = CacheSettings.Default,
-    maxConcurrentRequests: Int                                               = 16): Cache[T, File] = {
+    maxConcurrentRequests: Int                                               = 16): FileCache[T] = {
     lazy val (limited: (T => Future[File]), refresh: (T => Unit)) = semaphore[T, File](maxConcurrentRequests) { (t, time) =>
       if (System.nanoTime() - time > 1000000000L * 60) {
         cache.remove(t)
@@ -134,7 +140,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
     lazy val cache = computeCache(filePattern, settings)(limited)
 
-    new Cache[T, File] {
+    new FileCache[T] {
       def apply(t: T): Future[File] = {
         if (!cache.isReady(t))
           refresh(t)
@@ -144,6 +150,8 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       def contains(t: T): Boolean = cache.contains(t)
       def isReady(t: T): Boolean = cache.isReady(t)
       def remove(t: T): Unit = cache.remove(t)
+
+      def targetFile(t: T): File = filePattern(t)
     }
   }
 
