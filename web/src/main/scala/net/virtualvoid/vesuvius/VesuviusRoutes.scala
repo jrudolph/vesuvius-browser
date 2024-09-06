@@ -526,33 +526,43 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     for {
       info <- imageInfo(segment)
       mask <- maskFor(segment)
-      resized <- ThumbnailCache((mask, ThumbnailWidth, ThumbnailHeight, () => Future.successful(mask)))
+      resized <- ThumbnailCache((mask, ThumbnailWidth, ThumbnailHeight, MaskFileAcquire(segment)))
     } yield resized
 
   def resizedLayer(segment: SegmentReference, layer: LayerDefinition): Future[Option[File]] =
     for {
       i <- imageInfo(segment)
       file = layer.layerFileFor(segment)
-      resized <- ThumbnailCache((file, ThumbnailWidth, ThumbnailHeight, () => layer.layerFor(segment).map(_.get))).transform(x => Success(x.toOption))
+      resized <- ThumbnailCache((file, ThumbnailWidth, ThumbnailHeight, LayerAcquire(segment, layer))).transform(x => Success(x.toOption))
     } yield resized
 
-  def thumbnailDir(orig: File): File = {
-    require(orig.getAbsolutePath.startsWith(dataDir.getAbsolutePath))
-    val relativePathToData = orig.getAbsolutePath.drop(dataDir.getAbsolutePath.size)
-    new File(dataDir, s"thumbnails$relativePathToData").getParentFile()
+  sealed trait BaseFileAcquire {
+    def get(): Future[File]
+  }
+  case class LayerAcquire(segment: SegmentReference, layer: LayerDefinition) extends BaseFileAcquire {
+    def get(): Future[File] = layer.layerFor(segment).map(_.get)
+  }
+  case class MaskFileAcquire(segment: SegmentReference) extends BaseFileAcquire {
+    def get(): Future[File] = maskFor(segment)
   }
 
   lazy val ThumbnailCache = {
+    def thumbnailDir(orig: File): File = {
+      require(orig.getAbsolutePath.startsWith(dataDir.getAbsolutePath))
+      val relativePathToData = orig.getAbsolutePath.drop(dataDir.getAbsolutePath.size)
+      new File(dataDir, s"thumbnails$relativePathToData").getParentFile()
+    }
+
     def thumbnailLocationFor(f: File, w: Int, h: Int): File =
       new File(thumbnailDir(f), f.getName.dropRight(4) + s"_small_${w}x${h}-black-letterbox.png")
 
-    downloadUtils.computeCache[(File, Int, Int, () => Future[File])](
+    downloadUtils.computeCache[(File, Int, Int, BaseFileAcquire)](
       { case (f, w, h, _) => thumbnailLocationFor(f, w, h) }) {
-        case (f, w, h, compute) =>
+        case (f, w, h, acquire) =>
           if (f.exists())
             createLetterboxThumbnail(f, thumbnailLocationFor(f, w, h), w, h)
           else
-            compute().flatMap { f =>
+            acquire.get().flatMap { f =>
               createLetterboxThumbnail(f, thumbnailLocationFor(f, w, h), w, h)
             }
       }
