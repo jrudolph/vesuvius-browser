@@ -169,7 +169,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
         to.getParentFile.mkdirs()
         val neg = new File(to.getParentFile, s".neg-${to.getName}")
         if (to.exists() && isDeadlineInTheFuture(to.lastModified(), ttl) && isValid(to)) Future.successful(to)
-        else if (neg.exists() && isDeadlineInTheFuture(neg.lastModified(), negativeTtl) && isValid(neg)) Future.failed(new NoSuchElementException(s"Negatively cached"))
+        else if (neg.exists() && isDeadlineInTheFuture(neg.lastModified(), negativeTtl) && isValid(neg)) Future.failed(new NoSuchElementException(s"Negatively cached for $t file: $to"))
         else
           f(t).recoverWith {
             case t: ExpelledException => Future.failed(t) // do not cache these negative instances
@@ -195,7 +195,7 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
     to.getParentFile.mkdirs()
     val neg = new File(to.getParentFile, s".neg-${to.getName}")
     if (to.exists() && isDeadlineInTheFuture(to.lastModified(), ttl) && isValid(to)) Future.successful(to)
-    else if (neg.exists() && isDeadlineInTheFuture(neg.lastModified(), negativeTtl) && isValid(neg)) Future.failed(new RuntimeException(s"Negatively cached"))
+    else if (neg.exists() && isDeadlineInTheFuture(neg.lastModified(), negativeTtl) && isValid(neg)) Future.failed(new RuntimeException(s"Negatively cached file: $to"))
     else
       f().recoverWith {
         case t: Throwable =>
