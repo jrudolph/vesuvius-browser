@@ -16,6 +16,9 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.Success
 import scala.util.Try
+import org.apache.pekko.http.scaladsl.model.HttpEntity
+import org.apache.pekko.http.scaladsl.model.MediaTypes
+import org.apache.pekko.http.scaladsl.model.HttpCharsets
 
 trait LayerSource {
   def layerFor(segment: SegmentReference): Future[Option[File]]
@@ -405,6 +408,9 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           adminRoutes
         )
       },
+      path("css" / "settings.css") {
+        complete(HttpEntity(MediaTypes.`text/css`.toContentType(HttpCharsets.`UTF-8`), html.settings(config).body))
+      },
       getFromResourceDirectory("web")
     )
 
@@ -520,20 +526,18 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }(cpuBound)
   }
 
-  val (ThumbnailWidth @ _, ThumbnailHeight @ _) = (250, 125)
-
   def resizedMask(segment: SegmentReference): Future[File] =
     for {
       info <- imageInfo(segment)
       mask <- maskFor(segment)
-      resized <- ThumbnailCache((mask, ThumbnailWidth, ThumbnailHeight, MaskFileAcquire(segment)))
+      resized <- ThumbnailCache((mask, config.thumbnailWidth, config.thumbnailHeight, MaskFileAcquire(segment)))
     } yield resized
 
   def resizedLayer(segment: SegmentReference, layer: LayerDefinition): Future[Option[File]] =
     for {
       i <- imageInfo(segment)
       file = layer.layerFileFor(segment)
-      resized <- ThumbnailCache((file, ThumbnailWidth, ThumbnailHeight, LayerAcquire(segment, layer))).transform(x => Success(x.toOption))
+      resized <- ThumbnailCache((file, config.thumbnailWidth, config.thumbnailHeight, LayerAcquire(segment, layer))).transform(x => Success(x.toOption))
     } yield resized
 
   sealed trait BaseFileAcquire {
@@ -554,7 +558,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     }
 
     def thumbnailLocationFor(f: File, w: Int, h: Int): File =
-      new File(thumbnailDir(f), f.getName.dropRight(4) + s"_small_${w}x${h}-black-letterbox.png")
+      new File(thumbnailDir(f), f.getName.dropRight(4) + s"_small_${w}x${h}-black-letterbox.${config.thumbnailExtension}")
 
     downloadUtils.computeCache[(File, Int, Int, BaseFileAcquire)](
       { case (f, w, h, _) => thumbnailLocationFor(f, w, h) }) {
@@ -575,7 +579,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
     println(cmd)
     for {
       _ <- vipsCommandRunner(cmd)
-      tmpFile2 = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
+      tmpFile2 = File.createTempFile(".tmp.resized", s".${config.thumbnailExtension}", target.getParentFile)
       cmd2 = s"""vips gravity ${tmpFile.getAbsolutePath} ${tmpFile2.getAbsolutePath} centre $width $height --background "0,0,0""""
       _ <- vipsCommandRunner(cmd2)
     } yield {

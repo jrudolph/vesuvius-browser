@@ -12,7 +12,10 @@ case class AppConfig(
     adminPassword:      String,
     serverKey:          String,
     dataDir:            File,
-    concurrentResizes:  Int
+    concurrentResizes:  Int,
+    thumbnailWidth:     Int,
+    thumbnailHeight:    Int,
+    thumbnailExtension: String
 ) extends DataServerConfig
 
 object AppConfig {
@@ -25,7 +28,10 @@ object AppConfig {
       adminPassword = config.getString("app.admin-password"),
       serverKey = config.getString("app.server-key"),
       dataDir = new File(config.getString("app.data-dir")),
-      concurrentResizes = config.getInt("app.concurrent-resizes")
+      concurrentResizes = config.getInt("app.concurrent-resizes"),
+      thumbnailWidth = config.getInt("app.thumbnail-width"),
+      thumbnailHeight = config.getInt("app.thumbnail-height"),
+      thumbnailExtension = config.getString("app.thumbnail-extension")
     )
   }
 }
