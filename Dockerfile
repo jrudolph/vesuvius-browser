@@ -25,7 +25,7 @@ RUN git reset --hard HEAD
 
 RUN /sbt "show web/assembly"
 
-FROM eclipse-temurin:17
+FROM eclipse-temurin:21
 
 RUN apt-get update && \
     apt-get install --no-install-recommends -y libvips-tools && \
