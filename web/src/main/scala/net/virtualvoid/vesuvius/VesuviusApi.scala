@@ -23,6 +23,7 @@ object ScrollId {
 
 case class SegmentUrls(
     maskUrl:      String,
+    metaUrl:      String,
     objUrl:       String,
     compositeUrl: String,
     ppmUrl:       String
@@ -30,7 +31,7 @@ case class SegmentUrls(
 object SegmentUrls {
   import DefaultJsonProtocol._
 
-  implicit val segmentUrlsJsonFormat: JsonFormat[SegmentUrls] = jsonFormat4(SegmentUrls.apply)
+  implicit val segmentUrlsJsonFormat: JsonFormat[SegmentUrls] = jsonFormat5(SegmentUrls.apply)
 }
 
 case class SegmentInfo(
@@ -38,6 +39,7 @@ case class SegmentInfo(
     id:      String,
     width:   Int,
     height:  Int,
+    volume:  Option[String],
     urls:    SegmentUrls,
     areaCm2: Option[Float]
 )
@@ -45,7 +47,7 @@ case class SegmentInfo(
 object SegmentInfo {
   import DefaultJsonProtocol._
 
-  implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat6(SegmentInfo.apply)
+  implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat7(SegmentInfo.apply)
 
   def fromImageInfo(info: ImageInfo): SegmentInfo =
     SegmentInfo(
@@ -53,8 +55,10 @@ object SegmentInfo {
       info.ref.segmentId,
       info.width,
       info.height,
+      info.metadata.map(_.volume),
       SegmentUrls(
         info.ref.maskUrl,
+        info.ref.metaUrl,
         info.ref.objUrl,
         info.ref.compositeUrl,
         info.ref.ppmUrl
@@ -69,7 +73,7 @@ trait VesuviusApi { self: VesuviusRoutes =>
   private lazy val catalogEndpoint =
     endpoint
       .get
-      .in("catalog")
+      .in("segments")
       .out(jsonBody[Seq[SegmentInfo]])
       .description("Get all segments in the catalog")
 
