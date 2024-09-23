@@ -11,6 +11,9 @@ case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
   def layerUrl(z: Int): String = base.layerUrl(this, z)
 
   def maskUrl: String = base.maskFor(this)
+  def objUrl: String = base.objUrlFor(this)
+  def ppmUrl: String = base.ppmUrlFor(this)
+  def compositeUrl: String = base.compositeUrlFor(this)
   def inklabelUrl: String = base.inklabelFor(this)
 
   def metaUrl: String = base.metaFor(this)
@@ -72,6 +75,9 @@ sealed trait SegmentDirectoryStyle extends Product {
   def segmentUrl(segment: SegmentReference): String
   def maskFor(segment: SegmentReference): String
   def inklabelFor(segment: SegmentReference): String
+  def objFor(segment: SegmentReference): String
+  def ppmFor(segment: SegmentReference): String
+  def compositeFor(segment: SegmentReference): String
   def metaFor(segment: SegmentReference): String
   def layerUrl(segment: SegmentReference, z: Int): String
   def segmentIdForDirectory(dirName: String): String
@@ -84,6 +90,9 @@ sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
   def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}${segment.segmentId}/"
   def maskFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}_mask.png"
   def inklabelFor(segment: SegmentReference): String = s"${segmentUrl(segment)}inklabels.png"
+  def objFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}.obj"
+  def ppmFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}.ppm"
+  def compositeFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}.tif"
   def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
   def layerUrl(segment: SegmentReference, z: Int): String =
     if (isHighResSegment(segment))
@@ -114,6 +123,9 @@ case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
   }
 
   def inklabelFor(segment: SegmentReference): String = s"${segmentUrl(segment)}inklabels.png"
+  def objFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${shortSegmentId(segment)}.obj"
+  def ppmFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${shortSegmentId(segment)}.ppm"
+  def compositeFor(segment: SegmentReference): String = s"${segmentUrl(segment)}composite.png"
   def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
   def layerUrl(segment: SegmentReference, z: Int): String = f"${segmentUrl(segment)}layers/$z%02d.jpg"
 
@@ -141,6 +153,15 @@ sealed trait ScrollServerBase extends Product {
 
   def inklabelFor(segment: SegmentReference): String =
     directoryStyleFor(segment).inklabelFor(segment)
+
+  def objUrlFor(segment: SegmentReference): String =
+    directoryStyleFor(segment).objFor(segment)
+
+  def ppmUrlFor(segment: SegmentReference): String =
+    directoryStyleFor(segment).ppmFor(segment)
+
+  def compositeUrlFor(segment: SegmentReference): String =
+    directoryStyleFor(segment).compositeFor(segment)
 
   def metaFor(segment: SegmentReference): String =
     directoryStyleFor(segment).metaFor(segment)

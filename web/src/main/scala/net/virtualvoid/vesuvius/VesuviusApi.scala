@@ -19,33 +19,58 @@ object ScrollId {
   implicit val scrollIdJsonFormat: JsonFormat[ScrollId] = jsonFormat2(ScrollId.apply)
 }
 
+case class SegmentUrls(
+    maskUrl:      String,
+    objUrl:       String,
+    compositeUrl: String,
+    ppmUrl:       String
+)
+object SegmentUrls {
+  import DefaultJsonProtocol._
+
+  implicit val segmentUrlsJsonFormat: JsonFormat[SegmentUrls] = jsonFormat4(SegmentUrls.apply)
+}
+
 case class SegmentInfo(
-    scroll: ScrollId,
-    id:     String,
-    width:  Int,
-    height: Int
+    scroll:  ScrollId,
+    id:      String,
+    width:   Int,
+    height:  Int,
+    urls:    SegmentUrls,
+    areaCm2: Option[Float]
 )
 
 object SegmentInfo {
   import DefaultJsonProtocol._
 
-  implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat4(SegmentInfo.apply)
+  implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat6(SegmentInfo.apply)
 
   def fromImageInfo(info: ImageInfo): SegmentInfo =
-    SegmentInfo(ScrollId(info.ref.newScrollId.name, info.ref.newScrollId.number.toString), info.ref.segmentId, info.width, info.height)
+    SegmentInfo(
+      ScrollId(info.ref.newScrollId.name, info.ref.newScrollId.number.toString),
+      info.ref.segmentId,
+      info.width,
+      info.height,
+      SegmentUrls(
+        info.ref.maskUrl,
+        info.ref.objUrl,
+        info.ref.compositeUrl,
+        info.ref.ppmUrl
+      ),
+      info.area)
 }
 
 trait VesuviusApi { self: VesuviusRoutes =>
   import system.dispatcher
   import DefaultJsonProtocol._
 
-  private lazy val helloWorldEndpoint = endpoint.get.in("api" / "segments").out(jsonBody[Seq[SegmentInfo]])
+  private lazy val catalogEndpoint = endpoint.get.in("api" / "catalog").out(jsonBody[Seq[SegmentInfo]])
 
   private lazy val swaggerEndpoints = SwaggerInterpreter()
-    .fromEndpoints[Future](List(helloWorldEndpoint), "Vesuvius Browser API", "1.0")
+    .fromEndpoints[Future](List(catalogEndpoint), "Vesuvius Browser API", "1.0")
 
   private lazy val allEndpoints: List[ServerEndpoint[Any, Future]] =
-    swaggerEndpoints :+ helloWorldEndpoint.serverLogicSuccess[Future] { input =>
+    swaggerEndpoints :+ catalogEndpoint.serverLogicSuccess[Future] { input =>
       scrollSegments.map(_.map(SegmentInfo.fromImageInfo))
     }
 
