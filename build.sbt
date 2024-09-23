@@ -93,7 +93,11 @@ lazy val web = project.in(file("web"))
     assemblyMergeStrategy := {
       // merging pekko protobuf and protobuf from google ortools (not sure why they are different, but doesn't matter here)
       case PathList(ps@_*) if ps.last endsWith ".proto" => MergeStrategy.first
-      case PathList(ps@_*) if ps.last endsWith "module-info.class" => MergeStrategy.concat
+      case PathList("META-INF", "maven", "org.webjars", "swagger-ui", "pom.properties") =>
+        MergeStrategy.singleOrError
+      case PathList("META-INF", "resources", "webjars", "swagger-ui", _*)               =>
+        MergeStrategy.singleOrError
+      case PathList("META-INF", _*)                                                     => MergeStrategy.discard // Optional, but usually required
       case x => assemblyMergeStrategy.value(x)
     },
   )
