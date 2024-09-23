@@ -62,8 +62,8 @@ lazy val tiles = project.in(file("tiles"))
     // setup docker build
     // use separate dependency and app jars
     assembly / assemblyOption := (assembly / assemblyOption).value.withIncludeScala(false).withIncludeDependency(false),
-    assembly / assemblyJarName := "app.jar", // contract with Dockerfile
-    assemblyPackageDependency / assemblyJarName := "deps.jar", // contract with Dockerfile
+    assembly / assemblyJarName := "../app.jar", // contract with Dockerfile
+    assemblyPackageDependency / assemblyJarName := "../deps.jar", // contract with Dockerfile
     assemblyMergeStrategy := {
       // merging pekko protobuf and protobuf from google ortools (not sure why they are different, but doesn't matter here)
       case PathList(ps@_*) if ps.last endsWith ".proto" => MergeStrategy.first
@@ -88,8 +88,8 @@ lazy val web = project.in(file("web"))
     // setup docker build
     // use separate dependency and app jars
     assembly / assemblyOption := (assembly / assemblyOption).value.withIncludeScala(false).withIncludeDependency(false),
-    assembly / assemblyJarName := "app.jar", // contract with Dockerfile
-    assemblyPackageDependency / assemblyJarName := "deps.jar", // contract with Dockerfile
+    assembly / assemblyJarName := "../app.jar", // contract with Dockerfile
+    assemblyPackageDependency / assemblyJarName := "../deps.jar", // contract with Dockerfile
     assemblyMergeStrategy := {
       // merging pekko protobuf and protobuf from google ortools (not sure why they are different, but doesn't matter here)
       case PathList(ps@_*) if ps.last endsWith ".proto" => MergeStrategy.first
