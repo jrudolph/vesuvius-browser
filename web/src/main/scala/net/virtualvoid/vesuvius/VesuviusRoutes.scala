@@ -59,8 +59,8 @@ case class LayerDefinition(
     }
 }
 
-class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Directives with TwirlSupport with SprayJsonSupport {
-
+class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extends VesuviusApi with TwirlSupport with SprayJsonSupport {
+  import Directives._
   import system.dispatcher
   import config.dataDir
 
@@ -408,6 +408,7 @@ class VesuviusRoutes(config: AppConfig)(implicit system: ActorSystem) extends Di
           adminRoutes
         )
       },
+      apiRoutes,
       path("css" / "settings.css") {
         complete(HttpEntity(MediaTypes.`text/css`.toContentType(HttpCharsets.`UTF-8`), html.settings(config).body))
       },

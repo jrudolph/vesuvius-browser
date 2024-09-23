@@ -1,6 +1,7 @@
 val scalaV = "3.4.2"
 val pekkoV = "1.0.3"
 val pekkoHttpV = "1.0.1"
+val tapirV = "1.11.2"
 val scalaTestV = "3.2.19"
 
 inThisBuild(Def.settings(
@@ -77,6 +78,10 @@ lazy val web = project.in(file("web"))
   .settings(
     libraryDependencies ++= Seq(
       "com.typesafe.play" %% "twirl-api" % "1.6.0-RC4",
+      "com.softwaremill.sttp.tapir" %% "tapir-core" % tapirV,
+      "com.softwaremill.sttp.tapir" %% "tapir-pekko-http-server" % tapirV exclude("org.apache.pekko", "pekko-stream_3"),
+      "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % tapirV,
+      "com.softwaremill.sttp.tapir" %% "tapir-json-spray" % tapirV,
     ),
     Compile / resourceGenerators += (worker / assembly).map(_ :: Nil),
 
