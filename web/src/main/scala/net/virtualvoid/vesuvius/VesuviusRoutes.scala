@@ -408,7 +408,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
           adminRoutes
         )
       },
-      apiRoutes,
+      pathPrefix("api")(apiRoutes),
       path("css" / "settings.css") {
         complete(HttpEntity(MediaTypes.`text/css`.toContentType(HttpCharsets.`UTF-8`), html.settings(config).body))
       },

@@ -1,12 +1,14 @@
 package net.virtualvoid.vesuvius
 
-import spray.json._
-import sttp.tapir._
-import sttp.tapir.generic.auto._
-import sttp.tapir.json.spray._
+import spray.json.*
+import sttp.apispec.openapi.Server
+import sttp.tapir.*
+import sttp.tapir.generic.auto.*
+import sttp.tapir.json.spray.*
 import sttp.tapir.server.pekkohttp.PekkoHttpServerInterpreter
 import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
+
 import scala.concurrent.Future
 
 case class ScrollId(
@@ -64,10 +66,20 @@ trait VesuviusApi { self: VesuviusRoutes =>
   import system.dispatcher
   import DefaultJsonProtocol._
 
-  private lazy val catalogEndpoint = endpoint.get.in("api" / "catalog").out(jsonBody[Seq[SegmentInfo]])
+  private lazy val catalogEndpoint =
+    endpoint
+      .get
+      .in("catalog")
+      .out(jsonBody[Seq[SegmentInfo]])
+      .description("Get all segments in the catalog")
 
-  private lazy val swaggerEndpoints = SwaggerInterpreter()
-    .fromEndpoints[Future](List(catalogEndpoint), "Vesuvius Browser API", "1.0")
+  private lazy val swaggerEndpoints =
+    SwaggerInterpreter(
+      customiseDocsModel = { api =>
+        api.copy(servers = List(Server("/api")))
+      }
+    )
+      .fromEndpoints[Future](List(catalogEndpoint), "Vesuvius Browser API", "1.0")
 
   private lazy val allEndpoints: List[ServerEndpoint[Any, Future]] =
     swaggerEndpoints :+ catalogEndpoint.serverLogicSuccess[Future] { input =>
