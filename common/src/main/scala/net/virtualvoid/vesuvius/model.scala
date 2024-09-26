@@ -44,6 +44,8 @@ case class ScrollReference(scrollId: String, newScrollId: NewScrollId, base: Scr
   def volumeMetadataUrl(volumeId: String): String = s"${volumeUrl(volumeId)}meta.json"
   def volumeUrl(volumeId: String): String = s"${scrollUrl}volumes/$volumeId/"
   def volumeGridUrl(volumeId: String): String = s"${scrollUrl}volume_grids/$volumeId/"
+
+  def isFragment: Boolean = base.isFragment
 }
 
 object ScrollReference {
@@ -175,6 +177,8 @@ sealed trait ScrollServerBase extends Product {
   def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle
 
   def supportedDirectoryStyles: Seq[SegmentDirectoryStyle]
+
+  def isFragment: Boolean
 }
 
 case object FullScrollsBase extends ScrollServerBase {
@@ -189,6 +193,8 @@ case object FullScrollsBase extends ScrollServerBase {
       RegularSegmentDirectoryStyle
 
   val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(RegularSegmentDirectoryStyle, AutoSegmentedDirectoryStyle)
+
+  def isFragment = false
 }
 
 sealed trait FragmentDirectoryStyle extends RegularSegmentDirectoryStyle {
@@ -227,6 +233,8 @@ case object FragmentsBase extends ScrollServerBase {
   def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle = FragmentDirectoryStyle
 
   val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(FragmentDirectoryStyle)
+
+  def isFragment = true
 }
 
 case class SegmentMetadata(

@@ -12,13 +12,14 @@ import sttp.tapir.swagger.bundle.SwaggerInterpreter
 import scala.concurrent.Future
 
 case class ScrollId(
-    id:  String,
-    num: String
+    id:         String,
+    num:        String,
+    isFragment: Boolean
 )
 object ScrollId {
   import DefaultJsonProtocol._
 
-  implicit val scrollIdJsonFormat: JsonFormat[ScrollId] = jsonFormat2(ScrollId.apply)
+  implicit val scrollIdJsonFormat: JsonFormat[ScrollId] = jsonFormat3(ScrollId.apply)
 }
 
 case class SegmentUrls(
@@ -51,7 +52,7 @@ object SegmentInfo {
 
   def fromImageInfo(info: ImageInfo): SegmentInfo =
     SegmentInfo(
-      ScrollId(info.ref.newScrollId.name, info.ref.newScrollId.number.toString),
+      ScrollId(info.ref.newScrollId.name, info.ref.newScrollId.number.toString, isFragment = info.ref.scrollRef.isFragment),
       info.ref.segmentId,
       info.width,
       info.height,
