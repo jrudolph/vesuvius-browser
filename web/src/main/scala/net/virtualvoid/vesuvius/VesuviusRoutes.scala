@@ -275,7 +275,9 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
                 }
               },
               path("mask") {
-                resizedMask(segment).deliver
+                parameter("width".as[Int].?(config.thumbnailWidth), "height".as[Int].?(config.thumbnailHeight), "ext".as[String].?(config.thumbnailExtension)) { (width, height, ext) =>
+                  resizedMask(segment, width, height, ext).deliver
+                }
               },
               pathPrefix("inferred" / Segment) { layer =>
                 val layerDef = layerDefFor(layer).get
@@ -527,18 +529,17 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
     }(cpuBound)
   }
 
-  def resizedMask(segment: SegmentReference): Future[File] =
+  def resizedMask(segment: SegmentReference, width: Int = config.thumbnailWidth, height: Int = config.thumbnailHeight, extension: String = config.thumbnailExtension): Future[File] =
     for {
-      info <- imageInfo(segment)
       mask <- maskFor(segment)
-      resized <- ThumbnailCache((mask, config.thumbnailWidth, config.thumbnailHeight, MaskFileAcquire(segment)))
+      resized <- ThumbnailCache((mask, width, height, extension, MaskFileAcquire(segment)))
     } yield resized
 
-  def resizedLayer(segment: SegmentReference, layer: LayerDefinition): Future[Option[File]] =
+  def resizedLayer(segment: SegmentReference, layer: LayerDefinition, extension: String = config.thumbnailExtension): Future[Option[File]] =
     for {
       i <- imageInfo(segment)
       file = layer.layerFileFor(segment)
-      resized <- ThumbnailCache((file, config.thumbnailWidth, config.thumbnailHeight, LayerAcquire(segment, layer))).transform(x => Success(x.toOption))
+      resized <- ThumbnailCache((file, config.thumbnailWidth, config.thumbnailHeight, extension, LayerAcquire(segment, layer))).transform(x => Success(x.toOption))
     } yield resized
 
   sealed trait BaseFileAcquire {
@@ -558,29 +559,29 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
       new File(dataDir, s"thumbnails$relativePathToData").getParentFile()
     }
 
-    def thumbnailLocationFor(f: File, w: Int, h: Int): File =
-      new File(thumbnailDir(f), f.getName.dropRight(4) + s"_small_${w}x${h}-black-letterbox.${config.thumbnailExtension}")
+    def thumbnailLocationFor(f: File, w: Int, h: Int, extension: String): File =
+      new File(thumbnailDir(f), f.getName.dropRight(4) + s"_small_${w}x${h}-black-letterbox.$extension")
 
-    downloadUtils.computeCache[(File, Int, Int, BaseFileAcquire)](
-      { case (f, w, h, _) => thumbnailLocationFor(f, w, h) }) {
-        case (f, w, h, acquire) =>
+    downloadUtils.computeCache[(File, Int, Int, String, BaseFileAcquire)](
+      { case (f, w, h, ext, _) => thumbnailLocationFor(f, w, h, ext) }) {
+        case (f, w, h, ext, acquire) =>
           if (f.exists())
-            createLetterboxThumbnail(f, thumbnailLocationFor(f, w, h), w, h)
+            createLetterboxThumbnail(f, thumbnailLocationFor(f, w, h, ext), w, h, ext)
           else
             acquire.get().flatMap { f =>
-              createLetterboxThumbnail(f, thumbnailLocationFor(f, w, h), w, h)
+              createLetterboxThumbnail(f, thumbnailLocationFor(f, w, h, ext), w, h, ext)
             }
       }
   }
 
-  def createLetterboxThumbnail(f0: File, target: File, width: Int, height: Int): Future[File] = Future(()).flatMap { _ =>
+  def createLetterboxThumbnail(f0: File, target: File, width: Int, height: Int, extension: String): Future[File] = Future(()).flatMap { _ =>
     Option(f0).filter(_.exists).getOrElse({ println(s"File $f0 does not exist"); throw new RuntimeException(s"File $f0 does not exist") })
     val tmpFile = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
     val cmd = s"""vips thumbnail ${f0.getAbsolutePath} $tmpFile ${width} --height $height"""
     println(cmd)
     for {
       _ <- vipsCommandRunner(cmd)
-      tmpFile2 = File.createTempFile(".tmp.resized", s".${config.thumbnailExtension}", target.getParentFile)
+      tmpFile2 = File.createTempFile(".tmp.resized", s".$extension", target.getParentFile)
       cmd2 = s"""vips gravity ${tmpFile.getAbsolutePath} ${tmpFile2.getAbsolutePath} centre $width $height --background "0,0,0""""
       _ <- vipsCommandRunner(cmd2)
     } yield {
