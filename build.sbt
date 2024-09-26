@@ -1,5 +1,5 @@
 val scalaV = "3.4.3"
-val pekkoV = "1.0.3"
+val pekkoV = "1.1.1"
 val pekkoHttpV = "1.0.1"
 val tapirV = "1.11.5"
 val scalaTestV = "3.2.19"
