@@ -14,12 +14,13 @@ import scala.concurrent.Future
 case class ScrollId(
     id:         String,
     num:        String,
+    oldId:      String,
     isFragment: Boolean
 )
 object ScrollId {
   import DefaultJsonProtocol._
 
-  implicit val scrollIdJsonFormat: JsonFormat[ScrollId] = jsonFormat3(ScrollId.apply)
+  implicit val scrollIdJsonFormat: JsonFormat[ScrollId] = jsonFormat4(ScrollId.apply)
 }
 
 case class SegmentUrls(
@@ -52,7 +53,7 @@ object SegmentInfo {
 
   def fromImageInfo(info: ImageInfo): SegmentInfo =
     SegmentInfo(
-      ScrollId(info.ref.newScrollId.name, info.ref.newScrollId.number.toString, isFragment = info.ref.scrollRef.isFragment),
+      ScrollId(info.ref.newScrollId.name, info.ref.newScrollId.number.toString, oldId = info.ref.scrollRef.scrollId, isFragment = info.ref.scrollRef.isFragment),
       info.ref.segmentId,
       info.width,
       info.height,
