@@ -515,7 +515,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
 
   def tiffOffsetFor(meta: VolumeMetadata): Int =
     meta.uuid match {
-      case "20231117161658" | "20230206171837" => 368
+      case "20231117161658" | "20230206171837" | "20231121133215" | "20231121152933" => 368
       case _                => 8
     }
 }
