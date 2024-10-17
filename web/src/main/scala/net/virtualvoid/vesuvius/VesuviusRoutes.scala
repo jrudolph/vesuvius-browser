@@ -466,7 +466,12 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
       meta <- SegmentMetadataCache(segment).transform(x => Success(x.toOption))
       volumeMetadata <- meta.map(m => volumeMetadataRepository.metadataForVolume(segment.scrollRef, m.volume).transform(x => Success(x.toOption))).getOrElse(Future.successful(None))
     } yield ImageInfo(segment, width, height, area, meta, volumeMetadata)
-  }.transform(x => Success(x.toOption))
+  }.transform { x =>
+    if (x.isFailure) {
+      println(s"Failed to get image info for $segment: ${x.failed.get}")
+    }
+    Success(x.toOption)
+  }
 
   def segmentLayer(segment: SegmentReference, layerName: String): Future[File] =
     layerDefFor(layerName)
