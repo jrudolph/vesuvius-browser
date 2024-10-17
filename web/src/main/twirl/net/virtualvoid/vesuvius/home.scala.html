@@ -17,7 +17,7 @@
         <th>Mask</th>
     </tr>
 
-@for(info <- infos.sortBy(_.segmentId).reverse) {
+@for(info <- infos.sortBy(x => (if (x.segmentId.contains("mesh")) 0 else 1, x.segmentId)).reverse) {
     <tr>
         <td>@scroll.newScrollId.name</td>
         @for((uuid, voxelsize) <- Seq(info.volumeMetadata.map(x => (x.uuid, s"${x.voxelsize}")).getOrElse(("","")))) {
