@@ -214,7 +214,7 @@ case object FragmentDirectoryStyle extends FragmentDirectoryStyle {
     if (segment.scrollId == "Frag4")
       f"${segmentUrl(segment)}PHercParis1Fr39_54keV_mask.png"
     else
-      super.maskFor(segment)
+      s"${segmentUrl(segment)}mask.png"
 
   override def inklabelFor(segment: SegmentReference): String =
     if (segment.scrollId == "Frag4")
