@@ -204,6 +204,11 @@ sealed trait FragmentDirectoryStyle extends RegularSegmentDirectoryStyle {
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
 case object FragmentDirectoryStyle extends FragmentDirectoryStyle {
+  override def segmentUrl(segment: SegmentReference): String = segment.scrollId match {
+    case "PHerc1667Cr01Fr03" | "PHerc0051Cr04Fr08" => f"${super.segmentUrl(segment)}surface_processing/"
+    case _                                         => super.segmentUrl(segment)
+  }
+
   override def layerUrl(segment: SegmentReference, z: Int): String =
     if (segment.scrollId == "Frag4")
       f"${segmentUrl(segment)}PHercParis1Fr39_54keV_surface_volume/$z%02d.tif"
@@ -211,10 +216,10 @@ case object FragmentDirectoryStyle extends FragmentDirectoryStyle {
       f"${segmentUrl(segment)}surface_volume/$z%02d.tif"
 
   override def maskFor(segment: SegmentReference): String =
-    if (segment.scrollId == "Frag4")
-      f"${segmentUrl(segment)}PHercParis1Fr39_54keV_mask.png"
-    else
-      s"${segmentUrl(segment)}mask.png"
+    segment.scrollId match {
+      case "Frag4" => f"${segmentUrl(segment)}PHercParis1Fr39_54keV_mask.png"
+      case _       => s"${segmentUrl(segment)}mask.png"
+    }
 
   override def inklabelFor(segment: SegmentReference): String =
     if (segment.scrollId == "Frag4")
@@ -230,9 +235,13 @@ case object FragmentsBase extends ScrollServerBase {
 
   override def isHighResSegment(segment: SegmentReference): Boolean = false
 
-  def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle = FragmentDirectoryStyle
+  def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle =
+    if (segment.segmentId.startsWith("202"))
+      RegularSegmentDirectoryStyle
+    else
+      FragmentDirectoryStyle
 
-  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(FragmentDirectoryStyle)
+  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(FragmentDirectoryStyle, RegularSegmentDirectoryStyle)
 
   def isFragment = true
 }
