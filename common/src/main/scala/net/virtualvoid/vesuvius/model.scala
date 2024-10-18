@@ -108,7 +108,8 @@ sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
 case object RegularSegmentDirectoryStyle extends RegularSegmentDirectoryStyle {
   def isHighResSegment(segment: SegmentReference): Boolean =
     (segment.scrollId == "1667" && segment.segmentId < "20231210132040") ||
-      (segment.scrollId == "0332" && segment.segmentId < "20240618142020")
+      (segment.scrollId == "0332" && segment.segmentId < "20240618142020") ||
+      (segment.scrollId == "Frag2")
 }
 case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
   def baseUrl(scrollRef: ScrollReference): String = s"${scrollRef.scrollUrl}scroll1_autosegmentation_20240821000000/"
