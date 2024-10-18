@@ -221,6 +221,12 @@ case object FragmentDirectoryStyle extends FragmentDirectoryStyle {
       case _       => s"${segmentUrl(segment)}mask.png"
     }
 
+  override def objFor(segment: SegmentReference): String =
+    segment.scrollId match {
+      case "Frag4" => f"${segmentUrl(segment)}extras/PHercParis1Fr39_54keV.obj"
+      case _       => s"${segmentUrl(segment)}result.obj"
+    }
+
   override def inklabelFor(segment: SegmentReference): String =
     if (segment.scrollId == "Frag4")
       f"${segmentUrl(segment)}PHercParis1Fr39_54keV_inklabels.png"

@@ -57,7 +57,7 @@ object SegmentInfo {
       info.ref.segmentId,
       info.width,
       info.height,
-      info.metadata.map(_.volume),
+      info.volumeMetadata.map(_.uuid),
       SegmentUrls(
         info.ref.maskUrl,
         info.ref.metaUrl,

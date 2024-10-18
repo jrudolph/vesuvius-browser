@@ -464,7 +464,12 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
       (width, height) <- sizeOf(segment)
       area <- areaFor(segment)
       meta <- SegmentMetadataCache(segment).transform(x => Success(x.toOption))
-      volumeMetadata <- meta.map(m => volumeMetadataRepository.metadataForVolume(segment.scrollRef, m.volume).transform(x => Success(x.toOption))).getOrElse(Future.successful(None))
+      volumeId = meta.map(_.volume).orElse(Option(segment.scrollRef.defaultVolumeId).filter(_.nonEmpty))
+      volumeMetadata <- volumeId
+        .map(volumeId =>
+          volumeMetadataRepository.metadataForVolume(segment.scrollRef, volumeId)
+            .transform(x => Success(x.toOption)))
+        .getOrElse(Future.successful(None))
     } yield ImageInfo(segment, width, height, area, meta, volumeMetadata)
   }.transform { x =>
     if (x.isFailure) {
