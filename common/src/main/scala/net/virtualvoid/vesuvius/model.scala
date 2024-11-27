@@ -9,6 +9,7 @@ case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
   def baseUrl: String = base.segmentUrl(this)
 
   def layerUrl(z: Int): String = base.layerUrl(this, z)
+  def layerFileExtension: String = base.layerFileExtension(this)
 
   def maskUrl: String = base.maskFor(this)
   def objUrl: String = base.objUrlFor(this)
@@ -54,6 +55,7 @@ object ScrollReference {
     ScrollReference("2", 2, "PHercParis3", FullScrollsBase, "20230210143520"),
     ScrollReference("0332", 3, "PHerc332", FullScrollsBase, "20231027191953"),
     ScrollReference("1667", 4, "PHerc1667", FullScrollsBase, "20231107190228"),
+    ScrollReference("172", 5, "PHerc172", FullScrollsBase, "20241024131838"),
 
     ScrollReference("Frag1", 1, "PHercParis2Fr47", FragmentsBase, "20230205142449"), // 2nd volume: 20230213100222
     ScrollReference("Frag2", 2, "PHercParis2Fr143", FragmentsBase, "20230216174557"), // 2nd volume: 20230226143835
@@ -82,6 +84,7 @@ sealed trait SegmentDirectoryStyle extends Product {
   def compositeFor(segment: SegmentReference): String
   def metaFor(segment: SegmentReference): String
   def layerUrl(segment: SegmentReference, z: Int): String
+  def layerFileExtension: String
   def segmentIdForDirectory(dirName: String): String
   def isValidSegmentDirectory(dirName: String): Boolean
   def isHighResSegment(segment: SegmentReference): Boolean
@@ -98,10 +101,11 @@ sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
   def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
   def layerUrl(segment: SegmentReference, z: Int): String =
     if (isHighResSegment(segment))
-      f"${segmentUrl(segment)}layers/$z%03d.tif"
+      f"${segmentUrl(segment)}layers/$z%03d.$layerFileExtension"
     else
-      f"${segmentUrl(segment)}layers/$z%02d.tif"
+      f"${segmentUrl(segment)}layers/$z%02d.$layerFileExtension"
 
+  def layerFileExtension: String = "tif"
   def segmentIdForDirectory(dirName: String): String = dirName
   def isValidSegmentDirectory(dirName: String): Boolean = true
 }
@@ -130,7 +134,8 @@ case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
   def ppmFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${shortSegmentId(segment)}.ppm"
   def compositeFor(segment: SegmentReference): String = s"${segmentUrl(segment)}composite.png"
   def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
-  def layerUrl(segment: SegmentReference, z: Int): String = f"${segmentUrl(segment)}layers/$z%02d.jpg"
+  def layerFileExtension: String = "jpg"
+  def layerUrl(segment: SegmentReference, z: Int): String = f"${segmentUrl(segment)}layers/$z%02d.$layerFileExtension"
 
   def segmentIdForDirectory(dirName: String): String = {
     require(dirName.startsWith("working_"))
@@ -141,6 +146,12 @@ case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
   def predictionUrlFor(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}predictions/working_${segment.segmentId}_prediction_rotated_0_layer_17.png"
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
+}
+case object FlatSegmentedDirectoryStyle extends RegularSegmentDirectoryStyle {
+  override def isHighResSegment(segment: SegmentReference): Boolean = false
+  override def maskFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}_flat_mask.png"
+  override def objFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}_flat.obj"
+  override def layerFileExtension: String = "jpg"
 }
 
 sealed trait ScrollServerBase extends Product {
@@ -172,6 +183,9 @@ sealed trait ScrollServerBase extends Product {
   def layerUrl(segment: SegmentReference, z: Int): String =
     directoryStyleFor(segment).layerUrl(segment, z)
 
+  def layerFileExtension(segment: SegmentReference): String =
+    directoryStyleFor(segment).layerFileExtension
+
   def isHighResSegment(segment: SegmentReference): Boolean =
     directoryStyleFor(segment).isHighResSegment(segment)
 
@@ -190,6 +204,8 @@ case object FullScrollsBase extends ScrollServerBase {
   def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle =
     if (segment.segmentId.startsWith("mesh_window"))
       AutoSegmentedDirectoryStyle
+    else if (segment.scrollRef.newScrollId.number == 5)
+      FlatSegmentedDirectoryStyle
     else
       RegularSegmentDirectoryStyle
 

@@ -484,7 +484,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
       .getOrElse(Future.failed(new RuntimeException(s"Layer $layerName not found")))
 
   def segmentLayerTarget(segment: SegmentReference, layer: Int): File =
-    new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/layers/$layer.tif")
+    new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/layers/$layer.${segment.layerFileExtension}")
 
   def downloadedSegmentLayer(segment: SegmentReference, layer: Int): Future[File] = {
     import segment._
