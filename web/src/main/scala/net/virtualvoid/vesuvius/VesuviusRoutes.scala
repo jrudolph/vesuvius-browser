@@ -123,11 +123,11 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
   val GrandPrizeInklabels = externalLayer("grand-prize-inklabels", "external/grand-prize-inklabels")
   val FirstLettersInklabels = externalLayer("first-letters-inklabels", "external/first-letters-inklabels")
 
-  val AutosegmentedPrediction =
+  lazy val AutosegmentedPrediction =
     LayerDefinition("autosegmented-prediction", "jpg", FileCacheSource(AutoSegmentPredictionCache), isPublic = true)
 
-  val InkLabelLayer = LayerDefinition("inklabel", "jpg", FileCacheSource(InklabelCache), isPublic = true)
-  val AlphaMaskLayer = LayerDefinition("alpha", "png", FileCacheSource(AlphaMaskCache), isPublic = false)
+  lazy val InkLabelLayer = LayerDefinition("inklabel", "jpg", FileCacheSource(InklabelCache), isPublic = true)
+  lazy val AlphaMaskLayer = LayerDefinition("alpha", "png", FileCacheSource(AlphaMaskCache), isPublic = false)
 
   lazy val allLayers =
     Seq(
@@ -633,7 +633,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
 
   def maskFor(segment: SegmentReference): Future[File] = MaskCache(segment)
 
-  val AlphaMaskCache = computeCache[SegmentReference](
+  lazy val AlphaMaskCache = computeCache[SegmentReference](
     segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/mask-alpha.png")
   ) { segment =>
       maskFor(segment).flatMap { mask =>
