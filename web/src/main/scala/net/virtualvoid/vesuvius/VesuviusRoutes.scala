@@ -164,7 +164,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
 
   lazy val MainScreenLayerThumbnails = Seq(
     "grand-prize_17_32",
-    "timesformer-scroll5-27112024",
+    "timesformer-scroll5-27112024_17_32",
     "polytrope-test3-predictions",
     "first-word_15_32",
     "first-word_15_32_reverse",
