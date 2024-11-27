@@ -218,7 +218,7 @@ object Tasks {
       for {
         model <- download(modelDownload, modelTarget, None)
         maskFileName = s"${item.segment.segmentId}_mask.png"
-        mask <- download(f"${item.segment.baseUrl}$maskFileName", new File(segmentDir, maskFileName), Some(DataServerAuthorizationHeader))
+        mask <- download(item.segment.maskUrl, new File(segmentDir, maskFileName), Some(DataServerAuthorizationHeader))
         res <- downloadLayers(item.segment, input.parameters.startLayer, numLayers, segmentDir, input.parameters.reverseLayers)
         inference <- runInference()
       } yield inference
@@ -233,7 +233,7 @@ object Tasks {
 
     val resultTarget = new File(segmentDir, s"${item.segment.segmentId}.fingerprint.json")
     val target = new File(segmentDir, s"${item.segment.segmentId}.ppm")
-    val srcUrl = f"${item.segment.baseUrl}${item.segment.segmentId}.ppm"
+    val srcUrl = item.segment.ppmUrl
     download(srcUrl, target, Some(DataServerAuthorizationHeader))
       .map { res =>
         val fingerprint = PPMFingerprinter.fingerprint(item.segment, res)
@@ -250,7 +250,7 @@ object Tasks {
 
     val resultTarget = new File(segmentDir, s"${item.segment.segmentId}.ppm.bin")
     val target = new File(segmentDir, s"${item.segment.segmentId}.ppm")
-    val srcUrl = f"${item.segment.baseUrl}${item.segment.segmentId}.ppm"
+    val srcUrl = item.segment.ppmUrl
     download(srcUrl, target, Some(DataServerAuthorizationHeader))
       .map { ppmFile =>
         implicit val ppm = PPMReader(ppmFile)
