@@ -725,13 +725,13 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
   type Filter = ImageInfo => Boolean
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
-      Youssef_15_32Input -> (s => s.scrollId == "1" && hasReasonableSize(s) && !s.ref.isHighResSegment /*|| s.scrollId == "2"*/ ),
-      GrandPrize_17_32Input -> (s => hasReasonableSize(s) && !s.ref.isHighResSegment), //(s => s.scrollId == "1"),
+      //Youssef_15_32Input -> (s => s.scrollId == "1" && hasReasonableSize(s) && !s.ref.isHighResSegment /*|| s.scrollId == "2"*/ ),
+      GrandPrize_17_32Input -> (s => s.segmentId != "mesh" && hasReasonableSize(s) && !s.ref.isHighResSegment), //(s => s.scrollId == "1"),
       //GrandPrizeFinetune0_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
-      GrandPrizeFinetune1_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && hasReasonableSize(s) && !s.ref.isHighResSegment),
+      //GrandPrizeFinetune1_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && hasReasonableSize(s) && !s.ref.isHighResSegment),
       //GrandPrizeFinetune2_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
-      GrandPrizeFinetune3_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && hasReasonableSize(s) && !s.ref.isHighResSegment),
-      Youssef_15_32_ReverseInput -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
+      //GrandPrizeFinetune3_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && hasReasonableSize(s) && !s.ref.isHighResSegment),
+      //Youssef_15_32_ReverseInput -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
       //Youssef_63_32Input -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       //Youssef_63_32_ReverseInput -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       PPMFingerprintWorkItemInput -> (_.scrollId == "1"),
