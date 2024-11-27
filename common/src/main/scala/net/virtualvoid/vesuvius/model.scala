@@ -342,12 +342,6 @@ object InferenceModelCheckpoint {
     InferenceModelArchitecture.GrandPrizeModel,
     "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt"
   )
-  val TimesformerScroll5_27112024 = InferenceModelCheckpoint(
-    "Timesformer Model trained on Scroll 5 / 172 data (timesformer_scroll5_27112024)",
-    "timesformer-scroll5-27112024",
-    InferenceModelArchitecture.GrandPrizeModel,
-    "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_scroll5_27112024_20241108111522_epoch=19.ckpt"
-  )
   val GrandPrizeFineTune0 = InferenceModelCheckpoint(
     "Grand Prize JR Fine-Tune 0",
     "grand-prize-finetune0",
@@ -373,6 +367,13 @@ object InferenceModelCheckpoint {
     "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_valid_Frag5-right_step_14900_by_train_loss_0.556.ckpt"
   )
 
+  val TimesformerScroll5_27112024 = InferenceModelCheckpoint(
+    "Timesformer Model trained on Scroll 5 / 172 data (timesformer_scroll5_27112024)",
+    "timesformer-scroll5-27112024",
+    InferenceModelArchitecture.GrandPrizeModel,
+    "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_scroll5_27112024_20241108111522_epoch=19.ckpt"
+  )
+
   val FirstWordModel = InferenceModelCheckpoint(
     "First Word Model",
     "first-word",
@@ -386,6 +387,7 @@ object InferenceModelCheckpoint {
     GrandPrizeFineTune1,
     GrandPrizeFineTune2,
     GrandPrizeFineTune3,
+    TimesformerScroll5_27112024,
     FirstWordModel
   )
 
