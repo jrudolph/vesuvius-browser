@@ -720,7 +720,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
   val Youssef_63_32_ReverseInput = InferenceWorkItemInput(FirstWordModel, Forward63Stride32)
 
   def hasReasonableSize(info: ImageInfo): Boolean =
-    info.area.exists(_ > 8) || (info.width * info.height > 100 * 1000 * 1000)
+    info.area.exists(_ > 8) || (info.width * info.height > 100 * 1000 * 1000) || info.scrollId == "172"
 
   type Filter = ImageInfo => Boolean
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
