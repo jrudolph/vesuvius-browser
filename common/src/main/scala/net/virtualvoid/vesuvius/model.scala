@@ -116,11 +116,14 @@ case object RegularSegmentDirectoryStyle extends RegularSegmentDirectoryStyle {
       (segment.scrollId == "Frag2")
 }
 case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
-  def baseUrl(scrollRef: ScrollReference): String = s"${scrollRef.scrollUrl}scroll1_autosegmentation_20240821000000/"
+  def baseUrl(scrollRef: ScrollReference): String =
+    if (scrollRef.scrollId == "1") s"${scrollRef.scrollUrl}scroll1_autosegmentation_20240821000000/"
+    else if (scrollRef.scrollId == "172") s"${scrollRef.scrollUrl}thaumato_outputs/scroll5_thaumato_nov1/working/"
+    else s"${scrollRef.scrollUrl}thaumato_outputs"
   def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}working_${segment.segmentId}/"
 
   def shortSegmentId(segment: SegmentReference): String =
-    if (segment.segmentId.endsWith("_1"))
+    if (segment.scrollId == "1" && segment.segmentId.endsWith("_1"))
       segment.segmentId.dropRight(2)
     else
       segment.segmentId
@@ -202,7 +205,7 @@ case object FullScrollsBase extends ScrollServerBase {
     s"https://dl.ash2txt.org/full-scrolls/Scroll${newScrollId.number}/${newScrollId.name}.volpkg/"
 
   def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle =
-    if (segment.segmentId.startsWith("mesh_window"))
+    if (segment.segmentId.startsWith("mesh_"))
       AutoSegmentedDirectoryStyle
     else if (segment.scrollRef.newScrollId.number == 5)
       FlatSegmentedDirectoryStyle
