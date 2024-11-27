@@ -132,7 +132,7 @@ object Tasks {
         Source(from until from + num)
           .mapAsync(config.concurrentDownloads) { layer =>
             val targetId = if (reverse) from + num - 1 - (layer - from) else layer
-            val targetFile = new File(to, f"layers/$targetId%02d.tif")
+            val targetFile = new File(to, f"layers/$targetId%02d.${segment.layerFileExtension}")
             download(
               segment.layerUrl(layer),
               targetFile,
@@ -197,7 +197,7 @@ object Tasks {
             def runInference(): Future[(File, WorkItemResult)] = Future {
               import sys.process._
               require(model.exists, s"model checkpoint does not exist at ${model.getAbsolutePath}, ls: ${s"ls -lash ${model.getAbsolutePath}".!!}, ls dir: ${s"ls -lash ${config.inferenceScriptDir.getAbsolutePath}".!!}")
-              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${segmentBaseDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${params.stride} --start_idx ${params.startLayer} --workers 6"
+              val cmdLine = s"python3 ${inferenceScript.getAbsolutePath} --format ${item.segment.layerFileExtension} --model_path ${model.getAbsolutePath} --out_path ${workDir.getAbsolutePath} --segment_path ${segmentBaseDir.getAbsolutePath} --segment_id ${item.segment.segmentId} --stride ${params.stride} --start_idx ${params.startLayer} --workers 6"
               println(s"Running [$cmdLine]")
 
               val res = cmdLine.!!(ProcessLogger(println))
