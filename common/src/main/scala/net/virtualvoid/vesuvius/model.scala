@@ -342,6 +342,12 @@ object InferenceModelCheckpoint {
     InferenceModelArchitecture.GrandPrizeModel,
     "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_wild15_20230702185753_0_fr_i3depoch=12.ckpt"
   )
+  val TimesformerScroll5_27112024 = InferenceModelCheckpoint(
+    "Timesformer Model trained on Scroll 5 / 172 data (timesformer_scroll5_27112024)",
+    "timesformer-scroll5-27112024",
+    InferenceModelArchitecture.GrandPrizeModel,
+    "https://f004.backblazeb2.com/file/bulk-data-jr/timesformer_scroll5_27112024_20241108111522_epoch=19.ckpt"
+  )
   val GrandPrizeFineTune0 = InferenceModelCheckpoint(
     "Grand Prize JR Fine-Tune 0",
     "grand-prize-finetune0",

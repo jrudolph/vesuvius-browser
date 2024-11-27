@@ -139,6 +139,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
       inferenceLayer(GrandPrizeFinetune1_17_32Input, isPublic = false),
       inferenceLayer(GrandPrizeFinetune2_17_32Input, isPublic = false),
       inferenceLayer(GrandPrizeFinetune3_17_32Input, isPublic = false),
+      inferenceLayer(TimesformerScroll5_27112024_17_32Input, isPublic = true),
       inferenceLayer(Youssef_15_32Input, isPublic = true),
       inferenceLayer(Youssef_15_32_ReverseInput, isPublic = true),
       inferenceLayer(Youssef_63_32Input, isPublic = true),
@@ -163,6 +164,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
 
   lazy val MainScreenLayerThumbnails = Seq(
     "grand-prize_17_32",
+    "timesformer-scroll5-27112024",
     "polytrope-test3-predictions",
     "first-word_15_32",
     "first-word_15_32_reverse",
@@ -712,6 +714,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
   val GrandPrizeFinetune1_17_32Input = InferenceWorkItemInput(GrandPrizeFineTune1, Forward17Stride32)
   val GrandPrizeFinetune2_17_32Input = InferenceWorkItemInput(GrandPrizeFineTune2, Forward17Stride32)
   val GrandPrizeFinetune3_17_32Input = InferenceWorkItemInput(GrandPrizeFineTune3, Forward17Stride32)
+  val TimesformerScroll5_27112024_17_32Input = InferenceWorkItemInput(TimesformerScroll5_27112024, Forward17Stride32)
 
   val Youssef_15_32Input = InferenceWorkItemInput(FirstWordModel, Forward15Stride32)
   val Youssef_15_32_ReverseInput = InferenceWorkItemInput(FirstWordModel, Reverse15Stride32)
@@ -726,7 +729,8 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
       //Youssef_15_32Input -> (s => s.scrollId == "1" && hasReasonableSize(s) && !s.ref.isHighResSegment /*|| s.scrollId == "2"*/ ),
-      GrandPrize_17_32Input -> (s => !s.segmentId.startsWith("mesh") && hasReasonableSize(s) && !s.ref.isHighResSegment), //(s => s.scrollId == "1"),
+      GrandPrize_17_32Input -> (s => (!s.segmentId.startsWith("mesh") || s.scrollId == "172") && hasReasonableSize(s) && !s.ref.isHighResSegment), //(s => s.scrollId == "1"),
+      TimesformerScroll5_27112024_17_32Input -> (s => (s.scrollId == "172" && !s.segmentId.startsWith("mesh")) || hasReasonableSize(s)),
       //GrandPrizeFinetune0_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
       //GrandPrizeFinetune1_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && hasReasonableSize(s) && !s.ref.isHighResSegment),
       //GrandPrizeFinetune2_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
