@@ -38,7 +38,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
               },
               path("download" / "64-4") {
                 parameter("x".as[Int], "y".as[Int], "z".as[Int], "bitmask".as[Int], "downsampling".as[Int]) { (x, y, z, bitmask, downsampling) =>
-                  if (scroll.base != FragmentsBase && volume != "20231117161658" && volume != "20230206171837" && volume != "20241024131838") {
+                  if (scroll.base != FragmentsBase && volume != "20231117161658" && volume != "20230206171837" && (volume != "20241024131838" || downsampling < 8)) {
                     if (block64x4IsAvailable(scroll, meta, x, y, z, bitmask, downsampling) || gridFileAvailableFor(scroll, meta, x, y, z, downsampling))
                       block64x4(scroll, meta, x, y, z, bitmask, downsampling).deliver
                     else {
@@ -114,6 +114,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
       case "20231117143551" => 500000 // scroll 3 coarse
       case "20231027191953" => 500262 // scroll 0332
       case "20231107190228" => 500262 // scroll 1667
+      case "20241024131838" => 500148 // scroll 5 / 172
     }
 
     val files =
