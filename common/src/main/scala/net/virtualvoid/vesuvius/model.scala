@@ -118,9 +118,14 @@ case object RegularSegmentDirectoryStyle extends RegularSegmentDirectoryStyle {
 case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
   def baseUrl(scrollRef: ScrollReference): String =
     if (scrollRef.scrollId == "1") s"${scrollRef.scrollUrl}scroll1_autosegmentation_20240821000000/"
-    else if (scrollRef.scrollId == "172") s"${scrollRef.scrollUrl}thaumato_outputs/scroll5_thaumato_nov1/working/"
+    else if (scrollRef.scrollId == "172") s"${scrollRef.scrollUrl}thaumato_outputs/scroll5_thaumato_nov1/"
     else s"${scrollRef.scrollUrl}thaumato_outputs"
-  def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}working_${segment.segmentId}/"
+  def segmentUrl(segment: SegmentReference): String = {
+    val prefix =
+      if (segment.scrollId == "172") "working/"
+      else ""
+    s"${baseUrl(segment.scrollRef)}${prefix}working_${segment.segmentId}/"
+  }
 
   def shortSegmentId(segment: SegmentReference): String =
     if (segment.scrollId == "1" && segment.segmentId.endsWith("_1"))
