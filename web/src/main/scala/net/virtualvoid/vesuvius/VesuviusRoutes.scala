@@ -729,8 +729,8 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
       //Youssef_15_32Input -> (s => s.scrollId == "1" && hasReasonableSize(s) && !s.ref.isHighResSegment /*|| s.scrollId == "2"*/ ),
-      GrandPrize_17_32Input -> (s => (!s.segmentId.startsWith("mesh") /*|| s.scrollId == "172"*/ ) && hasReasonableSize(s) && !s.ref.isHighResSegment), //(s => s.scrollId == "1"),
-      TimesformerScroll5_27112024_17_32Input -> (s => !s.segmentId.startsWith("mesh") && hasReasonableSize(s) && !s.ref.isHighResSegment), //(s => (s.scrollId == "172" && !s.segmentId.startsWith("mesh")) || hasReasonableSize(s)),
+      GrandPrize_17_32Input -> (s => (true /*!s.segmentId.startsWith("mesh")*/ /*|| s.scrollId == "172"*/ ) && hasReasonableSize(s) && !s.ref.isHighResSegment), //(s => s.scrollId == "1"),
+      TimesformerScroll5_27112024_17_32Input -> (s => /*!s.segmentId.startsWith("mesh") &&*/ hasReasonableSize(s) && !s.ref.isHighResSegment), //(s => (s.scrollId == "172" && !s.segmentId.startsWith("mesh")) || hasReasonableSize(s)),
       //GrandPrizeFinetune0_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
       //GrandPrizeFinetune1_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && hasReasonableSize(s) && !s.ref.isHighResSegment),
       //GrandPrizeFinetune2_17_32Input -> (s => Set("2", "0332", "1667")(s.scrollId) && s.area.exists(_ > 10)),
