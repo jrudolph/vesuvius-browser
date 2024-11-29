@@ -290,7 +290,7 @@ object SegmentMetadata {
   implicit val segmentMetadataFormat: RootJsonFormat[SegmentMetadata] = jsonFormat3(SegmentMetadata.apply)
 }
 
-case class ImageInfo(
+case class SegmentInfo(
     ref:            SegmentReference,
     width:          Int,
     height:         Int,

@@ -3,27 +3,37 @@ package net.virtualvoid.vesuvius
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import org.apache.pekko.http.scaladsl.marshalling.{ Marshaller, ToResponseMarshallable }
-import org.apache.pekko.http.scaladsl.model.ws.{ Message, TextMessage }
-import org.apache.pekko.http.scaladsl.model.{ StatusCodes, headers }
-import org.apache.pekko.http.scaladsl.server.{ Directive1, Directives, Route }
-import org.apache.pekko.stream.scaladsl.{ FileIO, Flow, Sink, Source }
+import org.apache.pekko.http.scaladsl.marshalling.{Marshaller, ToResponseMarshallable}
+import org.apache.pekko.http.scaladsl.model.ws.{Message, TextMessage}
+import org.apache.pekko.http.scaladsl.model.{StatusCodes, headers}
+import org.apache.pekko.http.scaladsl.server.{Directive1, Directives, Route}
+import org.apache.pekko.stream.scaladsl.{FileIO, Flow, Sink, Source}
 import play.twirl.api.Html
 import spray.json.*
 
 import java.io.File
-import scala.concurrent.Future
-import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration.*
 import scala.util.Success
 import scala.util.Try
 import org.apache.pekko.http.scaladsl.model.HttpEntity
 import org.apache.pekko.http.scaladsl.model.MediaTypes
 import org.apache.pekko.http.scaladsl.model.HttpCharsets
 
+extension (f: Future[Boolean]) {
+  def ||(other: => Future[Boolean])(implicit ec: ExecutionContext): Future[Boolean] =
+    f.flatMap {
+      case true  => Future.successful(true)
+      case false => other
+    }
+}
+
 trait LayerSource {
   def layerFor(segment: SegmentReference): Future[Option[File]]
   /* Returns the file that would be used for the layer, even if it doesn't exist */
   def layerFileFor(segment: SegmentReference): File
+
+  def layerExists(segment: SegmentReference): Future[Boolean]
 }
 
 trait InferenceLayerSource extends LayerSource {
@@ -78,6 +88,9 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
       Future.successful(Some(targetFileForInput(segment, input)).filter(_.exists))
 
     def layerFileFor(segment: SegmentReference): File = targetFileForInput(segment, input)
+
+    override def layerExists(segment: SegmentReference): Future[Boolean] =
+      Future.successful(targetFileForInput(segment, input).exists)
   }
   case class SegmentLayerSource(
       layer: Int
@@ -87,15 +100,25 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
 
     def layerFileFor(segment: SegmentReference): File =
       segmentLayerTarget(segment, layer)
+
+    def layerExists(segment: SegmentReference): Future[Boolean] =
+      Future.successful(layerFileFor(segment).exists) ||
+        downloadUtils.urlExists(segment.layerUrl(layer))
   }
   case class AnonymousSource(f: SegmentReference => Future[Option[File]], targetFileFor: SegmentReference => File) extends LayerSource {
     def layerFor(segment: SegmentReference): Future[Option[File]] = f(segment)
     def layerFileFor(segment: SegmentReference): File = targetFileFor(segment)
+
+    def layerExists(segment: SegmentReference): Future[Boolean] =
+      Future.successful(targetFileFor(segment).exists)
   }
 
-  case class FileCacheSource(cache: FileCache[SegmentReference]) extends LayerSource {
+  case class FileCacheSource(cache: FileCache[SegmentReference], url: SegmentReference => String) extends LayerSource {
     def layerFor(segment: SegmentReference): Future[Option[File]] = cache(segment).transform(x => Success(x.toOption))
     def layerFileFor(segment: SegmentReference): File = cache.targetFile(segment)
+
+    def layerExists(segment: SegmentReference): Future[Boolean] =
+      Future.successful(cache.targetFile(segment).exists) || downloadUtils.urlExists(url(segment))
   }
 
   def inferenceLayer(input: InferenceWorkItemInput, isPublic: Boolean): LayerDefinition = {
@@ -124,10 +147,10 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
   val FirstLettersInklabels = externalLayer("first-letters-inklabels", "external/first-letters-inklabels")
 
   lazy val AutosegmentedPrediction =
-    LayerDefinition("autosegmented-prediction", "jpg", FileCacheSource(AutoSegmentPredictionCache), isPublic = true)
+    LayerDefinition("autosegmented-prediction", "jpg", FileCacheSource(AutoSegmentPredictionCache, AutoSegmentedDirectoryStyle.predictionUrlFor), isPublic = true)
 
-  lazy val InkLabelLayer = LayerDefinition("inklabel", "jpg", FileCacheSource(InklabelCache), isPublic = true)
-  lazy val AlphaMaskLayer = LayerDefinition("alpha", "png", FileCacheSource(AlphaMaskCache), isPublic = false)
+  lazy val InkLabelLayer = LayerDefinition("inklabel", "jpg", FileCacheSource(InklabelCache, _.inklabelUrl), isPublic = true)
+  lazy val AlphaMaskLayer = LayerDefinition("alpha", "png", FileCacheSource(AlphaMaskCache, _.maskUrl), isPublic = false)
 
   lazy val allLayers =
     Seq(
@@ -162,6 +185,26 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
       .get(name)
       .orElse(Try(name.toInt).toOption.map(z => LayerDefinition(name, "jpg", SegmentLayerSource(z), isPublic = true)))
 
+  private lazy val LayersForCache: Future[Map[SegmentReference, Seq[String]]] =
+    scrollSegments.flatMap { segments =>
+      Future.traverse(segments)(s => retrieveLayersFor(s.ref).map(s.ref -> _))
+        .map(_.toMap)
+    }
+
+  def layersFor(segment: SegmentReference): Future[Seq[String]] =
+    LayersForCache.map(_.getOrElse(segment, Seq.empty))
+
+  private def retrieveLayersFor(segment: SegmentReference): Future[Seq[String]] =
+    Future.traverse(PublicLayers)(l => l.source.layerExists(segment).map {
+      case true  => Seq(l.name)
+      case false => Seq.empty
+    }).map(_.flatten).flatMap { layers =>
+      downloadUtils.urlExists(segment.maskUrl).map {
+        case true  => "mask" +: layers
+        case false => layers
+      }
+    }
+
   lazy val MainScreenLayerThumbnails = Seq(
     "grand-prize_17_32",
     "timesformer-scroll5-27112024_17_32",
@@ -189,7 +232,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
 
   val NameR = """(\d+)_(\d+).(?:jpg|png)""".r
 
-  lazy val scrollSegments: Future[Seq[ImageInfo]] =
+  lazy val scrollSegments: Future[Seq[SegmentInfo]] =
     for {
       ids <- Future.traverse(ScrollReference.scrolls)(segmentIds)
       infos <- Future.traverse(ids.flatten)(imageInfo)
@@ -240,7 +283,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
         resolveRef(scroll, segmentId) { segment =>
           val isHighResScroll = segment.isHighResSegment
 
-          imageInfo(segment).await.orReject { (info: ImageInfo) =>
+          imageInfo(segment).await.orReject { (info: SegmentInfo) =>
             concat(
               segmentPath { isPlain =>
                 userManagement.loggedIn { user =>
@@ -439,9 +482,9 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
       complete(html.page(body, user, showDecorations))
     }
 
-  val InfoCache = LfuCache[SegmentReference, Option[ImageInfo]]
+  val InfoCache = LfuCache[SegmentReference, Option[SegmentInfo]]
 
-  def imageInfo(segment: SegmentReference): Future[Option[ImageInfo]] =
+  def imageInfo(segment: SegmentReference): Future[Option[SegmentInfo]] =
     InfoCache.getOrLoad(segment, _ => _imageInfo(segment))
 
   //areaFor
@@ -461,7 +504,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
         (width, height)
       }(cpuBound)
 
-  def _imageInfo(segment: SegmentReference): Future[Option[ImageInfo]] = {
+  def _imageInfo(segment: SegmentReference): Future[Option[SegmentInfo]] = {
     for {
       (width, height) <- sizeOf(segment)
       area <- areaFor(segment)
@@ -472,7 +515,7 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
           volumeMetadataRepository.metadataForVolume(segment.scrollRef, volumeId)
             .transform(x => Success(x.toOption)))
         .getOrElse(Future.successful(None))
-    } yield ImageInfo(segment, width, height, area, meta, volumeMetadata)
+    } yield SegmentInfo(segment, width, height, area, meta, volumeMetadata)
   }.transform { x =>
     if (x.isFailure) {
       println(s"Failed to get image info for $segment: ${x.failed.get}")
@@ -502,20 +545,20 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
     maxConcurrentRequests = 3
   )
 
-  def resizer(info: ImageInfo, layer: Int, tileX: Int, tileY: Int, layerName: String): Future[File] =
+  def resizer(info: SegmentInfo, layer: Int, tileX: Int, tileY: Int, layerName: String): Future[File] =
     dzdir(info, layerName).map { dir =>
       val layerDef = layerDefFor(layerName).get
       new File(dir, s"$layer/${tileX}_$tileY.${layerDef.extension}")
     }
 
-  val DZDirCache = LfuCache[(ImageInfo, String), File]
+  val DZDirCache = LfuCache[(SegmentInfo, String), File]
 
-  def dzdir(info: ImageInfo, layerName: String): Future[File] = {
+  def dzdir(info: SegmentInfo, layerName: String): Future[File] = {
     val layerDef = layerDefFor(layerName).get
     DZDirCache.getOrLoad((info, layerName), _ => extractDZ(info, layerName, layerDef.extension))
   }
 
-  def extractDZ(info: ImageInfo, layerName: String, suffix: String = ".jpg"): Future[File] = {
+  def extractDZ(info: SegmentInfo, layerName: String, suffix: String = ".jpg"): Future[File] = {
     val targetDir = new File(dataDir, s"tiles-dz/scroll${info.scrollId}/${info.segmentId}/layers/${layerName}_files")
     if (targetDir.exists()) Future.successful(targetDir)
     else segmentLayer(info.ref, layerName).flatMap { imageFile =>
@@ -722,10 +765,10 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
   val Youssef_63_32Input = InferenceWorkItemInput(FirstWordModel, Forward63Stride32)
   val Youssef_63_32_ReverseInput = InferenceWorkItemInput(FirstWordModel, Forward63Stride32)
 
-  def hasReasonableSize(info: ImageInfo): Boolean =
+  def hasReasonableSize(info: SegmentInfo): Boolean =
     info.area.exists(_ > 8) || (info.width * info.height > 100 * 1000 * 1000) || info.scrollId == "172"
 
-  type Filter = ImageInfo => Boolean
+  type Filter = SegmentInfo => Boolean
   lazy val requestedWorkInputs: Seq[(WorkItemInput, Filter)] =
     Seq(
       //Youssef_15_32Input -> (s => s.scrollId == "1" && hasReasonableSize(s) && !s.ref.isHighResSegment /*|| s.scrollId == "2"*/ ),

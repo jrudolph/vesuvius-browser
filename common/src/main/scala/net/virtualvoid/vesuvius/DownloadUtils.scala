@@ -277,6 +277,12 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
         }
       }
   }
+
+  def urlExists(url: String): Future[Boolean] = {
+    println(s"Checking existence of $url")
+    Http().singleRequest(authenticatedDataServerRequest(url).withMethod(method = HttpMethods.HEAD))
+      .map(_.status == StatusCodes.OK)
+  }
 }
 
 trait DownloadCounter {

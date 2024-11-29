@@ -1,5 +1,7 @@
 package net.virtualvoid.vesuvius
 
+import net.virtualvoid.vesuvius
+import org.apache.pekko.actor.ActorSystem
 import spray.json.*
 import sttp.apispec.openapi.Server
 import sttp.tapir.*
@@ -11,64 +13,11 @@ import sttp.tapir.swagger.bundle.SwaggerInterpreter
 
 import scala.concurrent.Future
 
-case class ScrollId(
-    id:         String,
-    num:        String,
-    oldId:      String,
-    isFragment: Boolean
-)
-object ScrollId {
-  import DefaultJsonProtocol._
+trait VesuviusApi { //self: VesuviusRoutes =>
+  val system: ActorSystem
+  def scrollSegments: Future[Seq[SegmentInfo]]
+  def layersFor(segment: SegmentReference): Future[Seq[String]]
 
-  implicit val scrollIdJsonFormat: JsonFormat[ScrollId] = jsonFormat4(ScrollId.apply)
-}
-
-case class SegmentUrls(
-    maskUrl:      String,
-    metaUrl:      String,
-    objUrl:       String,
-    compositeUrl: String,
-    ppmUrl:       String
-)
-object SegmentUrls {
-  import DefaultJsonProtocol._
-
-  implicit val segmentUrlsJsonFormat: JsonFormat[SegmentUrls] = jsonFormat5(SegmentUrls.apply)
-}
-
-case class SegmentInfo(
-    scroll:  ScrollId,
-    id:      String,
-    width:   Int,
-    height:  Int,
-    volume:  Option[String],
-    urls:    SegmentUrls,
-    areaCm2: Option[Float]
-)
-
-object SegmentInfo {
-  import DefaultJsonProtocol._
-
-  implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat7(SegmentInfo.apply)
-
-  def fromImageInfo(info: ImageInfo): SegmentInfo =
-    SegmentInfo(
-      ScrollId(info.ref.newScrollId.name, info.ref.newScrollId.number.toString, oldId = info.ref.scrollRef.scrollId, isFragment = info.ref.scrollRef.isFragment),
-      info.ref.segmentId,
-      info.width,
-      info.height,
-      info.volumeMetadata.map(_.uuid),
-      SegmentUrls(
-        info.ref.maskUrl,
-        info.ref.metaUrl,
-        info.ref.objUrl,
-        info.ref.compositeUrl,
-        info.ref.ppmUrl
-      ),
-      info.area)
-}
-
-trait VesuviusApi { self: VesuviusRoutes =>
   import system.dispatcher
   import DefaultJsonProtocol._
 
@@ -76,7 +25,7 @@ trait VesuviusApi { self: VesuviusRoutes =>
     endpoint
       .get
       .in("segments")
-      .out(jsonBody[Seq[SegmentInfo]])
+      .out(jsonBody[Seq[VesuviusApi.SegmentInfo]])
       .description("Get all segments in the catalog")
 
   private lazy val swaggerEndpoints =
@@ -88,10 +37,80 @@ trait VesuviusApi { self: VesuviusRoutes =>
       .fromEndpoints[Future](List(catalogEndpoint), "Vesuvius Browser API", "1.0")
 
   private lazy val allEndpoints: List[ServerEndpoint[Any, Future]] =
-    swaggerEndpoints :+ catalogEndpoint.serverLogicSuccess[Future] { input =>
-      scrollSegments.map(_.map(SegmentInfo.fromImageInfo))
+    swaggerEndpoints :+ catalogEndpoint.serverLogicSuccess[Future] { _ =>
+      for {
+        segments <- scrollSegments
+        result <- Future.traverse(segments) { s =>
+          layersFor(s.ref).map {
+            VesuviusApi.SegmentInfo.fromImageInfo(s, _)
+          }
+        }
+      } yield result
     }
 
   lazy val apiRoutes =
     PekkoHttpServerInterpreter().toRoute(allEndpoints)
+}
+
+object VesuviusApi {
+  case class ScrollId(
+      id:         String,
+      num:        String,
+      oldId:      String,
+      isFragment: Boolean
+  )
+
+  object ScrollId {
+    import DefaultJsonProtocol._
+
+    implicit val scrollIdJsonFormat: JsonFormat[ScrollId] = jsonFormat4(ScrollId.apply)
+  }
+
+  case class SegmentUrls(
+      maskUrl:      String,
+      metaUrl:      String,
+      objUrl:       String,
+      compositeUrl: String,
+      ppmUrl:       String
+  )
+
+  object SegmentUrls {
+    import DefaultJsonProtocol._
+
+    implicit val segmentUrlsJsonFormat: JsonFormat[SegmentUrls] = jsonFormat5(SegmentUrls.apply)
+  }
+
+  case class SegmentInfo(
+      scroll:  ScrollId,
+      id:      String,
+      width:   Int,
+      height:  Int,
+      volume:  Option[String],
+      urls:    SegmentUrls,
+      areaCm2: Option[Float],
+      layers:  Seq[String]
+  )
+
+  object SegmentInfo {
+    import DefaultJsonProtocol._
+
+    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat8(SegmentInfo.apply)
+
+    def fromImageInfo(info: vesuvius.SegmentInfo, layers: Seq[String]): SegmentInfo =
+      SegmentInfo(
+        ScrollId(info.ref.newScrollId.name, info.ref.newScrollId.number.toString, oldId = info.ref.scrollRef.scrollId, isFragment = info.ref.scrollRef.isFragment),
+        info.ref.segmentId,
+        info.width,
+        info.height,
+        info.volumeMetadata.map(_.uuid),
+        SegmentUrls(
+          info.ref.maskUrl,
+          info.ref.metaUrl,
+          info.ref.objUrl,
+          info.ref.compositeUrl,
+          info.ref.ppmUrl
+        ),
+        info.area,
+        layers)
+  }
 }

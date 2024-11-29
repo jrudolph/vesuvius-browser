@@ -1,6 +1,6 @@
 @import net.virtualvoid.vesuvius._
 
-@(infos: Seq[ImageInfo], layerThumbnails: Seq[LayerDefinition])
+@(infos: Seq[SegmentInfo], layerThumbnails: Seq[LayerDefinition])
 
 @for((scroll, infos) <- infos.groupBy(_.ref.scrollRef).toVector.sortBy(x => (if (x._1.base.productPrefix.contains("Fragment")) 1 else 0, scala.util.Try(x._1.scrollId.toInt).getOrElse(Int.MaxValue), x._1.scrollId))) {
 
