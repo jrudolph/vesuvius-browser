@@ -33,5 +33,6 @@ object WorkerConfig {
     case "inference"      => InferenceWorkItemInput(InferenceModelCheckpoint.GrandPrizeModel, InferenceParameters(0, 0, false)).productPrefix
     case "fingerprint"    => PPMFingerprintWorkItemInput.productPrefix
     case "downsample_ppm" => DownsamplePPMWorkItemInput("", 0).productPrefix
+    case "crosscut"       => CrosscutWorkItemInput.productPrefix
   }
 }
