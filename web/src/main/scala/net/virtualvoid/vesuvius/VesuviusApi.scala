@@ -88,16 +88,19 @@ trait VesuviusApi { //self: VesuviusRoutes =>
       obj <- urlReportFor(segment, "obj", segment.objUrl)
       ppm <- urlReportFor(segment, "ppm", segment.ppmUrl)
       meta <- urlReportFor(segment, "meta", segment.metaUrl)
+      composite <- urlReportFor(segment, "composite", segment.compositeUrl)
       layer0 <- urlReportFor(segment, "layer0", segment.layerUrl(0))
       layer32 <- urlReportFor(segment, "layer32", segment.layerUrl(32))
     } yield VesuviusApi.SegmentReport(
       VesuviusApi.ScrollId.forRef(segment),
       segment.segmentId,
+      segment.baseUrl,
       mask,
       area,
       obj,
       ppm,
       meta,
+      composite,
       layer0,
       layer32
     )
@@ -234,20 +237,22 @@ object VesuviusApi {
     )
   }
   case class SegmentReport(
-      scroll:  ScrollId,
-      id:      String,
-      mask:    UrlReport,
-      area:    UrlReport,
-      obj:     UrlReport,
-      ppm:     UrlReport,
-      meta:    UrlReport,
-      layer0:  UrlReport,
-      layer32: UrlReport
+      scroll:    ScrollId,
+      id:        String,
+      baseUrl:   String,
+      mask:      UrlReport,
+      area:      UrlReport,
+      obj:       UrlReport,
+      ppm:       UrlReport,
+      meta:      UrlReport,
+      composite: UrlReport,
+      layer0:    UrlReport,
+      layer32:   UrlReport
   )
   object SegmentReport {
     import DefaultJsonProtocol._
 
     implicit val segmentReportJsonFormat: JsonFormat[SegmentReport] =
-      jsonFormat9(SegmentReport.apply)
+      jsonFormat11(SegmentReport.apply)
   }
 }
