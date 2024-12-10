@@ -784,7 +784,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       //Youssef_63_32_ReverseInput -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       PPMFingerprintWorkItemInput -> (_.scrollId == "1"),
       DownSampleU16_2Input -> (_ => true),
-      CrosscutWorkItemInput -> (_.scrollId == "1"),
+      CrosscutWorkItemInput -> (_ => true),
     )
 
   val runnerId = System.currentTimeMillis().toString
