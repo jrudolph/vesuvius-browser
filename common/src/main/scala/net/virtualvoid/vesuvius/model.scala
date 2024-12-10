@@ -298,6 +298,8 @@ case class SegmentInfo(
     height:         Int,
     area:           Option[Float],
     metadata:       Option[SegmentMetadata],
+    minZ:           Option[Int],
+    maxZ:           Option[Int],
     volumeMetadata: Option[VolumeMetadata]
 ) {
   def scrollId: String = ref.scrollId

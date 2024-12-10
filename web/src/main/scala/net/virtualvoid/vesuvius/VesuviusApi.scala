@@ -168,6 +168,8 @@ object VesuviusApi {
       id:      String,
       width:   Int,
       height:  Int,
+      minZ:    Option[Int],
+      maxZ:    Option[Int],
       volume:  Option[String],
       urls:    SegmentUrls,
       areaCm2: Option[Float],
@@ -177,7 +179,7 @@ object VesuviusApi {
   object SegmentInfo {
     import DefaultJsonProtocol._
 
-    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat8(
+    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat10(
       SegmentInfo.apply
     )
 
@@ -190,6 +192,8 @@ object VesuviusApi {
         info.ref.segmentId,
         info.width,
         info.height,
+        info.minZ,
+        info.maxZ,
         info.volumeMetadata.map(_.uuid),
         SegmentUrls(
           info.ref.maskUrl,

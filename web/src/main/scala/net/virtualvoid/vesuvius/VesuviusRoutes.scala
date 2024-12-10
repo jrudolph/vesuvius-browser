@@ -514,7 +514,8 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
           volumeMetadataRepository.metadataForVolume(segment.scrollRef, volumeId)
             .transform(x => Success(x.toOption)))
         .getOrElse(Future.successful(None))
-    } yield SegmentInfo(segment, width, height, area, meta, volumeMetadata)
+      crosscut = crosscutsFor(segment)
+    } yield SegmentInfo(segment, width, height, area, meta,crosscut.map(_.minZ), crosscut.map(_.maxZ) , volumeMetadata)
   }.transform { x =>
     if (x.isFailure) {
       println(s"Failed to get image info for $segment: ${x.failed.get}")
@@ -725,6 +726,14 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       .recover {
         case _ => Vector.empty // FIXME: restrict to certain exceptions?
       }
+
+  def crosscutsFor(segment: SegmentReference): Option[SegmentCrosscutReport] = {
+    val file = targetFileForInput(segment, CrosscutWorkItemInput)
+    if (file.exists) {
+      val json = scala.io.Source.fromFile(file).mkString.parseJson
+      Some(json.convertTo[SegmentCrosscutReport])
+    } else None
+  }
 
   def targetFileForInput(segment: SegmentReference, input: WorkItemInput): File = {
     import segment._
