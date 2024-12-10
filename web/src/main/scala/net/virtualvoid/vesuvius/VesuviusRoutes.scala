@@ -69,7 +69,7 @@ case class LayerDefinition(
     }
 }
 
-class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extends VesuviusApi with TwirlSupport with SprayJsonSupport {
+class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) extends VesuviusApi with TwirlSupport with SprayJsonSupport {
   import Directives._
   import system.dispatcher
   import config.dataDir
@@ -487,7 +487,6 @@ class VesuviusRoutes(config: AppConfig)(implicit val system: ActorSystem) extend
   def imageInfo(segment: SegmentReference): Future[Option[SegmentInfo]] =
     InfoCache.getOrLoad(segment, _ => _imageInfo(segment))
 
-  //areaFor
   def sizeOf(segment: SegmentReference): Future[(Int, Int)] =
     maskFor(segment)
       .map { f =>

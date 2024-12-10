@@ -8,7 +8,9 @@ inThisBuild(Def.settings(
   scalaVersion := scalaV,
   scalacOptions ++= Seq(
     "-Wunused:all",
-    "-deprecation"
+    "-deprecation",
+    "-no-indent",
+    "-Xmax-inlines", "100"
   ),
   run / fork := true
 ))

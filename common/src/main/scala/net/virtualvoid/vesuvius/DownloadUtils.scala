@@ -191,6 +191,24 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       def fileFor(t: T): File = filePattern(t)
     }
 
+  import spray.json._
+  def jsonCache[K, V: JsonFormat](filePattern: K => File, ttl: Duration = DefaultPositiveTtl, negativeTtl: Duration = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: K => Future[V]): Cache[K, V] =
+    fileCache(filePattern, ttl, negativeTtl, isValid) { k =>
+      f(k).map { v =>
+        val file = filePattern(k)
+        file.getParentFile.mkdirs()
+        val out = new java.io.FileOutputStream(file)
+        out.write(v.toJson.compactPrint.getBytes("utf8"))
+        out.close()
+        file
+      }
+    }.map { (k, file) =>
+      val source = scala.io.Source.fromFile(file)
+      val json = source.mkString
+      source.close()
+      json.parseJson.convertTo[V]
+    }
+
   def cached(to: File, ttl: Duration = DefaultPositiveTtl, negativeTtl: Duration = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: () => Future[File]): Future[File] = {
     to.getParentFile.mkdirs()
     val neg = new File(to.getParentFile, s".neg-${to.getName}")
@@ -280,9 +298,10 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
   def urlExists(url: String): Future[Boolean] = {
     println(s"Checking existence of $url")
-    Http().singleRequest(authenticatedDataServerRequest(url).withMethod(method = HttpMethods.HEAD))
-      .map(_.status == StatusCodes.OK)
+    head(url).map(_.status == StatusCodes.OK)
   }
+  def head(url: String): Future[HttpResponse] =
+    Http().singleRequest(authenticatedDataServerRequest(url).withMethod(method = HttpMethods.HEAD))
 }
 
 trait DownloadCounter {

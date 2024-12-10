@@ -19,6 +19,8 @@ case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
 
   def metaUrl: String = base.metaFor(this)
 
+  def areaUrl: String = s"${baseUrl}area_cm2.txt"
+
   def isHighResSegment: Boolean = base.isHighResSegment(this)
 }
 object SegmentReference {
