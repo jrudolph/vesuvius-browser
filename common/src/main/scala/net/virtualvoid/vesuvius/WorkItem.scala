@@ -22,6 +22,7 @@ object WorkItemInput extends SprayJsonHelpers {
   implicit val inferenceParametersFormat: JsonFormat[InferenceParameters] = jsonFormat3(InferenceParameters.apply)
   implicit val inferenceWorkItemFormat: JsonFormat[InferenceWorkItemInput] = jsonFormat2(InferenceWorkItemInput.apply)
   implicit val ppmFingerprintWorkItemFormat: JsonFormat[PPMFingerprintWorkItemInput.type] = jsonFormat0(() => PPMFingerprintWorkItemInput)
+  implicit val crosscutWorkItemFormat: JsonFormat[CrosscutWorkItemInput.type] = jsonFormat0(() => CrosscutWorkItemInput)
   implicit val downsamplePPMWorkItemFormat: JsonFormat[DownsamplePPMWorkItemInput] = jsonFormat2(DownsamplePPMWorkItemInput.apply)
   implicit val workItemFormat: RootJsonFormat[WorkItemInput] = new RootJsonFormat[WorkItemInput] {
     override def write(obj: WorkItemInput): JsValue = {
@@ -30,6 +31,7 @@ object WorkItemInput extends SprayJsonHelpers {
           case i: InferenceWorkItemInput     => inferenceWorkItemFormat.write(i)
           case PPMFingerprintWorkItemInput   => ppmFingerprintWorkItemFormat.write(PPMFingerprintWorkItemInput)
           case d: DownsamplePPMWorkItemInput => downsamplePPMWorkItemFormat.write(d)
+          case CrosscutWorkItemInput         => crosscutWorkItemFormat.write(CrosscutWorkItemInput)
         }
       res.asJsObject + ("type" -> JsString(obj.productPrefix))
     }
@@ -37,6 +39,7 @@ object WorkItemInput extends SprayJsonHelpers {
       case JsString("InferenceWorkItemInput")      => inferenceWorkItemFormat.read(json)
       case JsString("PPMFingerprintWorkItemInput") => ppmFingerprintWorkItemFormat.read(json)
       case JsString("DownsamplePPMWorkItemInput")  => downsamplePPMWorkItemFormat.read(json)
+      case JsString("CrosscutWorkItemInput")       => crosscutWorkItemFormat.read(json)
       case _                                       => throw new IllegalArgumentException(s"Work item type not specified")
     }
   }
@@ -72,6 +75,10 @@ case object PPMFingerprintWorkItemInput extends WorkItemInput {
  */
 case class DownsamplePPMWorkItemInput(positionType: String, downsamplingBits: Int) extends WorkItemInput {
   def `type`: String = "downsample_ppm"
+}
+
+case object CrosscutWorkItemInput extends WorkItemInput {
+  def `type`: String = "crosscut"
 }
 
 case class AssetReference()

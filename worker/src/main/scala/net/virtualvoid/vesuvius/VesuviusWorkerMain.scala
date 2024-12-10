@@ -28,6 +28,7 @@ object VesuviusWorkerMain extends App {
       case i: InferenceWorkItemInput       => Tasks.infer(item, i)
       case p @ PPMFingerprintWorkItemInput => Tasks.ppmFingerprint(item)
       case d: DownsamplePPMWorkItemInput   => Tasks.downsamplePpm(item, d)
+      case CrosscutWorkItemInput           => Tasks.crosscuts(item)
     }
   }
 
@@ -279,6 +280,23 @@ object Tasks {
         require(resultTarget.length() == size, s"Result file has wrong size: ${resultTarget.length()} != $size")
 
         (resultTarget, WorkCompleted(item, "Fingerprinting complete"))
+      }
+  }
+
+  def crosscuts(item: WorkItem)(implicit ctx: WorkContext): Future[(File, WorkItemResult)] = {
+    import ctx._
+    val workDir = new File(config.dataDir, item.id)
+    val segmentDir = new File(workDir, item.segment.segmentId)
+    segmentDir.mkdirs()
+
+    val resultTarget = new File(segmentDir, s"${item.segment.segmentId}.crosscuts.json")
+    val target = new File(segmentDir, s"${item.segment.segmentId}.obj")
+    val srcUrl = item.segment.objUrl
+    download(srcUrl, target, Some(DataServerAuthorizationHeader))
+      .map { res =>
+        val fingerprint = CrossCutter.fromObj(item.segment, res)
+        val json = write(fingerprint, resultTarget)
+        (json, WorkCompleted(item, "Crosscutting complete"))
       }
   }
 

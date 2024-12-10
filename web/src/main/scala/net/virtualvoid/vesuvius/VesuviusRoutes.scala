@@ -737,6 +737,8 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
         new File(dataDir, s"ppm/scroll${segment.scrollId}/${segment.segmentId}/fingerprint.json")
       case DownsamplePPMWorkItemInput(tpe, downsamplingBits) =>
         new File(dataDir, s"ppm/scroll${segment.scrollId}/${segment.segmentId}/uvmap-${tpe}-${downsamplingBits}.bin")
+      case CrosscutWorkItemInput =>
+        new File(dataDir, s"crosscuts/scroll${segment.scrollId}/${segment.segmentId}/crosscut.json")
     }
   }
 
@@ -782,6 +784,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       //Youssef_63_32_ReverseInput -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       PPMFingerprintWorkItemInput -> (_.scrollId == "1"),
       DownSampleU16_2Input -> (_ => true),
+      CrosscutWorkItemInput -> (_.scrollId == "1"),
     )
 
   val runnerId = System.currentTimeMillis().toString
