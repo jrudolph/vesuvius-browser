@@ -54,9 +54,6 @@ object CrossCutter {
 
           if (minz < z && maxz > z) {
             val points = Seq.newBuilder[Point2D]
-            // in our case planeCoord = 2 = z, uCoord = 0 = x, vCoord = 1 = y
-            // so we can replace coord(planeCoord) with z, coord(uCoord) with x and coord(vCoord) with y
-            // and don't need to define coord at all
 
             def intersects(v1: Vec3, v2: Vec3, w: Int): Boolean =
               (v1.z - w).sign != (v2.z - w).sign
