@@ -31,11 +31,7 @@ object Mesh {
     val VRegEx = s"""v\\s+($FPR)\\s+($FPR)\\s+($FPR)""".r
     val VNRegEx = s"""vn\\s+($FPR)\\s+($FPR)\\s+($FPR)""".r
     val VTRegEx = s"""vt\\s+($FPR)\\s+($FPR)""".r
-    val FRegEx = {
-      val f = s"""f\\s+($IntR)/($IntR)/($IntR)\\s+($IntR)/($IntR)/($IntR)\\s+($IntR)/($IntR)/($IntR)"""
-      println(s"Face regex: '$f'")
-      f.r
-    }
+    val FRegEx = s"""f\\s+($IntR)/($IntR)/($IntR)\\s+($IntR)/($IntR)/($IntR)\\s+($IntR)/($IntR)/($IntR)""".r
 
     Source.fromFile(objFile).getLines().map(_.trim).foreach {
       case VRegEx(x, y, z)  => vertices += Vec3(x.toDouble, y.toDouble, z.toDouble)
@@ -48,7 +44,7 @@ object Mesh {
           (vt1.toInt, vt2.toInt, vt3.toInt)
         )
       case x =>
-        println(s"Ignoring line: $x")
+      //println(s"Ignoring line: $x")
     }
 
     Mesh(vertices.result(), normals.result(), texCoords.result(), faces.result())
