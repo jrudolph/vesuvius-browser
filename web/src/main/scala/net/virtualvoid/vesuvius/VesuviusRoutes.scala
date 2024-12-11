@@ -199,9 +199,14 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       case true  => Seq(l.name)
       case false => Seq.empty
     }).map(_.flatten).flatMap { layers =>
+      val layers1 = crosscutsFor(segment) match {
+        case Some(_) => "outline" +: layers
+        case None => layers
+      }
+
       downloadUtils.urlExists(segment.maskUrl).map {
-        case true  => "mask" +: layers
-        case false => layers
+        case true  => "mask" +: layers1
+        case false => layers1
       }
     }
 
@@ -322,6 +327,11 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
               path("mask") {
                 parameter("width".as[Int].?(config.thumbnailWidth), "height".as[Int].?(config.thumbnailHeight), "ext".as[String].?(config.thumbnailExtension)) { (width, height, ext) =>
                   resizedMask(segment, width, height, ext).deliver
+                }
+              },
+              path("outline") {
+                parameter("width".as[Int].?(config.thumbnailWidth), "height".as[Int].?(config.thumbnailHeight)) { (width, height) =>
+                  outlineFor(info, width, height).deliver
                 }
               },
               pathPrefix("inferred" / Segment) { layer =>
@@ -597,6 +607,27 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       file = layer.layerFileFor(segment)
       resized <- ThumbnailCache((file, config.thumbnailWidth, config.thumbnailHeight, extension, LayerAcquire(segment, layer))).transform(x => Success(x.toOption))
     } yield resized
+
+  def outlineFileFor(info: SegmentInfo, width: Int, height: Int): File =
+    new File(dataDir, s"outlines/scroll${info.scrollId}/${info.segmentId}/outline-${width}x${height}.png")
+  lazy val SegmentOutlineCache =
+    downloadUtils.fileCache[(SegmentInfo, Int, Int)](
+      (outlineFileFor _).tupled
+    ) { case (info, width, height) =>
+      for {
+        crosscuts <- Future.successful(crosscutsFor(info.ref).get)
+      } yield {
+        val volume = info.volumeMetadata.get
+        val target = outlineFileFor(info, width, height)
+        val tmp = File.createTempFile(".tmp.outline", ".png", target.getParentFile)
+        tmp.getParentFile.mkdirs()
+        SegmentOutline.generate(crosscuts, width, height,volume.width ,volume.height , tmp)
+        tmp.renameTo(target)
+        target
+      }
+    }
+  def outlineFor(info: SegmentInfo, width: Int = config.thumbnailWidth, height: Int = config.thumbnailHeight): Future[File] =
+    SegmentOutlineCache((info, width, height))
 
   sealed trait BaseFileAcquire {
     def get(): Future[File]
