@@ -14,9 +14,6 @@ object SegmentOutline {
     g.fillRect(0, 0, width, height)
     g.setColor(java.awt.Color.BLUE)
 
-    crosscutReport.crosscuts.sortBy(_.z).foreach { cut =>
-      println(cut.z)
-    }
     val cut = crosscutReport.crosscuts.sortBy(_.z).apply(crosscutReport.crosscuts.size / 2)
 
     cut.lines.foreach {
