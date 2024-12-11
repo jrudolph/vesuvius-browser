@@ -164,22 +164,23 @@ object VesuviusApi {
   }
 
   case class SegmentInfo(
-      scroll:  ScrollId,
-      id:      String,
-      width:   Int,
-      height:  Int,
-      minZ:    Option[Int],
-      maxZ:    Option[Int],
-      volume:  Option[String],
-      urls:    SegmentUrls,
-      areaCm2: Option[Float],
-      layers:  Seq[String]
+      scroll:          ScrollId,
+      id:              String,
+      width:           Int,
+      height:          Int,
+      minZ:            Option[Int],
+      maxZ:            Option[Int],
+      volume:          Option[String],
+      volumeVoxelSize: Option[Double],
+      urls:            SegmentUrls,
+      areaCm2:         Option[Float],
+      layers:          Seq[String]
   )
 
   object SegmentInfo {
     import DefaultJsonProtocol._
 
-    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat10(
+    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat11(
       SegmentInfo.apply
     )
 
@@ -195,6 +196,7 @@ object VesuviusApi {
         info.minZ,
         info.maxZ,
         info.volumeMetadata.map(_.uuid),
+        info.volumeMetadata.map(_.voxelsize),
         SegmentUrls(
           info.ref.maskUrl,
           info.ref.metaUrl,
