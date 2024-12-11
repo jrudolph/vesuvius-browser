@@ -515,7 +515,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
             .transform(x => Success(x.toOption)))
         .getOrElse(Future.successful(None))
       crosscut = crosscutsFor(segment)
-    } yield SegmentInfo(segment, width, height, area, meta,crosscut.map(_.minZ), crosscut.map(_.maxZ) , volumeMetadata)
+    } yield SegmentInfo(segment, width, height, area, meta,crosscut.map(_.minZ.max(0)), crosscut.map(_.maxZ) , volumeMetadata)
   }.transform { x =>
     if (x.isFailure) {
       println(s"Failed to get image info for $segment: ${x.failed.get}")
