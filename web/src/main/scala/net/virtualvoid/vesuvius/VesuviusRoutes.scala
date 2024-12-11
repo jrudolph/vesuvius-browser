@@ -612,7 +612,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     new File(dataDir, s"outlines/scroll${info.scrollId}/${info.segmentId}/outline-${width}x${height}.png")
   lazy val SegmentOutlineCache =
     downloadUtils.fileCache[(SegmentInfo, Int, Int)](
-      (outlineFileFor _).tupled
+      outlineFileFor.tupled
     ) { case (info, width, height) =>
       for {
         crosscuts <- Future.successful(crosscutsFor(info.ref).get)
@@ -766,10 +766,16 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
 
   def crosscutsFor(segment: SegmentReference): Option[SegmentCrosscutReport] = {
     val file = targetFileForInput(segment, CrosscutWorkItemInput)
-    if (file.exists) {
-      val json = scala.io.Source.fromFile(file).mkString.parseJson
-      Some(json.convertTo[SegmentCrosscutReport])
-    } else None
+    if (file.exists)
+      try {
+        val json = scala.io.Source.fromFile(file).mkString.parseJson
+        Some(json.convertTo[SegmentCrosscutReport])
+      } catch {
+        case e: Exception =>
+          println(s"Failed to parse crosscut for $segment from $file: $e")
+          None
+      }
+    else None
   }
 
   def targetFileForInput(segment: SegmentReference, input: WorkItemInput): File = {
