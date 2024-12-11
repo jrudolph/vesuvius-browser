@@ -730,7 +730,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
 
   val SegmentAuthorCache: Cache[SegmentReference, String] =
     downloadUtils.downloadCache[SegmentReference](_.authorUrl, segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/author.txt"))
-      .map((_, metadata) => scala.io.Source.fromFile(metadata).mkString)
+      .map((_, metadata) => scala.io.Source.fromFile(metadata).mkString.trim)
   def authorFor(segment: SegmentReference): Future[String] = SegmentAuthorCache(segment)
 
   def crosscutsFor(segment: SegmentReference): Option[SegmentCrosscutReport] = {
