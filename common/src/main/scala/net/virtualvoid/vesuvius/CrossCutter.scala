@@ -11,14 +11,14 @@ case class Point2D(
     y: Int
 )
 
-case class CrosscutLines(
+case class CrosscutLine(
     p0: Point2D,
     p1: Point2D
 )
 
 case class SegmentCrosscut(
     z:     Int,
-    lines: Seq[CrosscutLines]
+    lines: Seq[CrosscutLine]
 )
 
 case class SegmentCrosscutReport(
@@ -31,7 +31,7 @@ object SegmentCrosscutReport {
   import DefaultJsonProtocol._
 
   implicit val point2DFormat: JsonFormat[Point2D] = jsonFormat2(Point2D.apply)
-  implicit val crosscutPathElementFormat: JsonFormat[CrosscutLines] = jsonFormat2(CrosscutLines.apply)
+  implicit val crosscutPathElementFormat: JsonFormat[CrosscutLine] = jsonFormat2(CrosscutLine.apply)
   implicit val segmentCrosscutFormat: JsonFormat[SegmentCrosscut] = jsonFormat2(SegmentCrosscut.apply)
   implicit val segmentCrosscutReportFormat: JsonFormat[SegmentCrosscutReport] = jsonFormat4(SegmentCrosscutReport.apply)
 }
@@ -43,7 +43,7 @@ object CrossCutter {
     val zBounds = mesh.vertices.map(_.z).min.toInt to mesh.vertices.map(_.z).max.toInt
 
     def crosscut(z: Int): SegmentCrosscut = {
-      val pathElements: Seq[CrosscutLines] =
+      val pathElements: Seq[CrosscutLine] =
         mesh.faces.flatMap { face =>
           val v1 = mesh.vertices(face.vertices._1 - 1)
           val v2 = mesh.vertices(face.vertices._2 - 1)
@@ -81,7 +81,7 @@ object CrossCutter {
             addIntersectionPoints(v2, v3)
             addIntersectionPoints(v3, v1)
 
-            if (points.result().size == 2) Seq(CrosscutLines(points.result().head, points.result().last))
+            if (points.result().size == 2) Seq(CrosscutLine(points.result().head, points.result().last))
             else Seq.empty
           } else Seq.empty
         }
@@ -90,7 +90,7 @@ object CrossCutter {
     }
 
     val cuts =
-      ((zBounds.min + StepSize - 1) / StepSize * StepSize to zBounds.max by StepSize).headOption.toSeq map crosscut
+      (zBounds.min + StepSize - 1) / StepSize * StepSize to zBounds.max by StepSize map crosscut
 
     SegmentCrosscutReport(segmentReference, zBounds.min, zBounds.max, cuts)
   }
