@@ -204,10 +204,13 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
         case None => layers
       }
 
-      downloadUtils.urlExists(segment.maskUrl).map {
-        case true  => "mask" +: layers1
-        case false => layers1
-      }
+      if (MaskCache.contains(segment))
+        Future.successful("mask" +: layers1)
+      else
+          downloadUtils.urlExists(segment.maskUrl).map {
+            case true  => "mask" +: layers1
+            case false => layers1
+          }
     }
 
   lazy val MainScreenLayerThumbnails = Seq(
