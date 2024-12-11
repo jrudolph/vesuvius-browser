@@ -88,21 +88,23 @@ trait VesuviusApi { //self: VesuviusRoutes =>
       obj <- urlReportFor(segment, "obj", segment.objUrl)
       ppm <- urlReportFor(segment, "ppm", segment.ppmUrl)
       meta <- urlReportFor(segment, "meta", segment.metaUrl)
+      author <- urlReportFor(segment, "author", segment.authorUrl)
       composite <- urlReportFor(segment, "composite", segment.compositeUrl)
       layer0 <- urlReportFor(segment, "layer0", segment.layerUrl(0))
       layer32 <- urlReportFor(segment, "layer32", segment.layerUrl(32))
     } yield VesuviusApi.SegmentReport(
-      VesuviusApi.ScrollId.forRef(segment),
-      segment.segmentId,
-      segment.baseUrl,
-      mask,
-      area,
-      obj,
-      ppm,
-      meta,
-      composite,
-      layer0,
-      layer32
+      scroll = VesuviusApi.ScrollId.forRef(segment),
+      id = segment.segmentId,
+      baseUrl = segment.baseUrl,
+      mask = mask,
+      area = area,
+      obj = obj,
+      ppm = ppm,
+      meta = meta,
+      author = author,
+      composite = composite,
+      layer0 = layer0,
+      layer32 = layer32
     )
   }
 
@@ -152,13 +154,14 @@ object VesuviusApi {
       metaUrl:      String,
       objUrl:       String,
       compositeUrl: String,
-      ppmUrl:       String
+      ppmUrl:       String,
+      authorUrl:    String
   )
 
   object SegmentUrls {
     import DefaultJsonProtocol._
 
-    implicit val segmentUrlsJsonFormat: JsonFormat[SegmentUrls] = jsonFormat5(
+    implicit val segmentUrlsJsonFormat: JsonFormat[SegmentUrls] = jsonFormat6(
       SegmentUrls.apply
     )
   }
@@ -174,13 +177,14 @@ object VesuviusApi {
       volumeVoxelSize: Option[Double],
       urls:            SegmentUrls,
       areaCm2:         Option[Float],
+      author:          Option[String],
       layers:          Seq[String]
   )
 
   object SegmentInfo {
     import DefaultJsonProtocol._
 
-    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat11(
+    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat12(
       SegmentInfo.apply
     )
 
@@ -189,23 +193,25 @@ object VesuviusApi {
       layers: Seq[String]
     ): SegmentInfo =
       SegmentInfo(
-        ScrollId.forRef(info.ref),
-        info.ref.segmentId,
-        info.width,
-        info.height,
-        info.minZ,
-        info.maxZ,
-        info.volumeMetadata.map(_.uuid),
-        info.volumeMetadata.map(_.voxelsize),
-        SegmentUrls(
+        scroll = ScrollId.forRef(info.ref),
+        id = info.ref.segmentId,
+        width = info.width,
+        height = info.height,
+        minZ = info.minZ,
+        maxZ = info.maxZ,
+        volume = info.volumeMetadata.map(_.uuid),
+        volumeVoxelSize = info.volumeMetadata.map(_.voxelsize),
+        urls = SegmentUrls(
           info.ref.maskUrl,
           info.ref.metaUrl,
           info.ref.objUrl,
           info.ref.compositeUrl,
-          info.ref.ppmUrl
+          info.ref.ppmUrl,
+          info.ref.authorUrl
         ),
-        info.area,
-        layers
+        areaCm2 = info.area,
+        author = info.author,
+        layers = layers
       )
   }
 
@@ -251,6 +257,7 @@ object VesuviusApi {
       obj:       UrlReport,
       ppm:       UrlReport,
       meta:      UrlReport,
+      author:    UrlReport,
       composite: UrlReport,
       layer0:    UrlReport,
       layer32:   UrlReport
@@ -259,6 +266,6 @@ object VesuviusApi {
     import DefaultJsonProtocol._
 
     implicit val segmentReportJsonFormat: JsonFormat[SegmentReport] =
-      jsonFormat11(SegmentReport.apply)
+      jsonFormat12(SegmentReport.apply)
   }
 }

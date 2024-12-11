@@ -514,8 +514,9 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
           volumeMetadataRepository.metadataForVolume(segment.scrollRef, volumeId)
             .transform(x => Success(x.toOption)))
         .getOrElse(Future.successful(None))
+      author <- authorFor(segment).transform(x => Success(x.toOption))
       crosscut = crosscutsFor(segment)
-    } yield SegmentInfo(segment, width, height, area, meta,crosscut.map(_.minZ.max(0)), crosscut.map(_.maxZ) , volumeMetadata)
+    } yield SegmentInfo(segment, width, height, area, meta,crosscut.map(_.minZ.max(0)), crosscut.map(_.maxZ) , volumeMetadata, author)
   }.transform { x =>
     if (x.isFailure) {
       println(s"Failed to get image info for $segment: ${x.failed.get}")
@@ -726,6 +727,11 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       .recover {
         case _ => Vector.empty // FIXME: restrict to certain exceptions?
       }
+
+  val SegmentAuthorCache: Cache[SegmentReference, String] =
+    downloadUtils.downloadCache[SegmentReference](_.authorUrl, segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/author.txt"))
+      .map((_, metadata) => scala.io.Source.fromFile(metadata).mkString)
+  def authorFor(segment: SegmentReference): Future[String] = SegmentAuthorCache(segment)
 
   def crosscutsFor(segment: SegmentReference): Option[SegmentCrosscutReport] = {
     val file = targetFileForInput(segment, CrosscutWorkItemInput)

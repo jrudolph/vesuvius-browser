@@ -20,6 +20,7 @@ case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
   def metaUrl: String = base.metaFor(this)
 
   def areaUrl: String = s"${baseUrl}area_cm2.txt"
+  def authorUrl: String = s"${baseUrl}author.txt"
 
   def isHighResSegment: Boolean = base.isHighResSegment(this)
 }
@@ -300,7 +301,8 @@ case class SegmentInfo(
     metadata:       Option[SegmentMetadata],
     minZ:           Option[Int],
     maxZ:           Option[Int],
-    volumeMetadata: Option[VolumeMetadata]
+    volumeMetadata: Option[VolumeMetadata],
+    author:         Option[String]
 ) {
   def scrollId: String = ref.scrollId
   def segmentId: String = ref.segmentId
