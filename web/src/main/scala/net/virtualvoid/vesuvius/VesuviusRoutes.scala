@@ -615,10 +615,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
   }
 
   def resizedArtifact(segment: SegmentReference, artifact: SegmentArtifact, width: Int = config.thumbnailWidth, height: Int = config.thumbnailHeight, extension: String = config.thumbnailExtension): Future[File] =
-    for {
-      file <- ArtifactCache(artifact -> segment)
-      resized <- ThumbnailCache((file, width, height, extension, ArtifactAcquire(segment, artifact)))
-    } yield resized
+    ThumbnailCache((ArtifactCache.targetFile(artifact -> segment), width, height, extension, ArtifactAcquire(segment, artifact)))
 
   def resizedLayer(segment: SegmentReference, layer: LayerDefinition, extension: String = config.thumbnailExtension): Future[Option[File]] =
     for {
