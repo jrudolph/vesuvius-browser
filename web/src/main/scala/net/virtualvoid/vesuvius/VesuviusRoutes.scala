@@ -6,7 +6,7 @@ import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.marshalling.{Marshaller, ToResponseMarshallable}
 import org.apache.pekko.http.scaladsl.model.ws.{Message, TextMessage}
 import org.apache.pekko.http.scaladsl.model.{StatusCodes, headers}
-import org.apache.pekko.http.scaladsl.server.{Directive1, Directives, Route}
+import org.apache.pekko.http.scaladsl.server.{Directive1, Directives, PathMatcher, PathMatcher1, Route}
 import org.apache.pekko.stream.scaladsl.{FileIO, Flow, Sink, Source}
 import play.twirl.api.Html
 import spray.json.*
@@ -204,7 +204,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
         case None => layers
       }
 
-      if (MaskCache.contains(segment))
+      if (ArtifactCache.contains(SegmentArtifact.Mask -> segment))
         Future.successful("mask" +: layers1)
       else
           downloadUtils.urlExists(segment.maskUrl).map {
@@ -327,9 +327,9 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
                   }
                 }
               },
-              path("mask") {
+              path(ImageArtifact) { art =>
                 parameter("width".as[Int].?(config.thumbnailWidth), "height".as[Int].?(config.thumbnailHeight), "ext".as[String].?(config.thumbnailExtension)) { (width, height, ext) =>
-                  resizedMask(segment, width, height, ext).deliver
+                  resizedArtifact(segment, art, width, height, ext).deliver
                 }
               },
               path("outline") {
@@ -475,6 +475,14 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       getFromResourceDirectory("web")
     )
 
+  def ImageArtifact: PathMatcher1[SegmentArtifact] =
+    PathMatcher("""mask|composite|inklabel""".r)
+      .map {
+        case "mask" => SegmentArtifact.Mask
+        case "composite" => SegmentArtifact.Composite
+        case "inklabel" => SegmentArtifact.Inklabel
+      }
+
   def segmentPath: Directive1[Boolean] =
     (pathSingleSlash & provide(false)) |
       (path("plain") & provide(true))
@@ -520,7 +528,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     for {
       (width, height) <- sizeOf(segment)
       area <- areaFor(segment)
-      meta <- SegmentMetadataCache(segment).transform(x => Success(x.toOption))
+      meta <- metaFor(segment)
       volumeId = meta.map(_.volume).orElse(Option(segment.scrollRef.defaultVolumeId).filter(_.nonEmpty))
       volumeMetadata <- volumeId
         .map(volumeId =>
@@ -532,6 +540,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     } yield SegmentInfo(segment, width, height, area, meta,crosscut.map(_.minZ.max(0)), crosscut.map(_.maxZ) , volumeMetadata, author)
   }.transform { x =>
     if (x.isFailure) {
+      x.failed.get.printStackTrace()
       println(s"Failed to get image info for $segment: ${x.failed.get}")
     }
     Success(x.toOption)
@@ -598,10 +607,10 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     }(cpuBound)
   }
 
-  def resizedMask(segment: SegmentReference, width: Int = config.thumbnailWidth, height: Int = config.thumbnailHeight, extension: String = config.thumbnailExtension): Future[File] =
+  def resizedArtifact(segment: SegmentReference, artifact: SegmentArtifact, width: Int = config.thumbnailWidth, height: Int = config.thumbnailHeight, extension: String = config.thumbnailExtension): Future[File] =
     for {
-      mask <- maskFor(segment)
-      resized <- ThumbnailCache((mask, width, height, extension, MaskFileAcquire(segment)))
+      file <- ArtifactCache(artifact -> segment)
+      resized <- ThumbnailCache((file, width, height, extension, ArtifactAcquire(segment, artifact)))
     } yield resized
 
   def resizedLayer(segment: SegmentReference, layer: LayerDefinition, extension: String = config.thumbnailExtension): Future[Option[File]] =
@@ -638,8 +647,8 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
   case class LayerAcquire(segment: SegmentReference, layer: LayerDefinition) extends BaseFileAcquire {
     def get(): Future[File] = layer.layerFor(segment).map(_.get)
   }
-  case class MaskFileAcquire(segment: SegmentReference) extends BaseFileAcquire {
-    def get(): Future[File] = maskFor(segment)
+  case class ArtifactAcquire(segment: SegmentReference, artifact: SegmentArtifact) extends BaseFileAcquire {
+    def get(): Future[File] = ArtifactCache(artifact -> segment)
   }
 
   lazy val ThumbnailCache = {
@@ -681,8 +690,6 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     }
   }
 
-  def resizedX(orig: File, target: File, height: Int, rotate90: Boolean): Future[Option[File]] =
-    resizedX(Future.successful(orig), target, height, rotate90)
   def resizedX(orig: Future[File], target: File, height: Int, rotate90: Boolean): Future[Option[File]] =
     orig.flatMap { f0 =>
       cached(target, negativeTtl = 10.seconds, isValid = f => f0.exists() && f0.lastModified() < f.lastModified()) { () =>
@@ -706,12 +713,21 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       }
     }.transform(x => Success(x.toOption))
 
-  lazy val MaskCache = downloadUtils.downloadCache[SegmentReference](
-    _.maskUrl,
-    segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/mask.png")
+  lazy val ArtifactCache = downloadUtils.downloadCache[(SegmentArtifact,SegmentReference)](
+    { case (art, ref) => art.urlFor(ref) },
+    { case (art, ref) => new File(dataDir, s"raw/scroll${ref.scrollId}/${ref.segmentId}/${art.fileNameFor(ref)}") }
   )
 
-  def maskFor(segment: SegmentReference): Future[File] = MaskCache(segment)
+  def maskFor(segment: SegmentReference): Future[File] = ArtifactCache(SegmentArtifact.Mask -> segment)
+  def compositeFor(segment: SegmentReference): Future[File] = ArtifactCache(SegmentArtifact.Composite -> segment)
+  def authorFor(segment: SegmentReference): Future[String] = ArtifactCache(SegmentArtifact.Author -> segment)
+    .map(scala.io.Source.fromFile(_).mkString.trim)
+  def metaFor(segment: SegmentReference): Future[Option[SegmentMetadata]] = ArtifactCache(SegmentArtifact.Meta -> segment)
+    .map(scala.io.Source.fromFile(_).mkString.parseJson.convertTo[SegmentMetadata])
+    .transform(x => Success(x.toOption))
+  def areaFor(segment: SegmentReference): Future[Option[Float]] = ArtifactCache(SegmentArtifact.Area -> segment)
+    .map(scala.io.Source.fromFile(_).mkString.toFloat)
+    .transform(x => Success(x.toOption))
 
   lazy val AlphaMaskCache = computeCache[SegmentReference](
     segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/mask-alpha.png")
@@ -728,20 +744,6 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       _.inklabelUrl,
       segment => { import segment._; new File(dataDir, s"inklabels/scroll$scrollId/$segmentId/inklabel.png") },
     )
-
-  def areaFor(segment: SegmentReference): Future[Option[Float]] = {
-    import segment._
-    cacheDownload(
-      s"${segment.baseUrl}area_cm2.txt",
-      new File(dataDir, s"raw/scroll$scrollId/$segmentId/area_cm2.txt")
-    )
-      .map(f => scala.io.Source.fromFile(f).getLines().next().toFloat)
-      .transform(x => Success(x.toOption))
-  }
-
-  val SegmentMetadataCache: Cache[SegmentReference, SegmentMetadata] =
-    downloadUtils.downloadCache[SegmentReference](_.metaUrl, segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/meta.json"))
-      .map((_, metadata) => scala.io.Source.fromFile(metadata).mkString.parseJson.convertTo[SegmentMetadata])
 
   def segmentIds(scroll: ScrollReference): Future[Seq[SegmentReference]] =
     Future.traverse(scroll.base.supportedDirectoryStyles) { style =>
@@ -762,10 +764,6 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
         case _ => Vector.empty // FIXME: restrict to certain exceptions?
       }
 
-  val SegmentAuthorCache: Cache[SegmentReference, String] =
-    downloadUtils.downloadCache[SegmentReference](_.authorUrl, segment => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/author.txt"))
-      .map((_, metadata) => scala.io.Source.fromFile(metadata).mkString.trim)
-  def authorFor(segment: SegmentReference): Future[String] = SegmentAuthorCache(segment)
 
   def crosscutsFor(segment: SegmentReference): Option[SegmentCrosscutReport] = {
     val file = targetFileForInput(segment, CrosscutWorkItemInput)

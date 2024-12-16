@@ -281,6 +281,29 @@ case object FragmentsBase extends ScrollServerBase {
   def isFragment = true
 }
 
+sealed trait SegmentArtifact {
+  def urlFor(segment: SegmentReference): String
+  def fileNameFor(segment: SegmentReference): String
+}
+object SegmentArtifact {
+  val Mask = apply(_.maskUrl, segment => s"${segment.segmentId}_mask.${extOf(segment.maskUrl)}")
+  val Composite = apply(_.compositeUrl, segment => s"${segment.segmentId}_composite.${extOf(segment.compositeUrl)}")
+  val Inklabel = apply(_.inklabelUrl, segment => s"${segment.segmentId}_inklabel.${extOf(segment.inklabelUrl)}")
+  val PPM = apply(_.ppmUrl, segment => s"${segment.segmentId}.ppm")
+  val Obj = apply(_.objUrl, segment => s"${segment.segmentId}.obj")
+  val Meta = apply(_.metaUrl, segment => s"${segment.segmentId}-meta.json")
+  val Author = apply(_.authorUrl, segment => s"${segment.segmentId}-author.txt")
+  val Area = apply(_.areaUrl, segment => s"${segment.segmentId}-areaCm2.txt")
+
+  def extOf(name: String): String =
+    name.split("\\.").last
+
+  private def apply(get: SegmentReference => String, fileName: SegmentReference => String): SegmentArtifact = new SegmentArtifact {
+    def urlFor(segment: SegmentReference): String = get(segment)
+    def fileNameFor(segment: SegmentReference): String = fileName(segment)
+  }
+}
+
 case class SegmentMetadata(
     name:   String,
     uuid:   String,
