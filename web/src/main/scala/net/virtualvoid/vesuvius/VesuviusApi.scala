@@ -34,6 +34,12 @@ trait VesuviusApi { //self: VesuviusRoutes =>
       .out(jsonBody[Seq[VesuviusApi.SegmentInfo]])
       .description("Get all segments in the catalog")
 
+  private lazy val segmentInfoEndpoint =
+    endpoint.get
+      .in("segments" / "scroll" / path[String]("scrollId") / path[String]("segmentId"))
+      .out(jsonBody[VesuviusApi.SegmentInfo])
+      .description("Get information about a specific segment")
+
   private lazy val segmentReportEndpoint =
     endpoint.get
       .in("segments" / "url-report")
@@ -47,7 +53,7 @@ trait VesuviusApi { //self: VesuviusRoutes =>
       }
     )
       .fromEndpoints[Future](
-        List(catalogEndpoint, segmentReportEndpoint),
+        List(catalogEndpoint, segmentInfoEndpoint, segmentReportEndpoint),
         "Vesuvius Browser API",
         "1.0"
       )
@@ -138,8 +144,16 @@ trait VesuviusApi { //self: VesuviusRoutes =>
       fromApiCache[Seq[VesuviusApi.SegmentReport]]("url-report", 1)
     }
 
+  private lazy val segmentInfoImplementation =
+    segmentInfoEndpoint.serverLogicSuccess[Future] { (scrollId, segmentId) =>
+      getSegments.map { segments =>
+        segments.find(i => i.id == segmentId && i.scroll.oldId == scrollId)
+          .getOrElse(throw new RuntimeException(s"Segment $segmentId not found"))
+      }
+    }
+
   private lazy val allEndpoints: List[ServerEndpoint[Any, Future]] =
-    swaggerEndpoints :+ catalogImplementation :+ segmentReportImplementation
+    swaggerEndpoints :+ catalogImplementation :+ segmentReportImplementation :+ segmentInfoImplementation
 
   lazy val apiRoutes =
     PekkoHttpServerInterpreter().toRoute(allEndpoints)
