@@ -199,18 +199,24 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       case true  => Seq(l.name)
       case false => Seq.empty
     }).map(_.flatten).flatMap { layers =>
-      val layers1 = crosscutsFor(segment) match {
-        case Some(_) => "outline" +: layers
-        case None => layers
+      val outline = crosscutsFor(segment) match {
+        case Some(_) => Seq("outline")
+        case None => Seq.empty
       }
 
-      if (ArtifactCache.contains(SegmentArtifact.Mask -> segment))
-        Future.successful("mask" +: layers1)
-      else
-          downloadUtils.urlExists(segment.maskUrl).map {
-            case true  => "mask" +: layers1
-            case false => layers1
+      def ifExists(artifact: SegmentArtifact, layerName: String): Future[Seq[String]] =
+        if (ArtifactCache.contains(artifact -> segment))
+          Future.successful(Seq(layerName))
+        else
+          downloadUtils.urlExists(artifact.urlFor(segment)).map {
+            case true  => Seq(layerName)
+            case false => Seq.empty
           }
+
+      for {
+        mask <- ifExists(SegmentArtifact.Mask, "mask")
+        composite <- ifExists(SegmentArtifact.Composite, "composite")
+      } yield layers ++ outline ++ mask ++ composite
     }
 
   lazy val MainScreenLayerThumbnails = Seq(
