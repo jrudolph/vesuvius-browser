@@ -334,10 +334,17 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
                   }
                 }
               },
-              path(ImageArtifact) { art =>
-                parameter("width".as[Int].?(config.thumbnailWidth), "height".as[Int].?(config.thumbnailHeight), "ext".as[String].?(config.thumbnailExtension)) { (width, height, ext) =>
-                  resizedArtifact(segment, art, width, height, ext).deliver
-                }
+              pathPrefix(ImageArtifact) { art =>
+                concat(
+                  pathEnd {
+                    parameter("width".as[Int].?(config.thumbnailWidth), "height".as[Int].?(config.thumbnailHeight), "ext".as[String].?(config.thumbnailExtension)) { (width, height, ext) =>
+                      resizedArtifact(segment, art, width, height, ext).deliver
+                    }
+                  },
+                  path("full") {
+                    redirect(art.urlFor(segment), StatusCodes.Found)
+                  }
+                )
               },
               path("outline") {
                 parameter("width".as[Int].?(config.thumbnailWidth), "height".as[Int].?(config.thumbnailHeight)) { (width, height) =>
@@ -345,7 +352,8 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
                 }
               },
               pathPrefix("inferred" / Segment) { layer =>
-                val layerDef = layerDefFor(layer).get
+
+                val layerDef = layerDefFor(layer).getOrElse(throw new RuntimeException(s"Layer $layer not found"))
 
                 concat(
                   pathEnd {
