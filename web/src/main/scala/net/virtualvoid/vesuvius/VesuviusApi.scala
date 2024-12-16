@@ -13,6 +13,7 @@ import sttp.tapir.server.ServerEndpoint
 import sttp.tapir.swagger.bundle.SwaggerInterpreter
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 import java.io.File
 
@@ -51,16 +52,32 @@ trait VesuviusApi { //self: VesuviusRoutes =>
         "1.0"
       )
 
+  def getSegments: Future[Seq[VesuviusApi.SegmentInfo]] =
+    for {
+      segments <- scrollSegments
+      result <- Future.traverse(segments) { s =>
+        layersFor(s.ref).map {
+          VesuviusApi.SegmentInfo.fromImageInfo(s, _)
+        }
+      }
+    } yield result
+
+  lazy val ApiCache = downloadUtils.jsonCache[String, JsValue](
+    what => new File(dataDir, s"cache/api/$what.json"),
+    ttl = 6.hours,
+    negativeTtl = 10.seconds
+  ) {
+      case "segments"   => getSegments.map(_.toJson)
+      case "url-report" => getUrlReport.map(_.toJson)
+    }
+
+  def fromApiCache[T: JsonFormat](what: String): Future[T] =
+    ApiCache(what).map(_.convertTo[T])
+
   private lazy val catalogImplementation =
     catalogEndpoint.serverLogicSuccess[Future] { _ =>
-      for {
-        segments <- scrollSegments
-        result <- Future.traverse(segments) { s =>
-          layersFor(s.ref).map {
-            VesuviusApi.SegmentInfo.fromImageInfo(s, _)
-          }
-        }
-      } yield result
+      import spray.json.DefaultJsonProtocol._
+      fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments")
     }
 
   private lazy val urlReportCache = downloadUtils.jsonCache[(SegmentReference, String, String), VesuviusApi.UrlReport](
@@ -108,14 +125,17 @@ trait VesuviusApi { //self: VesuviusRoutes =>
     )
   }
 
+  def getUrlReport: Future[Seq[VesuviusApi.SegmentReport]] =
+    for {
+      segments <- scrollSegments
+      result <- Future.traverse(segments) { s =>
+        reportFor(s.ref)
+      }
+    } yield result
+
   private lazy val segmentReportImplementation =
     segmentReportEndpoint.serverLogicSuccess[Future] { _ =>
-      for {
-        segments <- scrollSegments
-        result <- Future.traverse(segments) { s =>
-          reportFor(s.ref)
-        }
-      } yield result
+      fromApiCache[Seq[VesuviusApi.SegmentReport]]("url-report")
     }
 
   private lazy val allEndpoints: List[ServerEndpoint[Any, Future]] =
