@@ -5,7 +5,7 @@ import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.http.caching.LfuCache
 import org.apache.pekko.http.caching.scaladsl.{ CachingSettings, LfuCacheSettings }
 import org.apache.pekko.http.scaladsl.Http
-import org.apache.pekko.http.scaladsl.model.{ HttpHeader, HttpMethods, HttpRequest, HttpResponse, StatusCodes, headers }
+import org.apache.pekko.http.scaladsl.model.{ HttpHeader, HttpMethods, HttpRequest, HttpResponse, StatusCodes, Uri, headers }
 import org.apache.pekko.stream.scaladsl.{ FileIO, Flow, Keep, Sink }
 import org.apache.pekko.util.ByteString
 
@@ -13,6 +13,7 @@ import java.io.{ File, PrintStream }
 import java.util.concurrent.atomic.AtomicLong
 import scala.concurrent.duration.*
 import scala.concurrent.{ Future, Promise, TimeoutException }
+import scala.io.Source
 import scala.util.{ Failure, Success, Try }
 
 trait DataServerConfig {
@@ -294,6 +295,33 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
           }
         }
       }
+  }
+
+  def urlExistsCache(cacheDir: File): Cache[String, Boolean] = {
+    def fileFor(url: String) = {
+      val uri = Uri(url)
+      def sanitize(element: String): String =
+        element.replaceAll("[^a-zA-Z0-9]", "_")
+      new File(cacheDir, s"${sanitize(uri.authority.toString)}/${uri.path.toString}.exists")
+    }
+
+    fileCache[String](
+      fileFor,
+      ttl = 7.day,
+      negativeTtl = 1.day
+    ) { url =>
+      urlExists(url).map { b =>
+        val target = fileFor(url)
+        val tmp = new File(target.getParentFile, s".tmp.${target.getName}")
+        val fos = new java.io.FileOutputStream(tmp)
+        fos.write(if (b) "true".getBytes("utf8") else "false".getBytes("utf8"))
+        fos.close()
+        tmp.renameTo(target)
+        target
+      }
+    }.map { (_, f) =>
+      Source.fromFile(f).mkString.trim.toBoolean
+    }
   }
 
   def urlExists(url: String): Future[Boolean] = {

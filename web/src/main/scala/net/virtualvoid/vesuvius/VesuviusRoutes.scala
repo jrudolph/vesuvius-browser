@@ -80,6 +80,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
   val downloadUtils = new DownloadUtils(config)
   import downloadUtils._
   val volumeMetadataRepository = VolumeMetadataRepository(downloadUtils, dataDir)
+  val DataServerUrlExistsCache = downloadUtils.urlExistsCache(new File(dataDir, "url-exists"))
 
   case class InferenceLayerSourceImpl(
       input: InferenceWorkItemInput
@@ -103,7 +104,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
 
     def layerExists(segment: SegmentReference): Future[Boolean] =
       Future.successful(layerFileFor(segment).exists) ||
-        downloadUtils.urlExists(segment.layerUrl(layer))
+        DataServerUrlExistsCache(segment.layerUrl(layer))
   }
   case class AnonymousSource(f: SegmentReference => Future[Option[File]], targetFileFor: SegmentReference => File) extends LayerSource {
     def layerFor(segment: SegmentReference): Future[Option[File]] = f(segment)
@@ -118,7 +119,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     def layerFileFor(segment: SegmentReference): File = cache.targetFile(segment)
 
     def layerExists(segment: SegmentReference): Future[Boolean] =
-      Future.successful(cache.targetFile(segment).exists) || downloadUtils.urlExists(url(segment))
+      Future.successful(cache.targetFile(segment).exists) || DataServerUrlExistsCache(url(segment))
   }
 
   def inferenceLayer(input: InferenceWorkItemInput, isPublic: Boolean): LayerDefinition = {
@@ -208,7 +209,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
         if (ArtifactCache.contains(artifact -> segment))
           Future.successful(Seq(layerName))
         else
-          downloadUtils.urlExists(artifact.urlFor(segment)).map {
+          DataServerUrlExistsCache(artifact.urlFor(segment)).map {
             case true  => Seq(layerName)
             case false => Seq.empty
           }
