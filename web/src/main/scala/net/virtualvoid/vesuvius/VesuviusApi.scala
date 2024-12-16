@@ -77,7 +77,7 @@ trait VesuviusApi { //self: VesuviusRoutes =>
   private lazy val catalogImplementation =
     catalogEndpoint.serverLogicSuccess[Future] { _ =>
       import spray.json.DefaultJsonProtocol._
-      fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", 2)
+      fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", 5)
     }
 
   private lazy val urlReportCache = downloadUtils.jsonCache[(SegmentReference, String, String), VesuviusApi.UrlReport](
@@ -187,25 +187,43 @@ object VesuviusApi {
     )
   }
 
+  case class VolumeInfo(
+      volume:      String,
+      baseUrl:     String,
+      voxelSizenM: Int,
+      energykeV:   Int)
+  object VolumeInfo {
+    import DefaultJsonProtocol._
+
+    implicit val volumeInfoJsonFormat: JsonFormat[VolumeInfo] = jsonFormat4(VolumeInfo.apply)
+
+    def fromMetadata(meta: vesuvius.VolumeMetadata, url: String): VolumeInfo =
+      VolumeInfo(
+        meta.uuid,
+        url,
+        (meta.voxelsize * 1000).toInt,
+        meta.energykeV
+      )
+  }
+
   case class SegmentInfo(
-      scroll:          ScrollId,
-      id:              String,
-      width:           Int,
-      height:          Int,
-      minZ:            Option[Int],
-      maxZ:            Option[Int],
-      volume:          Option[String],
-      volumeVoxelSize: Option[Double],
-      urls:            SegmentUrls,
-      areaCm2:         Option[Float],
-      author:          Option[String],
-      layers:          Seq[String]
+      scroll:  ScrollId,
+      id:      String,
+      width:   Int,
+      height:  Int,
+      minZ:    Option[Int],
+      maxZ:    Option[Int],
+      volume:  Option[VolumeInfo],
+      urls:    SegmentUrls,
+      areaCm2: Option[Float],
+      author:  Option[String],
+      layers:  Seq[String]
   )
 
   object SegmentInfo {
     import DefaultJsonProtocol._
 
-    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat12(
+    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat11(
       SegmentInfo.apply
     )
 
@@ -220,8 +238,7 @@ object VesuviusApi {
         height = info.height,
         minZ = info.minZ,
         maxZ = info.maxZ,
-        volume = info.volumeMetadata.map(_.uuid),
-        volumeVoxelSize = info.volumeMetadata.map(_.voxelsize),
+        volume = info.volumeMetadata.map(v => VolumeInfo.fromMetadata(v, info.ref.scrollRef.volumeUrl(v.uuid))),
         urls = SegmentUrls(
           info.ref.baseUrl,
           info.ref.maskUrl,

@@ -19,10 +19,13 @@ case class VolumeMetadata(
   def formatLayer(layer: Int): String =
     if (slices >= 10000) f"$layer%05d" else f"$layer%04d"
 
+  def energykeV: Int = VolumeMetadata.EnergyRegex.findFirstMatchIn(name).map(_.group(1).toInt).getOrElse(0)
 }
 object VolumeMetadata {
   import DefaultJsonProtocol.*
   implicit val format: RootJsonFormat[VolumeMetadata] = jsonFormat9(apply)
+
+  private[VolumeMetadata] val EnergyRegex = """(\d+)keV""".r
 }
 
 class VolumeMetadataRepository(downloadUtils: DownloadUtils, dataDir: File)(implicit system: ActorSystem) {
