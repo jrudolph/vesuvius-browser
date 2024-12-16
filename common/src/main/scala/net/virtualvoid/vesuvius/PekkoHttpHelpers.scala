@@ -1,5 +1,6 @@
 package net.virtualvoid.vesuvius
 
+import org.apache.pekko.http.scaladsl.model.DateTime
 import org.apache.pekko.http.scaladsl.server.*
 import org.apache.pekko.http.scaladsl.server.util.Tupler
 
@@ -19,7 +20,11 @@ trait PekkoHttpHelpers {
     }
   }
   implicit class FileDirectiveExtension[T](directive: Directive1[File]) {
-    def deliver: Route = directive(getFromFile)
+    def deliver: Route = directive { file =>
+      conditional(DateTime(file.lastModified())) {
+        getFromFile(file)
+      }
+    }
   }
   implicit class FutureFileDirectiveExtension[T](f: Future[File]) {
     def deliver: Route = f.await.deliver

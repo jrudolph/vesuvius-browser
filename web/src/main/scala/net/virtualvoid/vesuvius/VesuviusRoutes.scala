@@ -352,7 +352,6 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
                 }
               },
               pathPrefix("inferred" / Segment) { layer =>
-
                 val layerDef = layerDefFor(layer).getOrElse(throw new RuntimeException(s"Layer $layer not found"))
 
                 concat(
