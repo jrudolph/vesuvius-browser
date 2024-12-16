@@ -62,22 +62,22 @@ trait VesuviusApi { //self: VesuviusRoutes =>
       }
     } yield result
 
-  lazy val ApiCache = downloadUtils.jsonCache[String, JsValue](
-    what => new File(dataDir, s"cache/api/$what.json"),
+  lazy val ApiCache = downloadUtils.jsonCache[(String, Int), JsValue](
+    { case (what, version) => new File(dataDir, s"cache/api/$what-$version.json") },
     ttl = 6.hours,
     negativeTtl = 10.seconds
   ) {
-      case "segments"   => getSegments.map(_.toJson)
-      case "url-report" => getUrlReport.map(_.toJson)
+      case ("segments", _)   => getSegments.map(_.toJson)
+      case ("url-report", _) => getUrlReport.map(_.toJson)
     }
 
-  def fromApiCache[T: JsonFormat](what: String): Future[T] =
-    ApiCache(what).map(_.convertTo[T])
+  def fromApiCache[T: JsonFormat](what: String, version: Int): Future[T] =
+    ApiCache(what -> version).map(_.convertTo[T])
 
   private lazy val catalogImplementation =
     catalogEndpoint.serverLogicSuccess[Future] { _ =>
       import spray.json.DefaultJsonProtocol._
-      fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments")
+      fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", 2)
     }
 
   private lazy val urlReportCache = downloadUtils.jsonCache[(SegmentReference, String, String), VesuviusApi.UrlReport](
@@ -135,7 +135,7 @@ trait VesuviusApi { //self: VesuviusRoutes =>
 
   private lazy val segmentReportImplementation =
     segmentReportEndpoint.serverLogicSuccess[Future] { _ =>
-      fromApiCache[Seq[VesuviusApi.SegmentReport]]("url-report")
+      fromApiCache[Seq[VesuviusApi.SegmentReport]]("url-report", 1)
     }
 
   private lazy val allEndpoints: List[ServerEndpoint[Any, Future]] =
@@ -170,6 +170,7 @@ object VesuviusApi {
   }
 
   case class SegmentUrls(
+      baseUrl:      String,
       maskUrl:      String,
       metaUrl:      String,
       objUrl:       String,
@@ -181,7 +182,7 @@ object VesuviusApi {
   object SegmentUrls {
     import DefaultJsonProtocol._
 
-    implicit val segmentUrlsJsonFormat: JsonFormat[SegmentUrls] = jsonFormat6(
+    implicit val segmentUrlsJsonFormat: JsonFormat[SegmentUrls] = jsonFormat7(
       SegmentUrls.apply
     )
   }
@@ -222,6 +223,7 @@ object VesuviusApi {
         volume = info.volumeMetadata.map(_.uuid),
         volumeVoxelSize = info.volumeMetadata.map(_.voxelsize),
         urls = SegmentUrls(
+          info.ref.baseUrl,
           info.ref.maskUrl,
           info.ref.metaUrl,
           info.ref.objUrl,
