@@ -696,29 +696,6 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     }
   }
 
-  def resizedX(orig: Future[File], target: File, height: Int, rotate90: Boolean): Future[Option[File]] =
-    orig.flatMap { f0 =>
-      cached(target, negativeTtl = 10.seconds, isValid = f => f0.exists() && f0.lastModified() < f.lastModified()) { () =>
-        val f = Option(f0).filter(_.exists).getOrElse(throw new RuntimeException(s"File $f0 does not exist"))
-        import sys.process._
-        val rotatedFile =
-          if (rotate90) {
-            val rotFile = File.createTempFile(".tmp.rotated", ".png", target.getParentFile)
-            val cmd = s"""vips rot $f $rotFile d90"""
-            cmd.!!
-            rotFile.deleteOnExit()
-            rotFile
-          } else f
-
-        val tmpFile = File.createTempFile(".tmp.resized", ".png", target.getParentFile)
-        val cmd = s"""vips thumbnail $rotatedFile $tmpFile 10000 --height $height"""
-        cmd.!!
-
-        require(tmpFile.renameTo(target))
-        Future.successful(target)
-      }
-    }.transform(x => Success(x.toOption))
-
   lazy val ArtifactCache = downloadUtils.downloadCache[(SegmentArtifact,SegmentReference)](
     { case (art, ref) => art.urlFor(ref) },
     { case (art, ref) => new File(dataDir, s"raw/scroll${ref.scrollId}/${ref.segmentId}/${art.fileNameFor(ref)}") }
