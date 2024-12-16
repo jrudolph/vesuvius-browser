@@ -25,7 +25,7 @@ object VolumeMetadata {
   import DefaultJsonProtocol.*
   implicit val format: RootJsonFormat[VolumeMetadata] = jsonFormat9(apply)
 
-  private[VolumeMetadata] val EnergyRegex = """(\d+)keV""".r
+  private[VolumeMetadata] val EnergyRegex = """(\d+)\s*keV""".r
 }
 
 class VolumeMetadataRepository(downloadUtils: DownloadUtils, dataDir: File)(implicit system: ActorSystem) {

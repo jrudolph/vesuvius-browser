@@ -77,7 +77,7 @@ trait VesuviusApi { //self: VesuviusRoutes =>
   private lazy val catalogImplementation =
     catalogEndpoint.serverLogicSuccess[Future] { _ =>
       import spray.json.DefaultJsonProtocol._
-      fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", 5)
+      fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", 6)
     }
 
   private lazy val urlReportCache = downloadUtils.jsonCache[(SegmentReference, String, String), VesuviusApi.UrlReport](
