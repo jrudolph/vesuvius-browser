@@ -28,7 +28,8 @@ case class CacheSettings(
     baseDirectory:      Option[File],
     maxCacheSize:       Long,
     cacheHighWatermark: Double,
-    cacheLowWatermark:  Double
+    cacheLowWatermark:  Double,
+    touchFiles:         Boolean
 ) {
   require(maxCacheSize >= 0, s"maxCacheSize must be >= 0, but was $maxCacheSize")
 }
@@ -36,7 +37,7 @@ object CacheSettings {
   val DefaultPositiveTtl = 365.days
   val DefaultNegativeTtl = 2.hours
 
-  val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, Long.MaxValue, 0.9, 0.75)
+  val Default = CacheSettings(DefaultPositiveTtl, DefaultNegativeTtl, _ => true, None, Long.MaxValue, 0.9, 0.75, touchFiles = false)
 }
 
 trait Cache[T, U] {
@@ -81,11 +82,12 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
       def apply(t: T): Future[File] = {
         cache.getOrLoad(t, { _ =>
           val res = fCache(t)
-          // FIXME: shouldn't access registration go to the fileCache?
-          res.foreach { f =>
-            f.setLastModified(System.currentTimeMillis())
-            f
-          }(blockingDispatcher)
+          if (settings.touchFiles)
+            // FIXME: shouldn't access registration go to the fileCache?
+            res.foreach { f =>
+              f.setLastModified(System.currentTimeMillis())
+              f
+            }(blockingDispatcher)
           res
         })
           .flatMap { f =>
