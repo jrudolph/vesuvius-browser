@@ -25,8 +25,16 @@ trait VesuviusApi { //self: VesuviusRoutes =>
   def config: AppConfig
   def dataDir: File = config.dataDir
 
+  val SegmentsDataVersion = 7
+
   import system.dispatcher
   import DefaultJsonProtocol._
+
+  private lazy val versionEndpoint =
+    endpoint.get
+      .in("version")
+      .out(jsonBody[VesuviusApi.BackendVersion])
+      .description("Get backend server version information")
 
   private lazy val catalogEndpoint =
     endpoint.get
@@ -53,12 +61,23 @@ trait VesuviusApi { //self: VesuviusRoutes =>
       }
     )
       .fromEndpoints[Future](
-        List(catalogEndpoint, segmentInfoEndpoint, segmentReportEndpoint),
+        List(versionEndpoint, catalogEndpoint, segmentInfoEndpoint, segmentReportEndpoint),
         "Vesuvius Browser API",
         "1.0"
       )
 
-  def getSegments: Future[Seq[VesuviusApi.SegmentInfo]] =
+  private lazy val versionImplementation =
+    versionEndpoint.serverLogicSuccess[Future] { _ =>
+      Future.successful(
+        VesuviusApi.BackendVersion(
+          BuildInfo.buildVersion,
+          BuildInfo.buildVersion,
+          BuildInfo.builtAtMillis
+        )
+      )
+    }
+
+  def calculateSegments(): Future[Seq[VesuviusApi.SegmentInfo]] =
     for {
       segments <- scrollSegments
       result <- Future.traverse(segments) { s =>
@@ -68,12 +87,15 @@ trait VesuviusApi { //self: VesuviusRoutes =>
       }
     } yield result
 
+  def cachedSegments(): Future[Seq[VesuviusApi.SegmentInfo]] =
+    fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", SegmentsDataVersion)
+
   lazy val ApiCache = downloadUtils.jsonCache[(String, Int), JsValue](
     { case (what, version) => new File(dataDir, s"cache/api/$what-$version.json") },
     ttl = 6.hours,
     negativeTtl = 10.seconds
   ) {
-      case ("segments", _)   => getSegments.map(_.toJson)
+      case ("segments", _)   => calculateSegments().map(_.toJson)
       case ("url-report", _) => getUrlReport.map(_.toJson)
     }
 
@@ -81,10 +103,7 @@ trait VesuviusApi { //self: VesuviusRoutes =>
     ApiCache(what -> version).map(_.convertTo[T])
 
   private lazy val catalogImplementation =
-    catalogEndpoint.serverLogicSuccess[Future] { _ =>
-      import spray.json.DefaultJsonProtocol._
-      fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", 6)
-    }
+    catalogEndpoint.serverLogicSuccess[Future] { _ => cachedSegments() }
 
   private lazy val urlReportCache = downloadUtils.jsonCache[(SegmentReference, String, String), VesuviusApi.UrlReport](
     { case (segment, what, _) => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/$what-report.json") }
@@ -146,14 +165,14 @@ trait VesuviusApi { //self: VesuviusRoutes =>
 
   private lazy val segmentInfoImplementation =
     segmentInfoEndpoint.serverLogicSuccess[Future] { (scrollId, segmentId) =>
-      getSegments.map { segments =>
+      cachedSegments().map { segments =>
         segments.find(i => i.id == segmentId && i.scroll.oldId == scrollId)
           .getOrElse(throw new RuntimeException(s"Segment $segmentId not found"))
       }
     }
 
   private lazy val allEndpoints: List[ServerEndpoint[Any, Future]] =
-    swaggerEndpoints :+ catalogImplementation :+ segmentReportImplementation :+ segmentInfoImplementation
+    swaggerEndpoints :+ catalogImplementation :+ segmentReportImplementation :+ segmentInfoImplementation :+ versionImplementation
 
   lazy val apiRoutes =
     PekkoHttpServerInterpreter().toRoute(allEndpoints)
@@ -320,5 +339,17 @@ object VesuviusApi {
 
     implicit val segmentReportJsonFormat: JsonFormat[SegmentReport] =
       jsonFormat12(SegmentReport.apply)
+  }
+
+  case class BackendVersion(
+      version:         String,
+      commit:          String,
+      buildTimeMillis: Long
+  )
+  object BackendVersion {
+    import DefaultJsonProtocol._
+
+    implicit val backendVersionJsonFormat: JsonFormat[BackendVersion] =
+      jsonFormat3(BackendVersion.apply)
   }
 }

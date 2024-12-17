@@ -23,6 +23,8 @@ RUN /sbt -J-Xmx2g -J-verbose:gc update "show web/assemblyPackageDependency"
 COPY .git /tmp/project/.git
 RUN git reset --hard HEAD
 
+ARG BUILD_VERSION=latest
+ENV BUILD_VERSION=$BUILD_VERSION
 RUN /sbt "show web/assembly"
 
 FROM eclipse-temurin:21

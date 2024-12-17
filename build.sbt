@@ -1,3 +1,5 @@
+import sbtdynver.GitDescribeOutput
+
 val scalaV = "3.4.3"
 val pekkoV = "1.1.2"
 val pekkoHttpV = "1.1.0"
@@ -33,8 +35,14 @@ lazy val common = project.in(file("common"))
     ),
     buildInfoPackage := "net.virtualvoid.vesuvius",
     buildInfoOptions += BuildInfoOption.BuildTime,
-    buildInfoKeys ++= Seq(
-
+    buildInfoKeys ++= Seq[BuildInfoKey](
+      BuildInfoKey.map(dynverGitDescribeOutput) {
+        case (_, Some(GitDescribeOutput(ref, suffix, dirty))) =>
+          "gitCommit" -> suffix.sha
+        case (_, None) =>
+          "gitCommit" -> "unknown"
+      },
+      "buildVersion" -> sys.env.getOrElse("BUILD_VERSION", "unknown")
     )
   )
 
