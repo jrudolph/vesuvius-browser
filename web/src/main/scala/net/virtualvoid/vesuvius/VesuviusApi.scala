@@ -71,7 +71,7 @@ trait VesuviusApi { //self: VesuviusRoutes =>
       Future.successful(
         VesuviusApi.BackendVersion(
           BuildInfo.buildVersion,
-          BuildInfo.buildVersion,
+          BuildInfo.gitCommit,
           BuildInfo.builtAtMillis
         )
       )
