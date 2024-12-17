@@ -25,7 +25,7 @@ trait VesuviusApi { //self: VesuviusRoutes =>
   def config: AppConfig
   def dataDir: File = config.dataDir
 
-  val SegmentsDataVersion = 7
+  val SegmentsDataVersion = 8
 
   import system.dispatcher
   import DefaultJsonProtocol._
@@ -223,17 +223,23 @@ object VesuviusApi {
   case class VolumeInfo(
       volume:      String,
       baseUrl:     String,
+      maxX:        Int,
+      maxY:        Int,
+      maxZ:        Int,
       voxelSizenM: Int,
       energykeV:   Int)
   object VolumeInfo {
     import DefaultJsonProtocol._
 
-    implicit val volumeInfoJsonFormat: JsonFormat[VolumeInfo] = jsonFormat4(VolumeInfo.apply)
+    implicit val volumeInfoJsonFormat: JsonFormat[VolumeInfo] = jsonFormat7(VolumeInfo.apply)
 
     def fromMetadata(meta: vesuvius.VolumeMetadata, url: String): VolumeInfo =
       VolumeInfo(
         meta.uuid,
         url,
+        meta.width - 1,
+        meta.height - 1,
+        meta.slices - 1,
         (meta.voxelsize * 1000).toInt,
         meta.energykeV
       )
