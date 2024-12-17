@@ -131,12 +131,10 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     def dir(segment: SegmentReference) = new File(dataDir, s"$baseDir/Scroll${segment.scrollId}/")
     def simpleFile(segment: SegmentReference) = new File(dir(segment), s"${segment.segmentId}.${extension}")
 
-    def findFile(segment: SegmentReference): Option[File] = {
-      val res = FileUtils.firstFileNameMatching(dir(segment), s""".*${segment.segmentId}.*\\.${extension}""")
-      res
-    }
+    def findFile(segment: SegmentReference): Option[File] =
+      FileUtils.firstFileNameMatching(dir(segment), s""".*${segment.segmentId}.*\\.${extension}""")
 
-    LayerDefinition(name, "jpg", AnonymousSource(findFile.andThen(Future.successful), segment => simpleFile(segment)), isPublic)
+    LayerDefinition(name, extension, AnonymousSource(findFile.andThen(Future.successful), segment => findFile(segment).getOrElse(simpleFile(segment))), isPublic)
   }
 
   val PolytropeTest1Predictions = externalLayer("polytrope-test1-predictions", "external/polytrope-test1-model", isPublic = false)
