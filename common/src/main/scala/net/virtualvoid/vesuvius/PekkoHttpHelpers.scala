@@ -1,6 +1,5 @@
 package net.virtualvoid.vesuvius
 
-import org.apache.pekko.http.scaladsl.model.DateTime
 import org.apache.pekko.http.scaladsl.server.*
 import org.apache.pekko.http.scaladsl.server.util.Tupler
 
