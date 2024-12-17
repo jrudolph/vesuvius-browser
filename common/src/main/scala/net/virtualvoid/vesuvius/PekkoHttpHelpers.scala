@@ -20,11 +20,7 @@ trait PekkoHttpHelpers {
     }
   }
   implicit class FileDirectiveExtension[T](directive: Directive1[File]) {
-    def deliver: Route = directive { file =>
-      conditional(DateTime(file.lastModified())) {
-        getFromFile(file)
-      }
-    }
+    def deliver: Route = directive(getFromFile)
   }
   implicit class FutureFileDirectiveExtension[T](f: Future[File]) {
     def deliver: Route = f.await.deliver
