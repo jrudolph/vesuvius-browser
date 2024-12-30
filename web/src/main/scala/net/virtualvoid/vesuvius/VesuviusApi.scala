@@ -90,17 +90,25 @@ trait VesuviusApi { //self: VesuviusRoutes =>
   def cachedSegments(): Future[Seq[VesuviusApi.SegmentInfo]] =
     fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", SegmentsDataVersion)
 
-  lazy val ApiCache = downloadUtils.jsonCache[(String, Int), JsValue](
-    { case (what, version) => new File(dataDir, s"cache/api/$what-$version.json") },
-    ttl = 6.hours,
-    negativeTtl = 10.seconds
-  ) {
-      case ("segments", _)   => calculateSegments().map(_.toJson)
-      case ("url-report", _) => getUrlReport.map(_.toJson)
-    }
+  lazy val ApiCache =
+    downloadUtils.jsonCache[(String, Int), JsValue](
+      { case (what, version) => new File(dataDir, s"cache/api/$what-$version.json") },
+      ttl = 6.hours,
+      negativeTtl = 10.seconds
+    ) {
+        case ("segments", _)   => calculateSegments().map(_.toJson)
+        case ("url-report", _) => getUrlReport.map(_.toJson)
+      }
 
   def fromApiCache[T: JsonFormat](what: String, version: Int): Future[T] =
-    ApiCache(what -> version).map(_.convertTo[T])
+    ApiCache(what -> version)
+      .map(_.convertTo[T])
+      .recoverWith {
+        case e: DeserializationException => // remove and retry
+          ApiCache.remove(what -> version)
+          ApiCache(what -> version)
+            .map(_.convertTo[T])
+      }
 
   private lazy val catalogImplementation =
     catalogEndpoint.serverLogicSuccess[Future] { _ => cachedSegments() }

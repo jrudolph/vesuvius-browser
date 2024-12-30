@@ -46,13 +46,16 @@ trait Cache[T, U] {
   def isReady(t: T): Boolean
   def remove(t: T): Unit
 
-  def map[V](f: (T, U) => V)(implicit system: ActorSystem): Cache[T, V] = new Cache[T, V] {
+  def flatMap[V](f: (T, U) => Future[V])(implicit system: ActorSystem): Cache[T, V] = new Cache[T, V] {
     val settings = CacheSettings.Default
     val lfu = LfuCacheSettings(system).withTimeToLive(settings.ttl)
     val s = CachingSettings(system).withLfuCacheSettings(lfu)
     val cache = LfuCache[T, V](s)
 
-    def apply(t: T): Future[V] = cache.getOrLoad(t, t => Cache.this(t).map(u => f(t, u))(system.dispatcher))
+    def apply(t: T): Future[V] =
+      cache.getOrLoad(t, { t =>
+        Cache.this(t).flatMap(u => f(t, u))(system.dispatcher)
+      })
     def contains(t: T): Boolean = cache.get(t).isDefined || Cache.this.contains(t)
     def isReady(t: T): Boolean = cache.get(t).exists(_.isCompleted) || Cache.this.isReady(t)
     def remove(t: T): Unit = {
@@ -60,6 +63,8 @@ trait Cache[T, U] {
       Cache.this.remove(t)
     }
   }
+  def map[V](f: (T, U) => V)(implicit system: ActorSystem): Cache[T, V] =
+    flatMap((t, u) => Future.successful(f(t, u)))
 }
 
 trait FileCache[T] extends Cache[T, File] {
@@ -189,28 +194,38 @@ class DownloadUtils(config: DataServerConfig)(implicit system: ActorSystem) {
 
       def contains(t: T): Boolean = fileFor(t).exists()
       def isReady(t: T): Boolean = contains(t)
-      def remove(t: T): Unit = () // FIXME: should that be a no-op?
+      def remove(t: T): Unit = filePattern(t).delete()
 
       def fileFor(t: T): File = filePattern(t)
     }
 
   import spray.json._
-  def jsonCache[K, V: JsonFormat](filePattern: K => File, ttl: Duration = DefaultPositiveTtl, negativeTtl: Duration = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: K => Future[V]): Cache[K, V] =
-    fileCache(filePattern, ttl, negativeTtl, isValid) { k =>
-      f(k).map { v =>
-        val file = filePattern(k)
-        file.getParentFile.mkdirs()
-        val out = new java.io.FileOutputStream(file)
-        out.write(v.toJson.compactPrint.getBytes("utf8"))
-        out.close()
-        file
+  def jsonCache[K, V: JsonFormat](filePattern: K => File, ttl: Duration = DefaultPositiveTtl, negativeTtl: Duration = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: K => Future[V]): Cache[K, V] = {
+    val fc =
+      fileCache(filePattern, ttl, negativeTtl, isValid) { k =>
+        f(k).map { v =>
+          val file = filePattern(k)
+          file.getParentFile.mkdirs()
+          val out = new java.io.FileOutputStream(file)
+          out.write(v.toJson.compactPrint.getBytes("utf8"))
+          out.close()
+          file
+        }
       }
-    }.map { (k, file) =>
-      val source = scala.io.Source.fromFile(file)
-      val json = source.mkString
-      source.close()
-      json.parseJson.convertTo[V]
+
+    fc.flatMap { (k, file) =>
+      try {
+        val source = scala.io.Source.fromFile(file)
+        val json = source.mkString
+        source.close()
+        Future.successful(json.parseJson.convertTo[V])
+      } catch {
+        case e: Exception => // if deserialization fails remove from file cache and reevaluate
+          fc.remove(k)
+          f(k)
+      }
     }
+  }
 
   def cached(to: File, ttl: Duration = DefaultPositiveTtl, negativeTtl: Duration = DefaultNegativeTtl, isValid: File => Boolean = _ => true)(f: () => Future[File]): Future[File] = {
     to.getParentFile.mkdirs()
