@@ -260,6 +260,12 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
   lazy val mainRoute =
     concat(
       pathSingleSlash {
+        redirect("/v2/", StatusCodes.Found)
+      },
+      path("v2"./) { // if v2 is missing for whatever reason and we end up here, serve at least v1
+        redirect("/v1/", StatusCodes.Found)
+      },
+      path("v1"./) {
         get {
           scrollSegments.await { infos =>
             userManagement.loggedIn { user =>
