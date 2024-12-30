@@ -78,14 +78,18 @@ trait VesuviusApi { //self: VesuviusRoutes =>
     }
 
   def calculateSegments(): Future[Seq[VesuviusApi.SegmentInfo]] =
-    for {
+    (for {
       segments <- scrollSegments
       result <- Future.traverse(segments) { s =>
         layersFor(s.ref).map {
           VesuviusApi.SegmentInfo.fromImageInfo(s, _)
         }
       }
-    } yield result
+    } yield result).recover {
+      case e: Exception =>
+        e.printStackTrace()
+        throw e
+    }
 
   def cachedSegments(): Future[Seq[VesuviusApi.SegmentInfo]] =
     fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", SegmentsDataVersion)
