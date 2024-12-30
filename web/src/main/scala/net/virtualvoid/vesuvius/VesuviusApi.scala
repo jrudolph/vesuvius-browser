@@ -256,13 +256,14 @@ object VesuviusApi {
       urls:    SegmentUrls,
       areaCm2: Option[Float],
       author:  Option[String],
-      layers:  Seq[String]
+      layers:  Seq[String],
+      labels:  Seq[String]
   )
 
   object SegmentInfo {
     import DefaultJsonProtocol._
 
-    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat11(
+    implicit val segmentInfoJsonFormat: JsonFormat[SegmentInfo] = jsonFormat12(
       SegmentInfo.apply
     )
 
@@ -289,7 +290,10 @@ object VesuviusApi {
         ),
         areaCm2 = info.area,
         author = info.author,
-        layers = layers
+        layers = layers,
+        labels = Seq(
+          if (info.ref.baseUrl.contains("community-uploads")) "community" else "official"
+        ) ++ (if (info.ref.segmentId.contains("mesh")) Seq("autosegmented") else Seq.empty)
       )
   }
 
