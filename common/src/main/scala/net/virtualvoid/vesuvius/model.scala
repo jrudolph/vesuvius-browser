@@ -118,6 +118,10 @@ case object RegularSegmentDirectoryStyle extends RegularSegmentDirectoryStyle {
       (segment.scrollId == "0332" && segment.segmentId < "20240618142020") ||
       (segment.scrollId == "Frag2")
 }
+case class RegularSegmentDirectoryStyleAtDifferentBase(scrollBaseUrl: ScrollReference => String, highRes: Boolean = false) extends RegularSegmentDirectoryStyle {
+  override def baseUrl(scrollRef: ScrollReference): String = scrollBaseUrl(scrollRef)
+  override def isHighResSegment(segment: SegmentReference): Boolean = highRes
+}
 case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
   def baseUrl(scrollRef: ScrollReference): String =
     if (scrollRef.scrollId == "1") s"${scrollRef.scrollUrl}scroll1_autosegmentation_20240821000000/"
@@ -208,6 +212,24 @@ sealed trait ScrollServerBase extends Product {
   def isFragment: Boolean
 }
 
+val StephaneSegmentStyle =
+  RegularSegmentDirectoryStyleAtDifferentBase(
+    scrollRef => s"https://dl.ash2txt.org/community-uploads/stephane/Scroll${scrollRef.newScrollId.number}.${scrollRef.newScrollId.name}/"
+  )
+
+val StephaneSegmentIds = Set(
+  "20241202095341",
+  "20241202123309",
+  "20241202142344",
+  "20241202151506",
+  "20241202164924",
+  "20241204143830",
+  "20241206093955",
+  "20241206170633",
+  "20241206190644",
+  "20241207125748",
+)
+
 case object FullScrollsBase extends ScrollServerBase {
 
   def scrollUrl(newScrollId: NewScrollId): String =
@@ -216,12 +238,14 @@ case object FullScrollsBase extends ScrollServerBase {
   def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle =
     if (segment.segmentId.startsWith("mesh_"))
       AutoSegmentedDirectoryStyle
+    else if (StephaneSegmentIds(segment.segmentId))
+      StephaneSegmentStyle
     else if (segment.scrollRef.newScrollId.number == 5)
       FlatSegmentedDirectoryStyle
     else
       RegularSegmentDirectoryStyle
 
-  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(RegularSegmentDirectoryStyle, AutoSegmentedDirectoryStyle)
+  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(RegularSegmentDirectoryStyle, AutoSegmentedDirectoryStyle, StephaneSegmentStyle)
 
   def isFragment = false
 }
