@@ -6,12 +6,12 @@ import org.apache.pekko.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import org.apache.pekko.http.scaladsl.marshalling.{Marshaller, ToResponseMarshallable}
 import org.apache.pekko.http.scaladsl.model.ws.{Message, TextMessage}
 import org.apache.pekko.http.scaladsl.model.{StatusCodes, headers}
-import org.apache.pekko.http.scaladsl.server.{Directive1, Directives, PathMatcher, PathMatcher1, Route}
+import org.apache.pekko.http.scaladsl.server.{Directive1, Directives, ExceptionHandler, PathMatcher, PathMatcher1, Route}
 import org.apache.pekko.stream.scaladsl.{FileIO, Flow, Sink, Source}
 import play.twirl.api.Html
 import spray.json.*
 
-import java.io.File
+import java.io.{File, PrintWriter, StringWriter}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.*
 import scala.util.Success
@@ -241,7 +241,21 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
   ).map(layerDefFor(_).get) ++ MainScreenLayerThumbnails
 
   lazy val main =
-    encodeResponse { mainRoute }
+    encodeResponse {
+      parameter("exc".as[Boolean].?(false)) { excep =>
+        if (excep) {
+          handleExceptions(ExceptionHandler {
+            case e: Exception =>
+              val writer = new StringWriter()
+              e.printStackTrace(new PrintWriter(writer))
+              complete(s"Internal server error:\n${writer.getBuffer.toString}")
+          }) {
+            mainRoute
+          }
+        } else
+          mainRoute
+      }
+    }
 
   val NameR = """(\d+)_(\d+).(?:jpg|png)""".r
 
