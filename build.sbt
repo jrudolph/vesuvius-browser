@@ -108,6 +108,8 @@ lazy val web = project.in(file("web"))
         MergeStrategy.singleOrError
       case PathList("META-INF", "resources", "webjars", "swagger-ui", _*)               =>
         MergeStrategy.singleOrError
+      case PathList("META-INF", "services", _*)               =>
+        MergeStrategy.singleOrError
       case PathList("META-INF", _*)                                                     => MergeStrategy.discard // Optional, but usually required
       case x => assemblyMergeStrategy.value(x)
     },
