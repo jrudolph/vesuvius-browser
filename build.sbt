@@ -92,6 +92,7 @@ lazy val web = project.in(file("web"))
       "com.softwaremill.sttp.tapir" %% "tapir-pekko-http-server" % tapirV exclude("org.apache.pekko", "pekko-stream_3"),
       "com.softwaremill.sttp.tapir" %% "tapir-swagger-ui-bundle" % tapirV,
       "com.softwaremill.sttp.tapir" %% "tapir-json-spray" % tapirV,
+      "ch.qos.logback" % "logback-classic" % "1.3.14" % "runtime",
     ),
     Compile / resourceGenerators += (worker / assembly).map(_ :: Nil),
 
