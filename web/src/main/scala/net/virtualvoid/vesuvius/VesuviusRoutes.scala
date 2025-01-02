@@ -793,7 +793,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     input match {
       case InferenceWorkItemInput(checkpoint, params) =>
         val shortName0 = checkpoint.shortName
-        val shortName = if (checkpoint.architecture == InferenceModelArchitecture.FirstWordModel) "youssef-test" else shortName0
+        val shortName = if (checkpoint.shortName == "first-word") "youssef-test" else shortName0
         new File(dataDir, s"inferred/scroll$scrollId/$segmentId/inference_${shortName}_${params.suffix}.png")
       case PPMFingerprintWorkItemInput =>
         new File(dataDir, s"ppm/scroll${segment.scrollId}/${segment.segmentId}/fingerprint.json")
