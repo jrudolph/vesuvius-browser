@@ -166,6 +166,9 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       inferenceLayer(Youssef_15_32_ReverseInput, isPublic = true),
       inferenceLayer(Youssef_63_32Input, isPublic = true),
       inferenceLayer(Youssef_63_32_ReverseInput, isPublic = true),
+      inferenceLayer(PolytropeFragment2Input, isPublic = true),
+      inferenceLayer(PolytropeFragment3Input, isPublic = true),
+      inferenceLayer(PolytropeScroll4Input, isPublic = true),
       GrandPrizeInklabels,
       PolytropeInklabels20240816,
       FirstLettersInklabels,
@@ -825,6 +828,10 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
   val Youssef_63_32Input = InferenceWorkItemInput(FirstWordModel, Forward63Stride32)
   val Youssef_63_32_ReverseInput = InferenceWorkItemInput(FirstWordModel, Forward63Stride32)
 
+  val PolytropeFragment2Input = InferenceWorkItemInput(PolytropeFragment2Model, Forward17Stride32)
+  val PolytropeFragment3Input = InferenceWorkItemInput(PolytropeFragment3Model, Forward17Stride32)
+  val PolytropeScroll4Input = InferenceWorkItemInput(PolytropeScroll4Model, Forward17Stride32)
+
   def hasReasonableSize(info: SegmentInfo): Boolean =
     info.area.exists(_ > 8) || (info.width * info.height > 100 * 1000 * 1000) || info.scrollId == "172"
 
@@ -841,6 +848,9 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       //Youssef_15_32_ReverseInput -> (s => s.scrollId == "1" /*|| s.scrollId == "2"*/ ),
       //Youssef_63_32Input -> (s => s.scrollId == "332" || s.scrollId == "1667"),
       //Youssef_63_32_ReverseInput -> (s => s.scrollId == "332" || s.scrollId == "1667"),
+      PolytropeFragment2Input -> (_.ref.scrollRef.isFragment),
+      PolytropeFragment3Input -> (_.ref.scrollRef.isFragment),
+      PolytropeScroll4Input -> (x => !x.ref.isHighResSegment && x.scrollId == "1667"),
       PPMFingerprintWorkItemInput -> (_.scrollId == "1"),
       DownSampleU16_2Input -> (_ => true),
       CrosscutWorkItemInput -> (_ => true),
