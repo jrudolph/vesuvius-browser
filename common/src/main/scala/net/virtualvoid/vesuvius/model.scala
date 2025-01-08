@@ -434,27 +434,6 @@ object InferenceModelCheckpoint {
     "https://f004.backblazeb2.com/file/bulk-data-jr/model.ckpt"
   )
 
-  val PolytropeFragment2Model = InferenceModelCheckpoint(
-    "Polytrope Fragment Model 2",
-    "polytrope-fragment-model2",
-    InferenceModelArchitecture.FirstWordModel,
-    "https://f004.backblazeb2.com/file/bulk-data-jr/wild12_64_20240814122007_0_fr_i3d_epoch=12_nbfragmodel2.ckpt"
-  )
-
-  val PolytropeFragment3Model = InferenceModelCheckpoint(
-    "Polytrope Fragment Model 3",
-    "polytrope-fragment-model3",
-    InferenceModelArchitecture.FirstWordModel,
-    "https://f004.backblazeb2.com/file/bulk-data-jr/wild12_64_20240814122007_0_fr_i3d_epoch=9_nbfragmodel3.ckpt"
-  )
-
-  val PolytropeScroll4Model = InferenceModelCheckpoint(
-    "Polytrope Scroll 4 Model",
-    "polytrope-scroll4-model",
-    InferenceModelArchitecture.FirstWordModel,
-    "https://f004.backblazeb2.com/file/bulk-data-jr/wild12_64_20240814122007_0_fr_i3d_epoch=7_nbscroll4allsegmentsmodel.ckpt"
-  )
-
   val models: Seq[InferenceModelCheckpoint] = Seq(
     GrandPrizeModel,
     GrandPrizeFineTune0,
@@ -462,10 +441,7 @@ object InferenceModelCheckpoint {
     GrandPrizeFineTune2,
     GrandPrizeFineTune3,
     TimesformerScroll5_27112024,
-    FirstWordModel,
-    PolytropeFragment2Model,
-    PolytropeFragment3Model,
-    PolytropeScroll4Model
+    FirstWordModel
   )
 
   import spray.json._
