@@ -117,6 +117,9 @@ case object RegularSegmentDirectoryStyle extends RegularSegmentDirectoryStyle {
     (segment.scrollId == "1667" && segment.segmentId < "20231210132040") ||
       (segment.scrollId == "0332" && segment.segmentId < "20240618142020") ||
       (segment.scrollId == "Frag2")
+
+  override def isValidSegmentDirectory(dirName: String): Boolean =
+    !dirName.endsWith("_superseded")
 }
 case class RegularSegmentDirectoryStyleAtDifferentBase(scrollBaseUrl: ScrollReference => String, highRes: Boolean = false) extends RegularSegmentDirectoryStyle {
   override def baseUrl(scrollRef: ScrollReference): String = scrollBaseUrl(scrollRef)
@@ -163,6 +166,34 @@ case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
+
+case object WaldkauzFaspDirectoryStyle extends RegularSegmentDirectoryStyle {
+  override def baseUrl(scrollRef: ScrollReference): String =
+    if (scrollRef.newScrollId.number == 1)
+      "https://dl.ash2txt.org/community-uploads/waldkauz/"
+    else
+      "https://dl.ash2txt.org/community-uploads/waldkauz/missing"
+
+  override def segmentUrl(segment: SegmentReference): String = {
+    require(segment.segmentId == "waldkauz-fasp-2024-12-31")
+    s"${baseUrl(segment.scrollRef)}fasp/"
+  }
+
+  override def layerFileExtension: String = "tif"
+  override def layerUrl(segment: SegmentReference, z: Int): String =
+    f"${segmentUrl(segment)}fullres/${z - 22}%02d.$layerFileExtension"
+
+  override def segmentIdForDirectory(dirName: String): String = {
+    require(dirName == "fasp")
+    "waldkauz-fasp-2024-12-31"
+  }
+
+  override def isValidSegmentDirectory(dirName: String): Boolean =
+    dirName.startsWith("fasp")
+
+  def isHighResSegment(segment: SegmentReference): Boolean = false
+}
+
 case object FlatSegmentedDirectoryStyle extends RegularSegmentDirectoryStyle {
   override def isHighResSegment(segment: SegmentReference): Boolean = false
   override def maskFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}_flat_mask.png"
@@ -242,10 +273,17 @@ case object FullScrollsBase extends ScrollServerBase {
       StephaneSegmentStyle
     else if (segment.scrollRef.newScrollId.number == 5)
       FlatSegmentedDirectoryStyle
+    else if (segment.segmentId == "waldkauz-fasp-2024-12-31")
+      WaldkauzFaspDirectoryStyle
     else
       RegularSegmentDirectoryStyle
 
-  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] = Seq(RegularSegmentDirectoryStyle, AutoSegmentedDirectoryStyle, StephaneSegmentStyle)
+  val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] =
+    Seq(
+      RegularSegmentDirectoryStyle,
+      AutoSegmentedDirectoryStyle,
+      StephaneSegmentStyle,
+      WaldkauzFaspDirectoryStyle)
 
   def isFragment = false
 }
@@ -318,6 +356,7 @@ object SegmentArtifact {
   val Meta = apply(_.metaUrl, segment => s"${segment.segmentId}-meta.json")
   val Author = apply(_.authorUrl, segment => s"${segment.segmentId}-author.txt")
   val Area = apply(_.areaUrl, segment => s"${segment.segmentId}-areaCm2.txt")
+  val Layer32 = apply(_.layerUrl(32), segment => s"${segment.segmentId}-layer32.${extOf(segment.layerUrl(32))}")
 
   def extOf(name: String): String =
     name.split("\\.").last

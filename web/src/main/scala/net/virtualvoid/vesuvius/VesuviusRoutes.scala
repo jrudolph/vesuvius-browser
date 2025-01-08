@@ -542,6 +542,9 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
 
   def sizeOf(segment: SegmentReference): Future[(Int, Int)] =
     maskFor(segment)
+      .recoverWith {
+        case _ => ArtifactCache(SegmentArtifact.Layer32 -> segment)
+      }
       .map { f =>
         import sys.process._
         val cmd = s"vipsheader -a $f"
