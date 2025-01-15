@@ -18,6 +18,10 @@ trait PekkoHttpHelpers {
       case None    => reject
     }
   }
+
+  implicit class FutureOptionExtension[T](dir: Future[Option[T]]) {
+    def orReject: Directive1[T] = dir.await.orReject
+  }
   implicit class FileDirectiveExtension[T](directive: Directive1[File]) {
     def deliver: Route = directive(getFromFile)
   }

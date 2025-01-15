@@ -366,7 +366,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
               },
               path("outline") {
                 parameter("width".as[Int].?(config.thumbnailWidth), "height".as[Int].?(config.thumbnailHeight)) { (width, height) =>
-                  outlineFor(info, width, height).deliver
+                  outlineFor(info, width, height).await.orReject.deliver
                 }
               },
               pathPrefix("inferred" / Segment) { layer =>
@@ -659,7 +659,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       outlineFileFor.tupled
     ) { case (info, width, height) =>
       for {
-        crosscuts <- Future.successful(crosscutsFor(info.ref).get)
+        crosscuts <- crosscutsFor(info.ref).fold(Future.failed(new NoSuchElementException(s"Crosscuts missing for ${info.segmentId}")))(Future.successful)
       } yield {
         val volume = info.volumeMetadata.get
         val target = outlineFileFor(info, width, height)
@@ -670,8 +670,10 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
         target
       }
     }
-  def outlineFor(info: SegmentInfo, width: Int = config.thumbnailWidth, height: Int = config.thumbnailHeight): Future[File] =
+  def outlineFor(info: SegmentInfo, width: Int = config.thumbnailWidth, height: Int = config.thumbnailHeight): Future[Option[File]] =
     SegmentOutlineCache((info, width, height))
+      .map(Some(_))
+      .recover { case _: NoSuchElementException => None }
 
   sealed trait BaseFileAcquire {
     def get(): Future[File]
