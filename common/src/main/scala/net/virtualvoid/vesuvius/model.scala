@@ -170,26 +170,42 @@ case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
 case object WaldkauzFaspDirectoryStyle extends RegularSegmentDirectoryStyle {
   override def baseUrl(scrollRef: ScrollReference): String =
     if (scrollRef.newScrollId.number == 1)
-      "https://dl.ash2txt.org/community-uploads/waldkauz/"
+      "https://dl.ash2txt.org/community-uploads/waldkauz/fasp/"
     else
-      "https://dl.ash2txt.org/community-uploads/waldkauz/missing"
+      "https://dl.ash2txt.org/community-uploads/waldkauz/fasp/missing"
 
-  override def segmentUrl(segment: SegmentReference): String = {
-    require(segment.segmentId == "waldkauz-fasp-2024-12-31")
-    s"${baseUrl(segment.scrollRef)}fasp/"
+  override def segmentUrl(segment: SegmentReference): String = segment.segmentId match {
+    case "waldkauz-fasp-v1" => s"${baseUrl(segment.scrollRef)}v1/"
+    case "waldkauz-fasp-v3" => s"${baseUrl(segment.scrollRef)}v3/"
+    case _                  => throw new IllegalArgumentException(s"Unknown waldkauz segment ${segment.segmentId}")
   }
 
   override def layerFileExtension: String = "tif"
   override def layerUrl(segment: SegmentReference, z: Int): String =
-    f"${segmentUrl(segment)}fullres/${z - 22}%02d.$layerFileExtension"
+    segment.segmentId match {
+      case "waldkauz-fasp-v1" => f"${segmentUrl(segment)}fullres/${z - 22}%02d.$layerFileExtension"
+      case "waldkauz-fasp-v3" => f"${segmentUrl(segment)}layers_hr/${z - 22}%02d.$layerFileExtension"
+      case _                  => throw new IllegalArgumentException(s"Unknown waldkauz segment ${segment.segmentId}")
+    }
 
-  override def segmentIdForDirectory(dirName: String): String = {
-    require(dirName == "fasp")
-    "waldkauz-fasp-2024-12-31"
+  override def objFor(segment: SegmentReference): String = segment.segmentId match {
+    case "waldkauz-fasp-v1" => "https://dl.ash2txt.org/community-uploads/jrudolph/tmp/fasp-new.obj"
+    case "waldkauz-fasp-v3" => "https://dl.ash2txt.org/community-uploads/jrudolph/tmp/fasp-v3-new.obj"
+    case _                  => throw new IllegalArgumentException(s"Unknown waldkauz segment ${segment.segmentId}")
   }
 
-  override def isValidSegmentDirectory(dirName: String): Boolean =
-    dirName.startsWith("fasp")
+  override def segmentIdForDirectory(dirName: String): String = dirName match {
+    case "v1" => "waldkauz-fasp-v1"
+    case "v3" => "waldkauz-fasp-v3"
+    case _ =>
+      throw new IllegalArgumentException(s"Unknown waldkauz directory $dirName")
+  }
+
+  override def isValidSegmentDirectory(dirName: String): Boolean = {
+    val valid = dirName == "v1" || dirName == "v3"
+    println(s"Checking $dirName: valid = $valid")
+    valid
+  }
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
@@ -273,7 +289,7 @@ case object FullScrollsBase extends ScrollServerBase {
       StephaneSegmentStyle
     else if (segment.scrollRef.newScrollId.number == 5)
       FlatSegmentedDirectoryStyle
-    else if (segment.segmentId == "waldkauz-fasp-2024-12-31")
+    else if (segment.segmentId .startsWith("waldkauz-fasp"))
       WaldkauzFaspDirectoryStyle
     else
       RegularSegmentDirectoryStyle
