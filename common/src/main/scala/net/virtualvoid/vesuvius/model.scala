@@ -201,11 +201,8 @@ case object WaldkauzFaspDirectoryStyle extends RegularSegmentDirectoryStyle {
       throw new IllegalArgumentException(s"Unknown waldkauz directory $dirName")
   }
 
-  override def isValidSegmentDirectory(dirName: String): Boolean = {
-    val valid = dirName == "v1" || dirName == "v3"
-    println(s"Checking $dirName: valid = $valid")
-    valid
-  }
+  override def isValidSegmentDirectory(dirName: String): Boolean =
+    dirName == "v1" || dirName == "v3"
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
