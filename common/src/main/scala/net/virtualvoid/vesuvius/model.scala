@@ -177,6 +177,7 @@ case object WaldkauzFaspDirectoryStyle extends RegularSegmentDirectoryStyle {
   override def segmentUrl(segment: SegmentReference): String = segment.segmentId match {
     case "waldkauz-fasp-v1" => s"${baseUrl(segment.scrollRef)}v1/"
     case "waldkauz-fasp-v3" => s"${baseUrl(segment.scrollRef)}v3/"
+    case "waldkauz-fasp-v4" => s"${baseUrl(segment.scrollRef)}v4/"
     case _                  => throw new IllegalArgumentException(s"Unknown waldkauz segment ${segment.segmentId}")
   }
 
@@ -185,24 +186,31 @@ case object WaldkauzFaspDirectoryStyle extends RegularSegmentDirectoryStyle {
     segment.segmentId match {
       case "waldkauz-fasp-v1" => f"${segmentUrl(segment)}fullres/${z - 22}%02d.$layerFileExtension"
       case "waldkauz-fasp-v3" => f"${segmentUrl(segment)}layers_hr/${z - 22}%02d.$layerFileExtension"
+      case "waldkauz-fasp-v4" => f"${segmentUrl(segment)}layers_hr/${z - 22}%02d.$layerFileExtension"
       case _                  => throw new IllegalArgumentException(s"Unknown waldkauz segment ${segment.segmentId}")
     }
 
   override def objFor(segment: SegmentReference): String = segment.segmentId match {
     case "waldkauz-fasp-v1" => "https://dl.ash2txt.org/community-uploads/jrudolph/tmp/fasp-new.obj"
     case "waldkauz-fasp-v3" => "https://dl.ash2txt.org/community-uploads/jrudolph/tmp/fasp-v3-new.obj"
+    // did not change for v4
+    case "waldkauz-fasp-v4" => "https://dl.ash2txt.org/community-uploads/jrudolph/tmp/fasp-v3-new.obj"
     case _                  => throw new IllegalArgumentException(s"Unknown waldkauz segment ${segment.segmentId}")
   }
 
   override def segmentIdForDirectory(dirName: String): String = dirName match {
     case "v1" => "waldkauz-fasp-v1"
     case "v3" => "waldkauz-fasp-v3"
+    case "v4" => "waldkauz-fasp-v4"
     case _ =>
       throw new IllegalArgumentException(s"Unknown waldkauz directory $dirName")
   }
 
   override def isValidSegmentDirectory(dirName: String): Boolean =
-    dirName == "v1" || dirName == "v3"
+    dirName match {
+      case "v1" | "v3" | "v4" => true
+      case _ => false
+    }
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
 }
