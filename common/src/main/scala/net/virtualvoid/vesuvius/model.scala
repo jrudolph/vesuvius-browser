@@ -308,7 +308,7 @@ val ThaumatoRuns = Seq(
   AutoSegmentedDirectoryStyle("1", "thaumato_20240821000000", "thaumato_outputs/scroll1_autosegmentation_20240821000000"),
   AutoSegmentedDirectoryStyle("1", "thaumato_20241003234631", "thaumato_outputs/scroll1_autosegmentation_20241003234631/working"),
   AutoSegmentedDirectoryStyle("172", "thaumato_2024_nov1", "thaumato_outputs/scroll5_thaumato_nov1/working"),
-  //AutoSegmentedDirectoryStyle("172", "thaumato_2025_jan15", "thaumato_outputs/scroll5_thaumato_jan15/working"),
+  AutoSegmentedDirectoryStyle("172", "thaumato_2025_jan15", "thaumato_outputs/scroll5_thaumato_jan15/working"),
 )
 
 case object FullScrollsBase extends ScrollServerBase {
