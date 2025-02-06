@@ -146,7 +146,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
   val FirstLettersInklabels = externalLayer("first-letters-inklabels", "external/first-letters-inklabels")
 
   lazy val AutosegmentedPrediction =
-    LayerDefinition("autosegmented-prediction", "jpg", FileCacheSource(AutoSegmentPredictionCache, AutoSegmentedDirectoryStyle.predictionUrlFor), isPublic = true)
+    LayerDefinition("autosegmented-prediction", "jpg", FileCacheSource(AutoSegmentPredictionCache, _.predictionUrl), isPublic = true)
 
   lazy val InkLabelLayer = LayerDefinition("inklabel", "jpg", FileCacheSource(InklabelCache, _.inklabelUrl), isPublic = true)
   lazy val AlphaMaskLayer = LayerDefinition("alpha", "png", FileCacheSource(AlphaMaskCache, _.maskUrl), isPublic = false)
@@ -598,7 +598,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
   }
 
   lazy val AutoSegmentPredictionCache = downloadUtils.downloadCache[SegmentReference](
-    AutoSegmentedDirectoryStyle.predictionUrlFor,
+    _.predictionUrl,
     segment => new File(dataDir, s"raw/autosegment/scroll${segment.scrollId}/${segment.segmentId}/prediction.png"),
     maxConcurrentRequests = 3
   )
@@ -758,7 +758,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
 
   def segmentIds(scroll: ScrollReference): Future[Seq[SegmentReference]] =
     Future.traverse(scroll.base.supportedDirectoryStyles) { style =>
-      segmentIds(scroll, style, new File(config.dataDir, s"raw/scroll${scroll.scrollId}/${scroll.base}-${style.productPrefix}-path-listing.html"))
+      segmentIds(scroll, style, new File(config.dataDir, s"raw/scroll${scroll.scrollId}/${scroll.base}-${style.shortStyleName}-path-listing.html"))
         .map(_.map(segment => SegmentReference(scroll, segment)))
     }.map(_.flatten)
 

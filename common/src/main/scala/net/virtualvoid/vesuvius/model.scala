@@ -16,8 +16,9 @@ case class SegmentReference(scrollRef: ScrollReference, segmentId: String) {
   def ppmUrl: String = base.ppmUrlFor(this)
   def compositeUrl: String = base.compositeUrlFor(this)
   def inklabelUrl: String = base.inklabelFor(this)
-
   def metaUrl: String = base.metaFor(this)
+
+  def predictionUrl: String = base.predictionUrlFor(this)
 
   def areaUrl: String = s"${baseUrl}area_cm2.txt"
   def authorUrl: String = s"${baseUrl}author.txt"
@@ -86,11 +87,14 @@ sealed trait SegmentDirectoryStyle extends Product {
   def ppmFor(segment: SegmentReference): String
   def compositeFor(segment: SegmentReference): String
   def metaFor(segment: SegmentReference): String
+  def predictionUrlFor(segment: SegmentReference): String
   def layerUrl(segment: SegmentReference, z: Int): String
   def layerFileExtension: String
   def segmentIdForDirectory(dirName: String): String
   def isValidSegmentDirectory(dirName: String): Boolean
   def isHighResSegment(segment: SegmentReference): Boolean
+
+  def shortStyleName: String
 }
 
 sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
@@ -102,6 +106,7 @@ sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
   def ppmFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}.ppm"
   def compositeFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}.tif"
   def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
+  def predictionUrlFor(segment: SegmentReference): String = s"${segmentUrl(segment)}prediction.png"
   def layerUrl(segment: SegmentReference, z: Int): String =
     if (isHighResSegment(segment))
       f"${segmentUrl(segment)}layers/$z%03d.$layerFileExtension"
@@ -120,27 +125,34 @@ case object RegularSegmentDirectoryStyle extends RegularSegmentDirectoryStyle {
 
   override def isValidSegmentDirectory(dirName: String): Boolean =
     !dirName.endsWith("_superseded")
+
+  def shortStyleName: String = "regular"
 }
-case class RegularSegmentDirectoryStyleAtDifferentBase(scrollBaseUrl: ScrollReference => String, highRes: Boolean = false) extends RegularSegmentDirectoryStyle {
+case class RegularSegmentDirectoryStyleAtDifferentBase(scrollBaseUrl: ScrollReference => String, highRes: Boolean = false, val shortStyleName: String) extends RegularSegmentDirectoryStyle {
   override def baseUrl(scrollRef: ScrollReference): String = scrollBaseUrl(scrollRef)
   override def isHighResSegment(segment: SegmentReference): Boolean = highRes
 }
-case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
-  def baseUrl(scrollRef: ScrollReference): String =
-    if (scrollRef.scrollId == "1") s"${scrollRef.scrollUrl}scroll1_autosegmentation_20240821000000/"
-    else if (scrollRef.scrollId == "172") s"${scrollRef.scrollUrl}thaumato_outputs/scroll5_thaumato_nov1/working/"
-    else s"${scrollRef.scrollUrl}thaumato_outputs"
-  def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}working_${segment.segmentId}/"
+
+case class AutoSegmentedDirectoryStyle(scrollId: String, runName: String, basePath: String) extends SegmentDirectoryStyle {
+  def baseUrl(scrollRef: ScrollReference): String = {
+    if (scrollRef.scrollId == scrollId) s"${scrollRef.scrollUrl}$basePath/"
+    else s"${scrollRef.scrollUrl}thaumato_segments_need_to_be_setup_manually/"
+  }
+
+  def segmentIdWithoutRunNamePrefix(segment: SegmentReference): String = {
+    require(segment.segmentId.startsWith(s"${runName}_"))
+    segment.segmentId.drop(runName.length + 1)
+  }
+
+  def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}working_${segmentIdWithoutRunNamePrefix(segment)}/"
 
   def shortSegmentId(segment: SegmentReference): String =
     if (segment.scrollId == "1" && segment.segmentId.endsWith("_1"))
-      segment.segmentId.dropRight(2)
+      segmentIdWithoutRunNamePrefix(segment).dropRight(2)
     else
-      segment.segmentId
+      segmentIdWithoutRunNamePrefix(segment)
 
-  def maskFor(segment: SegmentReference): String = {
-    s"${segmentUrl(segment)}${shortSegmentId(segment)}_mask.png"
-  }
+  def maskFor(segment: SegmentReference): String =  s"${segmentUrl(segment)}${shortSegmentId(segment)}_mask.png"
 
   def inklabelFor(segment: SegmentReference): String = s"${segmentUrl(segment)}inklabels.png"
   def objFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${shortSegmentId(segment)}.obj"
@@ -152,7 +164,7 @@ case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
 
   def segmentIdForDirectory(dirName: String): String = {
     require(dirName.startsWith("working_"))
-    dirName.drop("working_".length)
+    s"${runName}_${dirName.drop("working_".length)}"
   }
   def isValidSegmentDirectory(dirName: String): Boolean = dirName.startsWith("working_")
 
@@ -161,10 +173,12 @@ case object AutoSegmentedDirectoryStyle extends SegmentDirectoryStyle {
       if (segment.scrollId == "1") ""
       else "../"
 
-    s"${baseUrl(segment.scrollRef)}${prefix}predictions/working_${segment.segmentId}_prediction_rotated_0_layer_17.png"
+    s"${baseUrl(segment.scrollRef)}${prefix}predictions/working_${segmentIdWithoutRunNamePrefix(segment)}_prediction_rotated_0_layer_17.png"
   }
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
+
+  def shortStyleName: String = s"thaumato-$runName"
 }
 
 case object WaldkauzFaspDirectoryStyle extends RegularSegmentDirectoryStyle {
@@ -213,6 +227,8 @@ case object WaldkauzFaspDirectoryStyle extends RegularSegmentDirectoryStyle {
     }
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
+
+  def shortStyleName: String = "waldkauz-fasp"
 }
 
 case object FlatSegmentedDirectoryStyle extends RegularSegmentDirectoryStyle {
@@ -220,6 +236,8 @@ case object FlatSegmentedDirectoryStyle extends RegularSegmentDirectoryStyle {
   override def maskFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}_flat_mask.png"
   override def objFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}_flat.obj"
   override def layerFileExtension: String = "jpg"
+
+  def shortStyleName: String = "flat-segmented"
 }
 
 sealed trait ScrollServerBase extends Product {
@@ -254,6 +272,9 @@ sealed trait ScrollServerBase extends Product {
   def layerFileExtension(segment: SegmentReference): String =
     directoryStyleFor(segment).layerFileExtension
 
+  def predictionUrlFor(segment: SegmentReference): String =
+    directoryStyleFor(segment).predictionUrlFor(segment)
+
   def isHighResSegment(segment: SegmentReference): Boolean =
     directoryStyleFor(segment).isHighResSegment(segment)
 
@@ -266,7 +287,8 @@ sealed trait ScrollServerBase extends Product {
 
 val StephaneSegmentStyle =
   RegularSegmentDirectoryStyleAtDifferentBase(
-    scrollRef => s"https://dl.ash2txt.org/community-uploads/stephane/Scroll${scrollRef.newScrollId.number}.${scrollRef.newScrollId.name}/"
+    scrollRef => s"https://dl.ash2txt.org/community-uploads/stephane/Scroll${scrollRef.newScrollId.number}.${scrollRef.newScrollId.name}/",
+    shortStyleName = "stephane-segments"
   )
 
 val StephaneSegmentIds = Set(
@@ -282,14 +304,21 @@ val StephaneSegmentIds = Set(
   "20241207125748",
 )
 
+val ThaumatoRuns = Seq(
+  AutoSegmentedDirectoryStyle("1", "thaumato_20240821000000", "thaumato_outputs/scroll1_autosegmentation_20240821000000"),
+  AutoSegmentedDirectoryStyle("1", "thaumato_20241003234631", "thaumato_outputs/scroll1_autosegmentation_20241003234631/working"),
+  AutoSegmentedDirectoryStyle("172", "thaumato_2024_nov1", "thaumato_outputs/scroll5_thaumato_nov1/working"),
+  //AutoSegmentedDirectoryStyle("172", "thaumato_2025_jan15", "thaumato_outputs/scroll5_thaumato_jan15/working"),
+)
+
 case object FullScrollsBase extends ScrollServerBase {
 
   def scrollUrl(newScrollId: NewScrollId): String =
     s"https://dl.ash2txt.org/full-scrolls/Scroll${newScrollId.number}/${newScrollId.name}.volpkg/"
 
   def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle =
-    if (segment.segmentId.startsWith("mesh_"))
-      AutoSegmentedDirectoryStyle
+    if (segment.segmentId.startsWith("thaumato_"))
+      ThaumatoRuns.find(t => segment.segmentId.startsWith(t.runName)).get
     else if (StephaneSegmentIds(segment.segmentId))
       StephaneSegmentStyle
     else if (segment.scrollRef.newScrollId.number == 5)
@@ -302,9 +331,8 @@ case object FullScrollsBase extends ScrollServerBase {
   val supportedDirectoryStyles: Seq[SegmentDirectoryStyle] =
     Seq(
       RegularSegmentDirectoryStyle,
-      AutoSegmentedDirectoryStyle,
       StephaneSegmentStyle,
-      WaldkauzFaspDirectoryStyle)
+      WaldkauzFaspDirectoryStyle) ++ ThaumatoRuns
 
   def isFragment = false
 }
@@ -345,6 +373,7 @@ case object FragmentDirectoryStyle extends FragmentDirectoryStyle {
     else
       super.inklabelFor(segment)
 
+  def shortStyleName: String = "fragment"
 }
 
 case object FragmentsBase extends ScrollServerBase {
