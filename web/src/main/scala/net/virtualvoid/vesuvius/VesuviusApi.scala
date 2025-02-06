@@ -25,6 +25,16 @@ trait VesuviusApi { //self: VesuviusRoutes =>
   def config: AppConfig
   def dataDir: File = config.dataDir
 
+  lazy val segmentsFingerprint: Future[String] =
+    scrollSegments.map { segments =>
+      segments
+        .sortBy(s => (s.scrollId, s.segmentId))
+        .map { s =>
+          import s.ref.*
+          s"$scrollId-$segmentId-$maskUrl-$areaUrl-$objUrl-$ppmUrl-$metaUrl-$authorUrl-$compositeUrl-${layerUrl(0)}-${layerUrl(32)}"
+        }.mkString("\n").sha256sum
+    }(system.dispatcher)
+
   val SegmentsDataVersion = 9
 
   import system.dispatcher
@@ -91,30 +101,33 @@ trait VesuviusApi { //self: VesuviusRoutes =>
     fromApiCache[Seq[VesuviusApi.SegmentInfo]]("segments", SegmentsDataVersion)
 
   lazy val ApiCache =
-    downloadUtils.jsonCache[(String, Int), JsValue](
-      { case (what, version) => new File(dataDir, s"cache/api/$what-$version.json") },
+    downloadUtils.jsonCache[(String, Int, String), JsValue](
+      { case (what, version, fingerprint) => new File(dataDir, s"cache/api/$what-$version-$fingerprint.json") },
       ttl = 6.hours,
       negativeTtl = 10.seconds
     ) {
-        case ("segments", _)   => calculateSegments().map(_.toJson)
-        case ("url-report", _) => getUrlReport.map(_.toJson)
+        case ("segments", _, _)   => calculateSegments().map(_.toJson)
+        case ("url-report", _, _) => getUrlReport.map(_.toJson)
       }
 
   def fromApiCache[T: JsonFormat](what: String, version: Int): Future[T] =
-    ApiCache(what -> version)
-      .map(_.convertTo[T])
-      .recoverWith {
-        case e: DeserializationException => // remove and retry
-          ApiCache.remove(what -> version)
-          ApiCache(what -> version)
-            .map(_.convertTo[T])
-      }
+    for {
+      fingerprint <- segmentsFingerprint
+      result <- ApiCache((what, version, fingerprint))
+        .map(_.convertTo[T])
+        .recoverWith {
+          case e: DeserializationException => // remove and retry
+            ApiCache.remove((what, version, fingerprint))
+            ApiCache((what, version, fingerprint))
+              .map(_.convertTo[T])
+        }
+    } yield result
 
   private lazy val catalogImplementation =
     catalogEndpoint.serverLogicSuccess[Future] { _ => cachedSegments() }
 
   private lazy val urlReportCache = downloadUtils.jsonCache[(SegmentReference, String, String), VesuviusApi.UrlReport](
-    { case (segment, what, _) => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/$what-report.json") }
+    { case (segment, what, url) => new File(dataDir, s"raw/scroll${segment.scrollId}/${segment.segmentId}/$what-${url.sha256sum}-report.json") }
   ) {
       case (_, _, url) =>
         println(s"Checking $url")
