@@ -157,7 +157,7 @@ case class AutoSegmentedDirectoryStyle(scrollId: String, runName: String, basePa
   def inklabelFor(segment: SegmentReference): String = s"${segmentUrl(segment)}inklabels.png"
   def objFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${shortSegmentId(segment)}.obj"
   def ppmFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${shortSegmentId(segment)}.ppm"
-  def compositeFor(segment: SegmentReference): String = s"${segmentUrl(segment)}composite.png"
+  def compositeFor(segment: SegmentReference): String = s"${segmentUrl(segment)}composite.$layerFileExtension"
   def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
   def layerFileExtension: String = "jpg"
   def layerUrl(segment: SegmentReference, z: Int): String = f"${segmentUrl(segment)}layers/$z%02d.$layerFileExtension"
