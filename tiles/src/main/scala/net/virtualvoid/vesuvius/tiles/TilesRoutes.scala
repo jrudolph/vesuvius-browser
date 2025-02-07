@@ -107,15 +107,8 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     gridFilesNeeded(x, y, z, downsampling).map { case (gx, gy, gz) => (scroll, meta.uuid, gx, gy, gz) }
 
   def createBlock64x4FromGrid(scroll: ScrollReference, meta: VolumeMetadata, target: File, x: Int, y: Int, z: Int, bitmask: Int, downsampling: Int): Future[File] = {
-    val gridZSpacing = meta.uuid match {
-      case "20230205180739" => 500147 // scroll 1
-      case "20230210143520" => 500147 // scroll 2 fine
-      case "20230212125146" => 500147 // scroll 2 coarse
-      case "20231117143551" => 500000 // scroll 3 coarse
-      case "20231027191953" => 500262 // scroll 0332
-      case "20231107190228" => 500262 // scroll 1667
-      case "20241024131838" => 500148 // scroll 5 / 172
-    }
+    val gridZSpacing = gridZSpacingFor(meta)
+    val tiffOffset = gridTiffOffsetFor(meta)
 
     val files =
       Future.traverse(gridFilesNeeded(x, y, z, downsampling)) {
@@ -123,7 +116,7 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
           tileFor(scroll, meta, gx, gy, gz)
             .map { target =>
               val raf = new java.io.RandomAccessFile(target, "r")
-              val mmap = raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, 8, raf.length() - 8)
+              val mmap = raf.getChannel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, tiffOffset, raf.length() - tiffOffset)
               madviseSequential(mmap)
               id -> mmap
             }
@@ -518,6 +511,23 @@ class TilesRoutes(config: TilesConfig)(implicit system: ActorSystem) extends Spr
     meta.uuid match {
       case "20231117161658" | "20230206171837" | "20231121133215" | "20231121152933" => 368
       case "20241024131838" => 256
+      case _ => 8
+    }
+
+  def gridZSpacingFor(meta: VolumeMetadata): Int =
+    meta.uuid match {
+      case "20230205180739" => 500147 // scroll 1
+      case "20230210143520" => 500147 // scroll 2 fine
+      case "20230212125146" => 500147 // scroll 2 coarse
+      case "20231117143551" => 500000 // scroll 3 coarse
+      case "20231027191953" => 500262 // scroll 0332
+      case "20231107190228" => 500262 // scroll 1667
+      case "20241024131838" => 500148 // scroll 5 / 172
+    }
+
+  def gridTiffOffsetFor(meta: VolumeMetadata): Int =
+    meta.uuid match {
+      case "20231117143551" => 256 // scroll 3 coarse
       case _                => 8
     }
 }
