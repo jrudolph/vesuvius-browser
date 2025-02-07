@@ -288,6 +288,8 @@ object VesuviusApi {
       SegmentInfo.apply
     )
 
+    val AutoSegmentedNames = Seq("mesh", "autogens-", "fasp")
+
     def fromImageInfo(
       info:   vesuvius.SegmentInfo,
       layers: Seq[String]
@@ -314,7 +316,7 @@ object VesuviusApi {
         layers = layers,
         labels = Seq(
           if (info.ref.baseUrl.contains("community-uploads")) "community" else "official"
-        ) ++ (if (info.ref.segmentId.contains("mesh")) Seq("autosegmented") else Seq.empty)
+        ) ++ (if (AutoSegmentedNames.exists(n => info.ref.segmentId.contains(n))) Seq("autosegmented") else Seq.empty)
       )
   }
 

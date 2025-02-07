@@ -46,6 +46,7 @@ case class NewScrollId(number: Int, name: String)
 
 case class ScrollReference(scrollId: String, newScrollId: NewScrollId, base: ScrollServerBase, defaultVolumeId: String) {
   def scrollUrl: String = base.scrollUrl(newScrollId)
+  def scrollNumber = newScrollId.number
   def volumeMetadataUrl(volumeId: String): String = s"${volumeUrl(volumeId)}meta.json"
   def volumeUrl(volumeId: String): String = s"${scrollUrl}volumes/$volumeId/"
   def volumeGridUrl(volumeId: String): String = s"${scrollUrl}volume_grids/$volumeId/"
@@ -99,12 +100,12 @@ sealed trait SegmentDirectoryStyle extends Product {
 
 sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
   def baseUrl(scrollRef: ScrollReference): String = s"${scrollRef.scrollUrl}paths/"
-  def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}${segment.segmentId}/"
-  def maskFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}_mask.png"
+  def segmentUrl(segment: SegmentReference): String = s"${baseUrl(segment.scrollRef)}${segmentIdInFileName(segment)}/"
+  def maskFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segmentIdInFileName(segment)}_mask.png"
   def inklabelFor(segment: SegmentReference): String = s"${segmentUrl(segment)}inklabels.png"
-  def objFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}.obj"
-  def ppmFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}.ppm"
-  def compositeFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segment.segmentId}.tif"
+  def objFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segmentIdInFileName(segment)}.obj"
+  def ppmFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segmentIdInFileName(segment)}.ppm"
+  def compositeFor(segment: SegmentReference): String = s"${segmentUrl(segment)}${segmentIdInFileName(segment)}.tif"
   def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta.json"
   def predictionUrlFor(segment: SegmentReference): String = s"${segmentUrl(segment)}prediction.png"
   def layerUrl(segment: SegmentReference, z: Int): String =
@@ -116,6 +117,8 @@ sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
   def layerFileExtension: String = "tif"
   def segmentIdForDirectory(dirName: String): String = dirName
   def isValidSegmentDirectory(dirName: String): Boolean = true
+
+  def segmentIdInFileName(segment: SegmentReference): String = segment.segmentId
 }
 case object RegularSegmentDirectoryStyle extends RegularSegmentDirectoryStyle {
   def isHighResSegment(segment: SegmentReference): Boolean =
@@ -179,6 +182,31 @@ case class AutoSegmentedDirectoryStyle(scrollId: String, runName: String, basePa
   def isHighResSegment(segment: SegmentReference): Boolean = false
 
   def shortStyleName: String = s"thaumato-$runName"
+}
+
+case object BrunissAutogens extends RegularSegmentDirectoryStyle {
+  override def baseUrl(scrollRef: ScrollReference): String = {
+    val dirName = if (scrollRef.scrollNumber == 5) "paths" else "autogens"
+    s"https://dl.ash2txt.org/community-uploads/bruniss/scrolls/s${scrollRef.scrollNumber}/$dirName/"
+  }
+
+  // do not try to parse fasp meta.json
+  override def metaFor(segment: SegmentReference): String = s"${segmentUrl(segment)}meta-info.json"
+  override def predictionUrlFor(segment: SegmentReference): String = s"${segmentUrl(segment)}prediction.png"
+
+  override def layerFileExtension: String = "tif"
+  override def layerUrl(segment: SegmentReference, z: Int): String =
+    f"${segmentUrl(segment)}layers/${z - 22}%02d.$layerFileExtension"
+
+  override def segmentIdForDirectory(dirName: String): String = s"autogens-$dirName"
+  override def segmentIdInFileName(segment: SegmentReference): String = {
+    require(segment.segmentId.startsWith("autogens-"))
+    segment.segmentId.drop("autogens-".length)
+  }
+
+  def isHighResSegment(segment: SegmentReference): Boolean = false
+
+  def shortStyleName: String = "bruniss-autogens"
 }
 
 case object WaldkauzFaspDirectoryStyle extends RegularSegmentDirectoryStyle {
@@ -319,6 +347,8 @@ case object FullScrollsBase extends ScrollServerBase {
   def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle =
     if (segment.segmentId.startsWith("thaumato_"))
       ThaumatoRuns.find(t => segment.segmentId.startsWith(t.runName)).get
+    else if (segment.segmentId .startsWith("autogens-"))
+      BrunissAutogens
     else if (StephaneSegmentIds(segment.segmentId))
       StephaneSegmentStyle
     else if (segment.scrollRef.newScrollId.number == 5)
@@ -332,6 +362,7 @@ case object FullScrollsBase extends ScrollServerBase {
     Seq(
       RegularSegmentDirectoryStyle,
       StephaneSegmentStyle,
+      BrunissAutogens,
       WaldkauzFaspDirectoryStyle) ++ ThaumatoRuns
 
   def isFragment = false
