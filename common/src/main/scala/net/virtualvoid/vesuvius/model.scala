@@ -96,6 +96,8 @@ sealed trait SegmentDirectoryStyle extends Product {
   def isHighResSegment(segment: SegmentReference): Boolean
 
   def shortStyleName: String
+
+  def defaultVolumeId(segmentReference: SegmentReference): String = segmentReference.scrollRef.defaultVolumeId
 }
 
 sealed trait RegularSegmentDirectoryStyle extends SegmentDirectoryStyle {
@@ -206,6 +208,10 @@ case object BrunissAutogens extends RegularSegmentDirectoryStyle {
 
   def isHighResSegment(segment: SegmentReference): Boolean = false
 
+  override def defaultVolumeId(segmentReference: SegmentReference): String =
+    if (segmentReference.newScrollId.number == 3) "20231117143551" // 7.91um volume
+    else super.defaultVolumeId(segmentReference)
+
   def shortStyleName: String = "bruniss-autogens"
 }
 
@@ -307,6 +313,10 @@ sealed trait ScrollServerBase extends Product {
     directoryStyleFor(segment).isHighResSegment(segment)
 
   def directoryStyleFor(segment: SegmentReference): SegmentDirectoryStyle
+
+  /** The default volume to choose if no explicit volume is provided */
+  def defaultVolumeFor(segment: SegmentReference): String =
+    directoryStyleFor(segment).defaultVolumeId(segment)
 
   def supportedDirectoryStyles: Seq[SegmentDirectoryStyle]
 

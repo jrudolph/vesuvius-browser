@@ -564,7 +564,7 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       (width, height) <- sizeOf(segment)
       area <- areaFor(segment)
       meta <- metaFor(segment)
-      volumeId = meta.map(_.volume).orElse(Option(segment.scrollRef.defaultVolumeId).filter(_.nonEmpty))
+      volumeId = meta.map(_.volume).orElse(Option(segment.scrollRef.base.defaultVolumeFor(segment)).filter(_.nonEmpty))
       volumeMetadata <- volumeId
         .map(volumeId =>
           volumeMetadataRepository.metadataForVolume(segment.scrollRef, volumeId)
