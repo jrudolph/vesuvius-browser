@@ -188,7 +188,7 @@ case class AutoSegmentedDirectoryStyle(scrollId: String, runName: String, basePa
 
 case object BrunissAutogens extends RegularSegmentDirectoryStyle {
   override def baseUrl(scrollRef: ScrollReference): String = {
-    val dirName = if (scrollRef.scrollNumber == 5) "paths" else "autogens"
+    val dirName = "autogens"
     s"https://dl.ash2txt.org/community-uploads/bruniss/scrolls/s${scrollRef.scrollNumber}/$dirName/"
   }
 
