@@ -448,6 +448,8 @@ object SegmentArtifact {
   val Author = apply(_.authorUrl, segment => s"${segment.segmentId}-author.txt")
   val Area = apply(_.areaUrl, segment => s"${segment.segmentId}-areaCm2.txt")
   val Layer32 = apply(_.layerUrl(32), segment => s"${segment.segmentId}-layer32.${extOf(segment.layerUrl(32))}")
+  val InkForward = apply(s => s"${s.baseUrl}ink_forward.jpg", segment => s"${segment.segmentId}-ink_forward.jpg")
+  val InkReverse = apply(s => s"${s.baseUrl}ink_reverse.jpg", segment => s"${segment.segmentId}-ink_reverse.jpg")
 
   def extOf(name: String): String =
     name.split("\\.").last

@@ -121,6 +121,13 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
     def layerExists(segment: SegmentReference): Future[Boolean] =
       Future.successful(cache.targetFile(segment).exists) || DataServerUrlExistsCache(url(segment))
   }
+  case class SegmentArtifactSource(artifact: SegmentArtifact) extends LayerSource {
+    def layerFor(segment: SegmentReference): Future[Option[File]] = ArtifactCache(artifact -> segment).transform(x => Success(x.toOption))
+    def layerFileFor(segment: SegmentReference): File = ArtifactCache.targetFile(artifact -> segment)
+
+    def layerExists(segment: SegmentReference): Future[Boolean] =
+      Future.successful(layerFileFor(segment).exists) || DataServerUrlExistsCache(artifact.urlFor(segment))
+  }
 
   def inferenceLayer(input: InferenceWorkItemInput, isPublic: Boolean): LayerDefinition = {
     val params = input.parameters
@@ -148,6 +155,11 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
   lazy val AutosegmentedPrediction =
     LayerDefinition("autosegmented-prediction", "jpg", FileCacheSource(AutoSegmentPredictionCache, _.predictionUrl), isPublic = true)
 
+  lazy val AutogensInkForward =
+    LayerDefinition("autogens-ink-forward", "jpg", SegmentArtifactSource(SegmentArtifact.InkForward), isPublic = true)
+  lazy val AutogensInkReverse =
+    LayerDefinition("autogens-ink-reverse", "jpg", SegmentArtifactSource(SegmentArtifact.InkReverse), isPublic = true)
+
   lazy val InkLabelLayer = LayerDefinition("inklabel", "jpg", FileCacheSource(InklabelCache, _.inklabelUrl), isPublic = true)
   lazy val AlphaMaskLayer = LayerDefinition("alpha", "png", FileCacheSource(AlphaMaskCache, _.maskUrl), isPublic = false)
 
@@ -172,7 +184,9 @@ class VesuviusRoutes(val config: AppConfig)(implicit val system: ActorSystem) ex
       RepushkoInklabels20231123,
       AutosegmentedPrediction,
       InkLabelLayer,
-      AlphaMaskLayer
+      AlphaMaskLayer,
+      AutogensInkForward,
+      AutogensInkReverse,
     )
   lazy val allLayersMap =
     allLayers.map(l => l.name -> l).toMap
